@@ -15,6 +15,8 @@
     包没重新生成，安装方拿到的还是老版本——而且没人会发现，因为"打包"没有单一入口，
     也没有任何检查比对过包内文件与源文件是否一致。
     现在的规则很简单：dist/ 里的一切都只能由本脚本生成，且必须通过验包才能交付。
+    打包前还会把文本文件的行尾统一成 LF：仓库 .gitattributes 是 `eol=lf`，开发机工作区
+    却是 CRLF，不归一的话同一提交在两台机器上算出的 MANIFEST 哈希不同（ISS-008）。
 
 退出码：0 成功；1 体检或自测失败；2 环境/参数问题。
 """
@@ -47,6 +49,11 @@ ROOT_FILES = ("SKILL.md", "VERSION", ".skill-metadata.yaml")
 SELF_STATED = {"SKILL.md", "VERSION", ".skill-metadata.yaml"}
 EXCLUDE_NAMES = {"__pycache__", ".DS_Store", "Thumbs.db", ".pytest_cache"}
 EXCLUDE_SUFFIX = (".pyc", ".pyo", ".swp", ".orig", ".rej", "~")
+
+# 进包前统一行尾。仓库 .gitattributes 是 `* text=auto eol=lf`，干净克隆拿到的源码是 LF，
+# 而开发机工作区常是 CRLF：不归一就打包，同一提交在两台机器上算出的 MANIFEST 哈希不同，
+# "同样输入产出同样字节"就成了只在本机成立的假话（ISS-008）。
+TEXT_SUFFIX = (".md", ".py", ".yaml", ".yml", ".json", ".txt", ".toml", ".cfg", ".ini", ".sh")
 
 # 安装根目录候选：产品各用一个目录，写死任何一个都会造成“装成功但没人读”的假通过。
 # 顺序：显式环境变量 → 千问办公 → 其他 Agent 目录 → 旧值兜底。
@@ -247,6 +254,23 @@ def sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def is_text(name: str) -> bool:
+    """进包的文本文件：按后缀判定，外加无后缀的 VERSION。"""
+    return name == "VERSION" or name.lower().endswith(TEXT_SUFFIX)
+
+
+def normalize(name: str, data: bytes) -> tuple[bytes, bool]:
+    """文本文件统一成 LF；返回 (归一后的字节, 是否改动过)。二进制与非 UTF-8 原样返回。"""
+    if not is_text(name):
+        return data, False
+    try:
+        text = data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data, False
+    out = text.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+    return out, out != data
+
+
 def make_manifest(version: str, entries: list[tuple[str, bytes]]) -> bytes:
     lines = [
         f"skill: {SKILL_NAME}",
@@ -267,10 +291,12 @@ def build(version: str) -> str:
     """先打到临时文件。验包通过后才允许落到 dist/，避免坏产物混进发布目录。"""
     print("\n3. 打包")
     files = walk_package_files()
-    entries = []
+    entries, rewritten = [], 0
     for f in files:
         with open(os.path.join(ROOT, f), "rb") as fh:
-            entries.append((f, fh.read()))
+            data, changed = normalize(f, fh.read())
+        rewritten += 1 if changed else 0
+        entries.append((f, data))
     manifest = make_manifest(version, entries)
     entries.append(("MANIFEST.txt", manifest))
     entries.sort(key=lambda x: x[0])
@@ -283,7 +309,7 @@ def build(version: str) -> str:
             zi.external_attr = (0o644 & 0xFFFF) << 16
             zi.create_system = 3
             zf.writestr(zi, data)
-    ok(f"{len(entries)} 个文件（未发布，等验包）")
+    ok(f"{len(entries)} 个文件（未发布，等验包；行尾统一为 LF，{rewritten} 个文件被改写）")
     return tmp
 
 
@@ -317,9 +343,14 @@ def verify(artifact: str, version: str) -> bool:
             err(f"重复条目：{sorted(duplicate)}")
             return False
         with open(os.path.join(ROOT, "SKILL.md"), "rb") as fh:
-            if zf.read("SKILL.md") != fh.read():
+            if zf.read("SKILL.md") != normalize("SKILL.md", fh.read())[0]:
                 err("包内 SKILL.md 与源文件不一致")
                 return False
+        # 行尾必须已经归一：包里有 CR 就说明这台机器的工作区是 CRLF，且归一漏了某个文件
+        crlf = [n for n in names if is_text(n) and b"\r" in zf.read(n)]
+        if crlf:
+            err(f"包内仍有 CRLF 行尾，跨机器不可复现：{crlf[:5]}")
+            return False
         man = zf.read("MANIFEST.txt").decode("utf-8")
         if f"version: {version}" not in man:
             err("MANIFEST 版本与 VERSION 不一致")
@@ -340,7 +371,7 @@ def verify(artifact: str, version: str) -> bool:
         if set(listed) | {"MANIFEST.txt"} != set(names):
             err("MANIFEST 未覆盖全部文件")
             return False
-    ok(f"结构、版本、SKILL.md 字节一致，{len(listed)} 个文件哈希吻合")
+    ok(f"结构、版本、SKILL.md 字节一致，{len(listed)} 个文件哈希吻合，包内无 CRLF")
 
     tmp = tempfile.mkdtemp(prefix="ddd-verify-")
     try:
