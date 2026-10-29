@@ -109,6 +109,37 @@ def copy_tpl(name, dest, date, extra=None):
     write_if_absent(dest, text)
 
 
+def ensure_schema(path, layers):
+    """写层表；已存在时只**合并层**，不动其它键。
+
+    「先默认 5 层、以后补 --full」是 SKILL.md 教的用法。若只在文件不存在时才写，
+    补 --full 会变成"层目录建了、配置没更新"，三个新层的文档立刻报 E3 layer 非法。
+    """
+    if not os.path.exists(path):
+        schema = json.loads(json.dumps(SCHEMA_TEMPLATE))
+        schema["layers"] = layers
+        write_if_absent(path, json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
+        return
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            schema = json.load(fh)
+        if not isinstance(schema, dict):
+            raise ValueError("顶层不是对象")
+    except (ValueError, OSError) as exc:
+        print(f"  WARN 读不动 {show(path)}（{exc}）；层表未更新，请手工补 layers")
+        return
+    old = schema.get("layers") if isinstance(schema.get("layers"), dict) else {}
+    added = {d: v for d, v in layers.items() if d not in old}
+    if not added:
+        print(f"  skip (layers 已齐): {show(path)}")
+        return
+    old.update(added)
+    schema["layers"] = old
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
+    print(f"  updated: {show(path)}  (+{'、'.join(added)})")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--target", default=".")
@@ -130,10 +161,7 @@ def main():
     for d in layers:
         os.makedirs(os.path.join(docs, d), exist_ok=True)
 
-    schema = json.loads(json.dumps(SCHEMA_TEMPLATE))
-    schema["layers"] = layers
-    write_if_absent(os.path.join(docs, "_schema.json"),
-                    json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
+    ensure_schema(os.path.join(docs, "_schema.json"), layers)
 
     copy_tpl("docs-README.md", os.path.join(docs, "README.md"), date)
     copy_tpl("dev-plan.md", os.path.join(docs, "00-门面", "开发计划.md"), date)

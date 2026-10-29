@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import datetime
+import json
 import os
 import re
 import shutil
@@ -69,6 +70,21 @@ def main():
         c, out = run("doc_check.py", "--quiet", cwd=tmp)
         check("doc_init + doc_check 为 0 error", c == 0 and "errors=0" in out, out.strip()[-200:])
         check("_schema.json 已生成", os.path.exists(os.path.join(tmp, "docs", "_schema.json")))
+
+        # 默认（不带 --full）只铺 5 层。这条路径曾因 layers 与内置 8 层合并而报 3 条假 E9，
+        # 而本文件以前一律带 --full，所以 32 条断言全绿也没拦住它。
+        tmp5 = tempfile.mkdtemp(prefix="ddd-selftest5-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp5)
+            c, out = run("doc_check.py", "--quiet", cwd=tmp5)
+            check("默认 5 层铺骨架首跑 0 error", c == 0 and "errors=0" in out, out.strip()[-200:])
+            # 同一个项目后补 --full：层表必须跟着合并，否则三层文档全报 E3（A2 原缺陷）
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", "--full", cwd=tmp5)
+            c, out = run("doc_check.py", "--quiet", cwd=tmp5)
+            check("已初始化项目补 --full 后仍 0 error", c == 0 and "errors=0" in out,
+                  out.strip()[-200:])
+        finally:
+            shutil.rmtree(tmp5, ignore_errors=True)
 
         # ---------------------------------------------------------------- 2
         print("\n2. 建档编号与文件名")
@@ -240,6 +256,45 @@ def main():
             check(f"{script} 配置损坏时给可读错误（不是 Traceback）",
                   "Traceback" not in out and c == 2, f"exit={c} {out[:160]}")
         write(sch, keep)
+
+        # ---------------------------------------------------------------- 12
+        print("\n12. 输入里的特殊字符与编码（标题引号 / 标题竖线 / UTF-8 BOM）")
+        tmp4 = tempfile.mkdtemp(prefix="ddd-selftest4-")
+        try:
+            today = datetime.date.today().isoformat()
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", "--full", cwd=tmp4)
+            title = '他说"这样"行不行|A B'
+            run("devlog.py", "new", "--title", title, "--scope", "重点: 引号", cwd=tmp4)
+            sess_dir = os.path.join(tmp4, "docs", "70-过程", "会话")
+            session = os.path.join(sess_dir, sorted(os.listdir(sess_dir))[0])
+            text = read(session)
+            m = re.search(r"(?m)^title: (.*)$", text)
+            want = f"{today} · 001 · {title}"
+            ok = False
+            try:
+                ok = m is not None and json.loads(m.group(1)) == want
+            except ValueError:
+                ok = False
+            check("标题含双引号时 front-matter 仍是合法 YAML 字符串", ok,
+                  (m.group(1) if m else "没有 title 行"))
+            c, out = run("devlog.py", "check", cwd=tmp4)
+            check("标题含双引号时 check 不误报 title≠H1", c == 0 and "S2" not in out, out[-220:])
+            run("devlog.py", "index", cwd=tmp4)
+            tl = read(os.path.join(tmp4, "docs", "70-过程", "时间线.md"))
+            row = next((l for l in tl.splitlines() if l.startswith("| 2026")), "")
+            cells = re.split(r"(?<!\\)\|", row.strip().strip("|")) if row else []
+            check("标题含竖线时时间线仍是 7 列", len(cells) == 7,
+                  f"{len(cells)} 列：{row[:90]}")
+            bom = ("---\ntitle: \"BOM 文档\"\nlayer: facade\ndomain: 全局\nstatus: active\n"
+                   f"authority: 2\nupdated: {today}\n"
+                   "summary: \"带 BOM 的正文不该被当成缺 front-matter\"\ntags: []\n---\n\n"
+                   "# BOM 文档\n\n正文。\n")
+            with open(os.path.join(tmp4, "docs", "00-门面", "bom.md"), "wb") as fh:
+                fh.write(b"\xef\xbb\xbf" + bom.encode("utf-8"))
+            c, out = run("doc_check.py", cwd=tmp4)
+            check("UTF-8 BOM 文件不报 E1", c == 0 and "errors=0" in out, out[-220:])
+        finally:
+            shutil.rmtree(tmp4, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

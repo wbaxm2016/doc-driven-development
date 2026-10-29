@@ -46,13 +46,49 @@ def die(msg, as_json=False, code=2):
 
 
 def read(path):
-    with open(path, encoding="utf-8") as fh:
+    # utf-8-sig：带 BOM 的档案/模板不该被当成「缺 front-matter」。
+    with open(path, encoding="utf-8-sig") as fh:
         return fh.read()
 
 
 def write(path, text):
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
+
+
+def cell(s):
+    """表格单元格：竖线转义、换行压平。
+
+    标题里出现一个 `|`，就会把整行时间线撑成多一列（实测列数 9 vs 8）。
+    """
+    return str(s).replace("|", "\\|").replace("\r", " ").replace("\n", " ")
+
+
+def requote_fm(text, keys=("title", "scope", "summary")):
+    """把 front-matter 里带用户文本的行重写成 JSON 字符串字面量。
+
+    模板是 `title: "{{TITLE}}"`，标题原样塞进去时，标题里的 `"` 或 `\\` 会让
+    PyYAML 直接 ParserError，而脚本自己的正则校验照样报 0 error——坏文件被当成好文件。
+    """
+    lines = text.splitlines(True)
+    if not lines or lines[0].strip() != "---":
+        return text
+    end = None
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            end = i
+            break
+    if end is None:
+        return text
+    for i in range(1, end):
+        m = re.match(r"^(%s):\s*(.*?)\s*$" % "|".join(keys), lines[i].rstrip("\r\n"))
+        if not m:
+            continue
+        val = m.group(2)
+        if len(val) >= 2 and val[0] == val[-1] and val[0] in "'\"":
+            val = val[1:-1]
+        lines[i] = "%s: %s\n" % (m.group(1), json.dumps(val, ensure_ascii=False))
+    return "".join(lines)
 
 
 def parse_fm(text):
@@ -67,7 +103,13 @@ def parse_fm(text):
         if m:
             val = m.group(2).strip()
             if len(val) >= 2 and val[0] == val[-1] and val[0] in "'\"":
-                val = val[1:-1]
+                q, val = val[0], val[1:-1]
+                if q == '"':
+                    # 与 doc_check 同一条规则：双引号块按 JSON 字符串还原转义。
+                    try:
+                        val = json.loads('"' + val + '"')
+                    except ValueError:
+                        pass
             data[m.group(1)] = val
     return data
 
@@ -187,6 +229,9 @@ def cmd_new(ctx, args):
     for k, v in {"{{TITLE}}": title, "{{DATE}}": date, "{{NO}}": no,
                  "{{SCOPE}}": args.scope, "{{SLUG}}": args.title}.items():
         text = text.replace(k, v)
+    # 先给标题/范围/摘要补上转义：模板里这三处都包在双引号中，用户文本原样落进去，
+    # 一个 `"` 或行尾的 `\` 就是坏 YAML（`--title '他说"这样"行不行'` 实测 ParserError）。
+    text = requote_fm(text)
     # 兜底：doc_init 铺骨架时已经把模板里的 {{DATE}} 换成了当天日期，
     # 第二天起占位符替换等于没做事——文件名会用真实日期、front-matter 却停在铺骨架那天，
     # 于是 check 必报 S7、时间线日期与标题互相打脸。这里按本次真实日期强制归一。
@@ -320,7 +365,8 @@ def build_timeline(ctx):
         out.append("| — | — | 尚无会话档案；用 `python scripts/devlog.py new --title \"主题\"` 建第一份 "
                    "| — | — | — | — |")
     for date, no, title, scope, dec, opened, link in rows:
-        out.append(f"| {date} | {no} | [{title}]({link}) | {scope} | {dec} | {opened} "
+        out.append(f"| {cell(date)} | {cell(no)} | [{cell(title)}]({cell(link)}) "
+                   f"| {cell(scope)} | {cell(dec)} | {cell(opened)} "
                    f"| `{os.path.basename(link)}` |")
     out += ["", "> 按日期倒序；数据来自各档案 front-matter，由 `scripts/devlog.py index` 生成，勿手改。"]
     return "\n".join(out) + "\n"

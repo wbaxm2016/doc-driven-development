@@ -47,7 +47,8 @@ def die(msg, as_json=False, code=2):
 
 
 def read(path):
-    with open(path, encoding="utf-8") as fh:
+    # utf-8-sig：带 BOM 的计划文档不该被当成坏 JSON/坏文件。
+    with open(path, encoding="utf-8-sig") as fh:
         return fh.read()
 
 
@@ -101,6 +102,10 @@ def load_schema(docs):
                     merged[k].update(v)
                 else:
                     merged[k] = v
+            # layers 整表替换（与 doc_check / devlog 同一条规则）：合并会让默认 5 层
+            # 项目永远带着 8 层的内置表，找不到 process 层的"假缺失"就是这么来的。
+            if "layers" in raw:
+                merged["layers"] = raw["layers"]
             return merged
     return json.loads(json.dumps(DEFAULT_SCHEMA))
 

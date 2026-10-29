@@ -82,7 +82,9 @@ CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
 
 # ---------------------------------------------------------------- 基础工具
 def read(path):
-    with open(path, encoding="utf-8") as fh:
+    # utf-8-sig：Windows 编辑器很容易写 BOM，而 `text.startswith("---")` 会把
+    # BOM 当成正文首字符，于是明明有 front-matter 却报 E1。
+    with open(path, encoding="utf-8-sig") as fh:
         return fh.read()
 
 
@@ -105,6 +107,13 @@ def parse_fm(text):
             q, val = val[0], val[1:-1]
             if q == "'":
                 val = val.replace("''", "'")
+            else:
+                # 双引号块按 JSON 字符串还原转义（devlog 写标题时就是这么转的），
+                # 否则 `他说\"这样\"` 与正文 H1 的 `他说"这样"` 永远不相等 → 假 E4。
+                try:
+                    val = json.loads('"' + val + '"')
+                except ValueError:
+                    pass
         data[m.group(1)] = val
     return data, body
 
@@ -166,6 +175,11 @@ def load_schema(docs):
                     merged[k].update(v)
                 else:
                     merged[k] = v
+            # layers 是「这一套层就是全部」，只能整表替换、不能与内置 8 层合并：
+            # doc_init 默认只写 5 层，合并会让它永远"缺"另外 3 层，铺完首跑就报
+            # 3 条假 E9（2.x 真实回归）。旧版 _layers.json 同理整表替换。
+            if "layers" in raw:
+                merged["layers"] = raw["layers"]
             return merged, name
     return json.loads(json.dumps(DEFAULT_SCHEMA)), None
 
