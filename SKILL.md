@@ -83,7 +83,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 **决策对比 8 维**：语义正确性、实现成本、改动半径、可逆性、长期维护、用户可感知、可验证性、风险（允许"两者相当"）。
 被否决的选项**不删**：写清当时为什么没选 + **回到条件** + **触发信号**。
 
-**契约用 EARS 句式**：`WHEN <条件> THE SYSTEM SHALL <行为>`。写不出触发条件，说明还没想清楚——先去开 ADR，别在契约里糊一句"必须好用"。详见 `references/requirements-ears.md`。
+**契约用 EARS 句式**：`WHEN <条件> THE SYSTEM SHALL <行为>`。写不出触发条件，说明还没想清楚——先去开 ADR，别在契约里糊一句"必须好用"。每条需求另带 `verify:` 列：一条能直接跑的命令或测试文件路径，供回检实现；写成"人工检查一下"等于没写。详见 `references/requirements-ears.md`。
 
 **开发计划三层**：方向 `D-n`（写成 `D1`）/ 工作 `W-n.m`（写成 `W1.1`）/ 任务 `T-n.m.k`（写成 `T1.1.1`）。唯一分层判据——**会话收尾能不能一句话说清"这个做完了"**。编号前缀是结构：`T1.2.3` 的所属必须是 `W1.2`；这三条格式与引用关系都由 `plan.py check` 机器判（码 `P1`–`P12`，输出里带 `[P?]`，可直接 grep）。
 
@@ -151,7 +151,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `assets/templates/timeline.md` | 时间线（含 `devlog-index` 生成区） |
 | `assets/templates/dev-plan.md` | 开发计划（三层 + 六维 + 三视角 + `plan-rank` 生成区） |
 | `assets/templates/adr.md` | ADR 六段 + `supersedes`/`superseded_by` 双向链 |
-| `assets/templates/requirements.md` | 契约层：EARS 句式 + 验收口径 + 不得做的事 |
+| `assets/templates/requirements.md` | 契约层：EARS 句式 + `verify:` 可执行入口 + 验收口径 + 不得做的事 |
 | `assets/templates/alias-table.md` | 术语规范名/禁用别名（E16 的唯一清单） |
 | `assets/templates/process-readme.md` | 过程层协议入口：落进 `70-过程/README.md`，登记本项目的落点与惯例（协议正文仍只在 `references/process-recording.md`，这里不复写） |
 | `assets/ci/` | pre-commit 与 GitHub Actions 门禁样例 |
