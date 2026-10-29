@@ -7,7 +7,7 @@
 
 做什么：
     1. 建层目录（默认 5 层：门面/契约/决策/运行/过程；--full 再加 架构/术语/规范）
-    2. 落 README、开发计划、问题收件箱、时间线、会话模板、ADR 模板、需求清单、别名表
+    2. 落 README、开发计划、需求清单、问题收件箱、时间线、会话模板、过程层 README、ADR 示例、别名表
     3. 写 <docs>/_schema.json —— 层 / 枚举 / 段结构 / 编号规则 / 路径的唯一来源
     4. 复制 scripts/{doc_check,devlog,plan}.py 到 <target>/scripts
     5. --ci 时另写 .pre-commit-config.yaml 与 .github/workflows/docs.yml
@@ -141,6 +141,7 @@ def main():
     copy_tpl("inbox.md", os.path.join(docs, "70-过程", "问题收件箱.md"), date)
     copy_tpl("timeline.md", os.path.join(docs, "70-过程", "时间线.md"), date)
     copy_tpl("session-record.md", os.path.join(docs, "70-过程", "会话档案模板.md"), date)
+    copy_tpl("process-readme.md", os.path.join(docs, "70-过程", "README.md"), date)
     copy_tpl("adr.md", os.path.join(docs, "30-决策", "adr", "ADR-001-示例决策.md"), date,
              {"{{NO}}": "001", "{{TITLE}}": "示例决策", "{{DOMAIN}}": "全局",
               "{{SLUG}}": "示例决策，可删除", "{{SUPERSEDES}}": ""})
@@ -152,10 +153,6 @@ def main():
                     fm("产品定位", "facade", "这个产品是什么、为什么做。", date, authority="1"))
     write_if_absent(os.path.join(docs, "40-运行", "FEATURES.md"),
                     fm("已实现能力清单", "operation", "现在能做到什么；只记已验收的，不记计划。", date))
-    write_if_absent(os.path.join(docs, "70-过程", "README.md"),
-                    fm("过程层：记录协议", "process",
-                       "一次会话一份双侧档案；问题即登记；时间线由脚本生成。",
-                       date, authority="4", status="reference"))
     write_if_absent(os.path.join(docs, "30-决策", "decisions.md"),
                     fm("决策索引", "decision",
                        "ADR 的唯一入口：一文件一决策，编号只增不复用。", date, authority="1")

@@ -144,11 +144,22 @@ def read_tables(text):
 
 
 # ---------------------------------------------------------------- 配置
+class SchemaError(Exception):
+    """配置文件存在但读不出来——报清楚该查哪个文件，不抛回溯。"""
+
+
 def load_schema(docs):
     for name in ("_schema.json", "_layers.json"):
         cfg = os.path.join(docs, name)
         if os.path.exists(cfg):
-            raw = json.loads(read(cfg))
+            try:
+                raw = json.loads(read(cfg))
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise SchemaError(
+                    f"{cfg} 解析失败：{exc}。这个文件是层/枚举/段结构的唯一来源，"
+                    f"要么修好它，要么删掉回退内置默认")
+            if not isinstance(raw, dict):
+                raise SchemaError(f"{cfg} 顶层不是对象（应为 {{\"layers\": {{...}}}}）")
             merged = json.loads(json.dumps(DEFAULT_SCHEMA))
             for k, v in raw.items():
                 if isinstance(v, dict) and isinstance(merged.get(k), dict):
@@ -216,7 +227,15 @@ def main():
             print(f"ERROR {msg}")
         return 2
 
-    schema, cfg_name = load_schema(docs)
+    try:
+        schema, cfg_name = load_schema(docs)
+    except SchemaError as exc:
+        msg = str(exc)
+        if as_json:
+            print(json.dumps({"ok": False, "fatal": msg}, ensure_ascii=False))
+        else:
+            print(f"ERROR {msg}")
+        return 2
     layers = schema["layers"]
     layer_names = set(layers.values())
     names = schema["names"]
@@ -454,7 +473,12 @@ def main():
         if not os.path.exists(baseline_path):
             add(errors, "<baseline>", "E17", f"缺少基线文件 {baseline_path}，先跑 --update-baseline")
         else:
-            base = json.loads(read(baseline_path)).get("counts", {})
+            try:
+                base = json.loads(read(baseline_path)).get("counts", {})
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                add(errors, baseline_path, "E17",
+                    f"基线文件解析失败：{exc}。删掉它再跑一次 --update-baseline")
+                base = {}
             over = {c: n for c, n in cur.items() if n > base.get(c, 0)}
             for c, n in sorted(over.items()):
                 add(errors, "<baseline>", "E17",

@@ -68,13 +68,16 @@
 ## 操作
 
 ```bash
-python scripts/plan.py check            # P1–P10：编号 / 分值 / 状态词 / 所属工作
+python scripts/plan.py check            # P1–P12：编号 / 分值 / 状态词 / 所属工作 / 前置与方向引用
 python scripts/plan.py check --json     # 给 CI 用
 python scripts/plan.py index            # 重算各视角排序视图，写回文档生成区
 python scripts/plan.py index --check    # 只比对，CI 用
 ```
 
 脚本按**表头**识别维度列（单个大写字母列即维度），因此：加维度＝加列+加权重，加视角＝加一行，**都不改脚本**。
+
+> 「前置未解不排期」要能被机器兜住，前提是**前置编号必须存在**：写错一位数字（`T1.1.1` 打成 `T11.1`）会让那条任务永久停在 ⛔，
+> 而排序视图看上去完全正常。所以 P11（前置不存在）与 P12（工作指向不存在的方向）是硬校验，不是提醒。
 
 ## 状态词纪律
 

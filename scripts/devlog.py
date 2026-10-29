@@ -119,11 +119,22 @@ def find_docs(arg):
     return None
 
 
+class SchemaError(Exception):
+    """配置文件存在但读不出来——报清楚该查哪个文件，不抛回溯。"""
+
+
 def load_schema(docs):
     for name in ("_schema.json", "_layers.json"):
         p = os.path.join(docs, name)
         if os.path.exists(p):
-            raw = json.loads(read(p))
+            try:
+                raw = json.loads(read(p))
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise SchemaError(
+                    f"{p} 解析失败：{exc}。这个文件是层/枚举/段结构的唯一来源，"
+                    f"要么修好它，要么删掉回退内置默认")
+            if not isinstance(raw, dict):
+                raise SchemaError(f"{p} 顶层不是对象（应为 {{\"layers\": {{...}}}}）")
             merged = json.loads(json.dumps(DEFAULT_SCHEMA))
             for k, v in raw.items():
                 if isinstance(v, dict) and isinstance(merged.get(k), dict):
@@ -176,6 +187,10 @@ def cmd_new(ctx, args):
     for k, v in {"{{TITLE}}": title, "{{DATE}}": date, "{{NO}}": no,
                  "{{SCOPE}}": args.scope, "{{SLUG}}": args.title}.items():
         text = text.replace(k, v)
+    # 兜底：doc_init 铺骨架时已经把模板里的 {{DATE}} 换成了当天日期，
+    # 第二天起占位符替换等于没做事——文件名会用真实日期、front-matter 却停在铺骨架那天，
+    # 于是 check 必报 S7、时间线日期与标题互相打脸。这里按本次真实日期强制归一。
+    text = re.sub(r"(?m)^(updated|session_date): .*$", r"\g<1>: " + date, text, count=2)
     os.makedirs(ctx.sess, exist_ok=True)
     write(target, text)
     print(f"created: {target}")
@@ -357,7 +372,10 @@ def main():
     if docs is None:
         return die("找不到文档目录（已试 docs/ 文档/ documentation）。"
                    "用 --docs 指定，或在项目根目录运行。", as_json)
-    schema = load_schema(docs)
+    try:
+        schema = load_schema(docs)
+    except SchemaError as exc:
+        return die(str(exc), as_json)
     ctx = Ctx(docs, schema)
     if not os.path.isdir(ctx.pdir):
         return die(f"找不到过程层目录：{ctx.pdir}。"

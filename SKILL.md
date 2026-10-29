@@ -1,6 +1,14 @@
 ---
 name: doc-driven-development
-description: 用文档当成唯一事实源来管住开发：双侧会话档案（用户侧 8 类 + AI 侧 6 项 + 八维选项对比）、问题收件箱、时间线、ADR（双向取代链）、EARS 句式契约、三层开发计划（方向/工作/任务）配六维优先级与多视角排序，全部带脚本校验与棘轮基线。当用户要求"记录/追溯开发过程与系统演化""把讨论和决策留档""管理下一步做什么并排优先级""搭一套文档体系/唯一事实源""给现有项目补可校验的文档骨架"，或提到 docs/ 分层目录、ADR、会话档案、ISS 编号、开发计划排序、EARS、文档漂移时使用。
+name_en: Doc-Driven Development
+name_zh: 文档驱动的开发过程
+description: Treat documents as the single source of truth for development. Dual-sided session records (8 user-side categories, 6 AI-side items, 8-dimension option comparison), an issue inbox that logs findings without interrupting, a generated timeline, ADRs with bidirectional supersede chains, EARS-phrased contracts, and a three-level plan (direction/work/task) scored on six dimensions across multiple views — all machine-validated by stdlib scripts. Use when the user asks to record or trace development process and system evolution, keep discussions and decisions on file, manage and prioritise what comes next, lay down a docs/ hierarchy or single source of truth, backfill verifiable docs into an existing project, or mentions ADR, session records, ISS ids, plan ranking, EARS, or doc drift.
+description_en: Treat documents as the single source of truth for development: dual-sided session records, issue inbox, generated timeline, ADRs with supersede chains, EARS-phrased contracts, and a scored three-level plan, all machine-validated. Use for recording/tracing development process, archiving decisions, prioritising next steps, or laying down a verifiable docs/ hierarchy.
+description_zh: 用文档当成唯一事实源来管住开发：双侧会话档案（用户侧 8 类 + AI 侧 6 项 + 八维选项对比）、问题收件箱、时间线、ADR（双向取代链）、EARS 句式契约、三层开发计划（方向/工作/任务）配六维优先级与多视角排序，全部带脚本校验与棘轮基线。当用户要求"记录/追溯开发过程与系统演化""把讨论和决策留档""管理下一步做什么并排优先级""搭一套文档体系/唯一事实源""给现有项目补可校验的文档骨架"，或提到 docs/ 分层目录、ADR、会话档案、ISS 编号、开发计划排序、EARS、文档漂移时使用。
+argument-hint: Point me at the project root, or paste the decisions and next steps to record
+argument-hint_en: Point me at the project root, or paste the decisions and next steps to record
+argument-hint_zh: 告诉我项目根目录，或把要留档的讨论结论与下一步候选贴给我
+user-invocable: true
 ---
 
 # 文档驱动的开发过程
@@ -19,13 +27,17 @@ description: 用文档当成唯一事实源来管住开发：双侧会话档案�
 
 ## 从不空手开始
 
+`doc_init.py` **只在技能目录里**（它要靠 `../assets/templates` 取模板，所以不会被复制进项目）。在项目根目录直接写 `python scripts/doc_init.py` 会报 `can't open file`——初始化必须带技能目录绝对路径：
+
 ```bash
-python scripts/doc_init.py --target .           # 5 层：门面/契约/决策/运行/过程
-python scripts/doc_init.py --target . --full    # 再加 架构/术语/规范
-python scripts/doc_init.py --target . --full --ci   # 另写 pre-commit + GitHub Actions
+python "<技能目录>/scripts/doc_init.py" --target .              # 5 层：门面/契约/决策/运行/过程
+python "<技能目录>/scripts/doc_init.py" --target . --full       # 再加 架构/术语/规范
+python "<技能目录>/scripts/doc_init.py" --target . --full --ci  # 另写 pre-commit + GitHub Actions
 ```
 
-幂等，不覆盖已有文件。落地内容：层目录、**`docs/_schema.json`（层/枚举/段结构/编号规则/路径的唯一来源）**、README、开发计划、需求清单、收件箱、时间线、会话模板、ADR 模板、别名表、最小占位文档，并把三份脚本复制进 `<target>/scripts`。
+技能目录本机是 `~/.qwenworkcn/skills/doc-driven-development`。
+
+幂等，不覆盖已有文件。落地内容：层目录、**`docs/_schema.json`（层/枚举/段结构/编号规则/路径的唯一来源）**、README、开发计划、需求清单、收件箱、时间线、会话模板、ADR 模板、过程层协议入口、别名表、最小占位文档，并把**日常三件套** `doc_check.py` / `devlog.py` / `plan.py` 复制进 `<target>/scripts`——从此日常命令才是「在项目根目录跑 `python scripts/<三件套之一>.py`」这个形式。
 
 铺完先跑 `python scripts/doc_check.py`，应为 `errors=0`（若有 `E9 层为空`，说明有层没内容：补一篇或从 `_schema.json` 删该层）。
 
@@ -44,7 +56,7 @@ python scripts/devlog.py new --title "本次主题" --scope "范围"
 ```bash
 python scripts/devlog.py check      # 七段顺序、front-matter、ISS 引用、文件名
 python scripts/devlog.py index      # 重建时间线
-python scripts/plan.py check        # 编号 / 分值 / 状态词 / 所属工作
+python scripts/plan.py check        # 编号 / 分值 / 状态词 / 所属工作 / 前置与方向引用
 python scripts/plan.py index        # 重建排序视图
 python scripts/doc_check.py         # 全库字段与链接
 ```
@@ -73,7 +85,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 **契约用 EARS 句式**：`WHEN <条件> THE SYSTEM SHALL <行为>`。写不出触发条件，说明还没想清楚——先去开 ADR，别在契约里糊一句"必须好用"。详见 `references/requirements-ears.md`。
 
-**开发计划三层**：`D-n` 方向 / `W-n.m` 工作 / `T-n.m.k` 任务。唯一分层判据——**会话收尾能不能一句话说清"这个做完了"**。编号前缀是结构，`T1.2.3` 的所属必须是 `W1.2`（P6 校验）。
+**开发计划三层**：方向 `D-n`（写成 `D1`）/ 工作 `W-n.m`（写成 `W1.1`）/ 任务 `T-n.m.k`（写成 `T1.1.1`）。唯一分层判据——**会话收尾能不能一句话说清"这个做完了"**。编号前缀是结构：`T1.2.3` 的所属必须是 `W1.2`；这三条格式与引用关系都由 `plan.py check` 机器判（码 `P1`–`P12`，输出里带 `[P?]`，可直接 grep）。
 
 **六维**（分越高越先做，成本取反）：`U` 用户可感知 / `C` 闭环贡献 / `S` 系统完备 / `R` 正确性风险 / `V` 可验证 / `E` 实施成本。
 **三视角权重**：尽快看到效果、系统更完备、核心功能优化——加视角只是加一行权重，不改脚本。
@@ -111,6 +123,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | 情况 | 正确行为 |
 |---|---|
 | `python` 不可用（Windows 常见，只有 `python3` / `py` / `py -3`） | 换 `python3` 或 `py -3` 重试；仍失败就如实报告"脚本没跑成"，**不要假装跑过了** |
+| `python scripts/doc_init.py` 报 `can't open file` | 正常——`doc_init.py` 只在技能目录里。改用 `python "<技能目录>/scripts/doc_init.py" --target <项目>`；装完之后 `doc_check/devlog/plan` 才在 `<项目>/scripts` 里 |
 | `docs/` 不在默认位置 | 用 `--docs 文档` 指定。三份脚本都会先找 `docs` / `文档` / `documentation`；找不到会**直接 exit 2 并说明**，不再返回 `errors=0` 的假通过 |
 | 项目已有一套自己的文档体系 | 先只跑 `doc_check.py` 摸清现状，不要 `doc_init` 覆盖；用 `--update-baseline` 记下存量，再逐条收敛 |
 | 校验报错但用户说"先别管" | 把错误原文写进会话档案 §3.5 与收件箱，继续当前话题（符合"发现即登记"），不要静默丢弃 |
@@ -140,13 +153,14 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `assets/templates/adr.md` | ADR 六段 + `supersedes`/`superseded_by` 双向链 |
 | `assets/templates/requirements.md` | 契约层：EARS 句式 + 验收口径 + 不得做的事 |
 | `assets/templates/alias-table.md` | 术语规范名/禁用别名（E16 的唯一清单） |
+| `assets/templates/process-readme.md` | 过程层协议入口：落进 `70-过程/README.md`，登记本项目的落点与惯例（协议正文仍只在 `references/process-recording.md`，这里不复写） |
 | `assets/ci/` | pre-commit 与 GitHub Actions 门禁样例 |
 | `assets/agents-snippet.md` | 粘进 `AGENTS.md` 的 8 行约定，让习惯默认生效 |
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
 | `scripts/devlog.py` | `new` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
-| `scripts/self_test.py` | 自检：把本文「验收」一节跑成 22 条断言，在临时目录里铺骨架、造错、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–10 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -165,3 +179,8 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 5. 时间线按日期倒序列出全部会话，链接可点。
 6. 把某篇契约的「必须」删掉 → E13 报；把 `superseded_by` 指向不存在的 ADR → E15 报。
 7. 在 `docs/文档` 而不是 `docs/` 下铺骨架 → `doc_check --docs 文档` 通过，`devlog.py` / `plan.py` 不报假通过。
+8. **跨天**：铺完骨架后把 `会话档案模板.md` 的日期改成昨天（模拟"骨架是昨天铺的"），再 `devlog.py new` → `check` 必须 0 error，文件名前缀 = `<session_date>-<session_no>-`，时间线日期列与档案标题同一天。2.0.0 就是缺这一条：`doc_init` 把模板里的 `{{DATE}}` 烤死在铺骨架那天，第二天起每次开档都自相矛盾。
+9. 前置写一个表里不存在的编号 → `plan.py check` 报 `[P11]`；工作表方向列写 `D9`（方向表里没有）→ 报 `[P12]`。查不出这两条时，任务会被永久标 ⛔ 且没有任何诊断。
+10. 把 `_schema.json` 改成非法 JSON → 三份脚本都给 `exit 2` + 一行说明（不是回溯）。
+
+`scripts/self_test.py` 把上面 1–10 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

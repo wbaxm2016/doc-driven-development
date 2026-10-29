@@ -32,25 +32,27 @@ dist/               构建产物（.skill = zip），只允许由 build.py 生�
 
 ```bash
 python build.py            # 体检 → 自测 → 打包 → 验包
-python build.py --install  # 同上，再覆盖安装到 ~/.workbuddy/skills/
+python build.py --install  # 同上，再覆盖安装到技能根目录（依次找 .qwenworkcn / .workbuddy）
+python build.py --install --skills-dir ~/.qwenworkcn/skills   # 明确指定根目录
 ```
 
 改完任何脚本或文档，**先跑 `python build.py`**。它会拦下这些情况：
 
-- `SKILL.md` front-matter 不合规（`name` 必须等于目录名、`description` ≤ 1024、行数过大告警）
+- `SKILL.md` front-matter 不合规：`name` 必须等于目录名、`description` 10–1024、双语字段（`name_en/name_zh/description_en/description_zh/argument-hint(_en|_zh)/user-invocable`）齐、行数过大告警
+- `.skill-metadata.yaml` 缺失或双语示例不足 2 条（没有这个文件时，用户点「使用」只会预填通用问句）
 - `SKILL.md` 里点名的 `references/` `assets/` `scripts/` 路径不存在，或有文件从未被提及
 - 脚本语法错误（装到用户机器上才炸是最贵的失败）
 - `self_test.py` 断言不过
 - 包内文件与源仓库不一致（多一个、少一个、内容不同）
 - `MANIFEST.txt` 里任一文件哈希与包内实际内容不符
-- `SKILL.md` 没落在包根目录（安装方会识别不到技能）
+- `SKILL.md` 没落在包根目录（本包按扁平结构设计与自校验；换到要求顶层同名目录的安装方时需要重新确认）
 
-自测 `scripts/self_test.py` 把 `SKILL.md` 的验收清单变成 22 条断言：自己在临时目录铺骨架、故意制造 5 类错误、验证假通过不再发生、验证棘轮基线。它跑在临时目录，不碰任何真实项目。
+自测 `scripts/self_test.py` 把 `SKILL.md` 的验收 1–10 跑成断言：临时目录里铺骨架、故意制造错误、验取代链与契约措辞、验目录改名不产生假通过、验棘轮基线，以及三组**时间演化与引用存在性**用例（跨天开档、`--date` 补记、前置/方向指向不存在的编号、配置损坏不抛回溯）。它跑在临时目录，不碰任何真实项目。
 
 单跑自测：
 
 ```bash
-python scripts/self_test.py      # 22 条断言
+python scripts/self_test.py      # 验收 1–10 的断言
 python scripts/self_test.py -v   # 顺带打印每条命令的退出码
 ```
 
@@ -65,25 +67,31 @@ python scripts/self_test.py -v   # 顺带打印每条命令的退出码
 
 ## 安装（其他 Agent / 其他机器）
 
-```bash
-# 方式一：解压到技能目录
-unzip doc-driven-development.skill -d ~/.workbuddy/skills/doc-driven-development
+**先确认对方读哪个技能目录**——这是最容易翻车的一步：千问办公（QoderWork CN）读 `~/.qwenworkcn/skills/`，别的 Agent 可能是 `~/.workbuddy/skills/` 或自己的路径。装错目录时脚本会打印"安装成功"，而技能列表里根本没有它：**这是一次假通过，正是这套实践要消灭的东西。**
 
-# 方式二：Zip 技能直接投放
-# 把 .skill 放到技能市场/上传入口即可
+```bash
+# 方式一：解压到目标产品的技能目录（千问办公示例）
+mkdir -p ~/.qwenworkcn/skills/doc-driven-development
+unzip doc-driven-development.skill -d ~/.qwenworkcn/skills/doc-driven-development
+
+# 方式二：让 build.py 自己找根目录（依次尝试 QWENWORK_SKILLS / WORKBUDDY_SKILLS /
+#         ~/.qwenworkcn/skills / ~/.workbuddy/skills），并打印实际落盘路径
+python build.py --install
+
+# 方式三：把 .skill 交给安装方的导入入口（卡片/上传），由对方决定落点
 ```
 
-安装后先自检：
+安装后先自检，并**重开会话/窗口**确认技能出现在列表里——那才是装上的证据：
 
 ```bash
-python ~/.workbuddy/skills/doc-driven-development/scripts/self_test.py
-cat ~/.workbuddy/skills/doc-driven-development/MANIFEST.txt   # 核对版本与哈希
+python ~/.qwenworkcn/skills/doc-driven-development/scripts/self_test.py
+cat ~/.qwenworkcn/skills/doc-driven-development/MANIFEST.txt   # 核对版本与哈希
 ```
 
 ## 设计原则
 
 1. **配置先于代码**：层、枚举、段结构、编号规则、路径全在项目内的 `docs/_schema.json`，加一层不用改脚本。
-2. **规则必须有码**：每条规则在 `references/check-rules.md` 里有一个码（`E`/`W`/`D`/`S`/`P`），且有断言覆盖。文档写了代码没实现，是这套实践最该避免的失败。
-3. **不假装跑过**：找不到目录就 exit 2 并说清楚，绝不返回 `errors=0` 的假通过。
+2. **规则必须有码，且码必须打印**：每条规则在 `references/check-rules.md` 里有一个码（`E`/`W`/`D`/`S`/`P`），三份脚本的错误行都带 `[码]`，CI 可以直接 grep。自测优先覆盖会影响判断结果的规则（假通过、跨天、引用不存在、配置损坏）——**不是每条规则都有断言，而是每条"会静默骗人"的规则都有**，别把这句读成全覆盖。文档写了代码没实现，是这套实践最该避免的失败。
+3. **不假装跑过**：找不到目录、配置读不出来就 exit 2 并说清楚，绝不返回 `errors=0` 的假通过。安装也是同一类风险：装到没人读的目录等于没装。
 4. **存量债棘轮**：老项目用 `--update-baseline` 当天接入，只许降不许升。
 5. **只做形式校验**：语义是否合理靠人。外链失效、锚点交给 lychee；合规追溯交给 StrictDoc / sphinx-needs（见 `references/ecosystem.md`）。

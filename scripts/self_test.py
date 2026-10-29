@@ -12,6 +12,7 @@
 """
 from __future__ import annotations
 
+import datetime
 import os
 import re
 import shutil
@@ -111,7 +112,7 @@ def main():
         _, dout = run("devlog.py", "check", cwd=tmp)
         check("D1 收件箱编号重复", "D1" in dout, dout[-300:])
         _, pout = run("plan.py", "check", cwd=tmp)
-        check("P4 分值越界", "P4" in pout or "分值非法" in pout, pout[-300:])
+        check("P4 分值越界（必须带码打印，供 CI grep）", "[P4]" in pout, pout[-300:])
 
         # ---------------------------------------------------------------- 4
         print("\n4. 生成区幂等")
@@ -178,6 +179,67 @@ def main():
         write(feat, read(feat) + "\n[再断一条](也没.md)\n")
         c, out = run("doc_check.py", "--baseline", cwd=tmp)
         check("超出基线时报 E17 且非 0", c != 0 and "E17" in codes(out), out[-300:])
+
+        # ---------------------------------------------------------------- 9
+        print("\n9. 跨天建档（v2.0.0 真实缺陷：doc_init 把模板里的 {{DATE}} 烤死在铺骨架那天）")
+        tmp3 = tempfile.mkdtemp(prefix="ddd-selftest3-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", "--full", cwd=tmp3)
+            yest = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+            tpl = os.path.join(tmp3, "docs", "70-过程", "会话档案模板.md")
+            # 模拟“骨架是昨天铺的”：模板里的日期停在昨天
+            write(tpl, re.sub(r"(?m)^(updated|session_date): 20\d\d-\d\d-\d\d$",
+                              lambda m: f"{m.group(1)}: {yest}", read(tpl)))
+            c, out = run("devlog.py", "new", "--title", "今天开档", cwd=tmp3)
+            c2, out2 = run("devlog.py", "check", cwd=tmp3)
+            check("跨天开档后 devlog check 不再报 S7", c2 == 0 and "S7" not in out2,
+                  f"exit={c2} {out2[-220:]}")
+            sess_dir = os.path.join(tmp3, "docs", "70-过程", "会话")
+            f3 = os.path.join(sess_dir, sorted(os.listdir(sess_dir))[-1])
+            fm3 = dict(re.findall(r"(?m)^(session_date|session_no): (\S+)$", read(f3)))
+            check("文件名前缀 = <session_date>-<session_no>-",
+                  os.path.basename(f3).startswith(f"{fm3.get('session_date')}-{fm3.get('session_no')}-"),
+                  f"{os.path.basename(f3)} {fm3}")
+            run("devlog.py", "index", cwd=tmp3)
+            row = [l for l in read(os.path.join(tmp3, "docs", "70-过程", "时间线.md")).splitlines()
+                   if re.match(r"^\| \d{4}-\d\d-\d\d \|", l)]
+            check("时间线日期列与档案 front-matter 同一天",
+                  bool(row) and row[0].split("|")[1].strip() == fm3.get("session_date"), str(row[:1]))
+            c3, out3 = run("devlog.py", "new", "--title", "补记昨天", "--date", yest, cwd=tmp3)
+            c4, out4 = run("devlog.py", "check", cwd=tmp3)
+            check("--date 补记历史日期后 check 仍 0 error", c4 == 0 and "S7" not in out4,
+                  f"exit={c4} {out4[-220:]}")
+            c5, out5 = run("doc_check.py", "--quiet", cwd=tmp3)
+            check("跨天场景下 doc_check 仍 0 error（E6 未来日期没被引入）",
+                  c5 == 0 and "errors=0" in out5, out5[-220:])
+        finally:
+            shutil.rmtree(tmp3, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 10
+        print("\n10. 引用的存在性：前置编号、工作→方向（查不出来就会永久静默卡死）")
+        ptext = read(plan)
+        write(plan, ptext.replace("| 待开工 | - |", "| 待开工 | T8.8.8 |", 1))
+        c, out = run("plan.py", "check", cwd=tmp)
+        check("P11 前置编号不存在被报出", c != 0 and "[P11]" in out, out[-300:])
+        write(plan, ptext)
+        work_row = [l for l in ptext.splitlines() if l.startswith("| **W1.1**")]
+        if work_row:
+            write(plan, ptext.replace("| **W1.1** | （示例）端到端跑通一次 | D1",
+                                      "| **W1.1** | （示例）端到端跑通一次 | D9", 1))
+            c, out = run("plan.py", "check", cwd=tmp)
+            check("P12 工作指向不存在的方向被报出", c != 0 and "[P12]" in out, out[-300:])
+            write(plan, ptext)
+
+        # ---------------------------------------------------------------- 11
+        print("\n11. 配置损坏时不抛回溯")
+        sch = os.path.join(tmp, "docs", "_schema.json")
+        keep = read(sch)
+        write(sch, "{ nope")
+        for script, arg in (("doc_check.py", None), ("devlog.py", "check"), ("plan.py", "check")):
+            c, out = run(script, *([arg] if arg else []), cwd=tmp)
+            check(f"{script} 配置损坏时给可读错误（不是 Traceback）",
+                  "Traceback" not in out and c == 2, f"exit={c} {out[:160]}")
+        write(sch, keep)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

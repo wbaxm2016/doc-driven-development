@@ -79,11 +79,22 @@ def find_docs(arg):
     return None
 
 
+class SchemaError(Exception):
+    """配置文件存在但读不出来——报清楚该查哪个文件，不抛回溯。"""
+
+
 def load_schema(docs):
     for name in ("_schema.json", "_layers.json"):
         p = os.path.join(docs, name)
         if os.path.exists(p):
-            raw = json.loads(read(p))
+            try:
+                raw = json.loads(read(p))
+            except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+                raise SchemaError(
+                    f"{p} 解析失败：{exc}。这个文件是层/枚举/编号规则的唯一来源，"
+                    f"要么修好它，要么删掉回退内置默认")
+            if not isinstance(raw, dict):
+                raise SchemaError(f"{p} 顶层不是对象（应为 {{\"layers\": {{...}}}}）")
             merged = json.loads(json.dumps(DEFAULT_SCHEMA))
             for k, v in raw.items():
                 if isinstance(v, dict) and isinstance(merged.get(k), dict):
@@ -153,7 +164,12 @@ def load(path):
 
 # ---------------------------------------------------------------- 校验
 def validate(weights, tasks, works, dirs, cfg):
+    """返回 (errs, items, codes, done, work_ids)。errs 里每条都带码，与 check-rules.md 的 P 段一一对应。"""
     errs = []
+
+    def E(code, msg):
+        errs.append({"code": code, "message": msg})
+
     w_header, w_rows = weights
     t_header, t_rows = tasks
     codes = dim_codes(t_header)
@@ -164,64 +180,78 @@ def validate(weights, tasks, works, dirs, cfg):
     states = set(cfg["states"])
     done = set(cfg["done_states"])
 
-    work_ids = set()
+    work_ids, work_dir = set(), {}
     if works:
         for r in works[1]:
             if r:
                 work_ids.add(r[0])
                 if not pat_w.fullmatch(r[0]):
-                    errs.append(f"工作编号不合规：{r[0]}（应形如 W1.1）")
+                    E("P9", f"工作编号不合规：{r[0]}（应形如 W1.1）")
+                if "方向" in works[0]:
+                    work_dir[r[0]] = r[works[0].index("方向")]
     dir_ids = set()
     if dirs:
         for r in dirs[1]:
             if r:
                 dir_ids.add(r[0])
                 if not pat_d.fullmatch(r[0]):
-                    errs.append(f"方向编号不合规：{r[0]}（应形如 D1）")
+                    E("P9", f"方向编号不合规：{r[0]}（应形如 D1）")
+    # P12：工作表的方向列必须落在方向表里（任务→工作有 P5，工作→方向不能缺）
+    if dir_ids:
+        for wid, dref in sorted(work_dir.items()):
+            if dref and dref not in dir_ids:
+                E("P12", f"{wid} 所属方向不存在：{dref}")
 
+    all_task_ids = {r[idx["ID"]] for r in t_rows if len(r) == len(t_header)}
     items, seen = [], {}
     for r in t_rows:
         if len(r) != len(t_header):
-            errs.append(f"任务行列数不符（{len(r)}≠{len(t_header)}）：{' | '.join(r)[:60]}")
+            E("P10", f"任务行列数不符（{len(r)}≠{len(t_header)}）：{' | '.join(r)[:60]}")
             continue
         tid = r[idx["ID"]]
         if tid in seen:
-            errs.append(f"任务编号重复：{tid}")
+            E("P2", f"任务编号重复：{tid}")
         seen[tid] = True
         if not pat_t.fullmatch(tid):
-            errs.append(f"任务编号不合规：{tid}（应形如 T1.1.1）")
+            E("P1", f"任务编号不合规：{tid}（应形如 T1.1.1）")
         status = r[idx["状态"]] if "状态" in idx else ""
         if states and status not in states:
-            errs.append(f"{tid} 的状态词不在白名单：{status!r}（允许：{'、'.join(sorted(states))}）")
+            E("P3", f"{tid} 的状态词不在白名单：{status!r}（允许：{'、'.join(sorted(states))}）")
         scores = {}
         for c in codes:
             v = r[idx[c]]
             if not re.fullmatch(r"\d", v or "") or not 1 <= int(v) <= 5:
-                errs.append(f"{tid} 的 {c} 分值非法：{v!r}（应为 1–5 整数）")
+                E("P4", f"{tid} 的 {c} 分值非法：{v!r}（应为 1–5 整数）")
                 scores[c] = 0
             else:
                 scores[c] = int(v)
         work = r[idx["所属"]] if "所属" in idx else ""
         if work_ids and work not in work_ids:
-            errs.append(f"{tid} 的所属工作不存在：{work}")
+            E("P5", f"{tid} 的所属工作不存在：{work}")
         if pat_t.fullmatch(tid) and pat_w.fullmatch(str(work)):
             if tid[1:].split(".")[:2] != work[1:].split("."):
-                errs.append(f"{tid} 的前缀与所属 {work} 不一致（编号应共享 n.m）")
+                E("P6", f"{tid} 的前缀与所属 {work} 不一致（编号应共享 n.m）")
         pre = r[idx["前置"]] if "前置" in idx else "-"
+        pres = [p.strip() for p in re.split(r"[,，/]", pre) if p.strip() and p.strip() != "-"]
+        # P11：前置必须指向表里存在的任务，否则该任务会被永久标 ⛔ 且没有任何诊断
+        for p in pres:
+            if p not in all_task_ids:
+                E("P11", f"{tid} 的前置编号不存在：{p}（表里没有这条任务；"
+                         f"写错一个编号就会把它永久卡在 ⛔）")
         items.append({"id": tid, "name": r[idx["任务"]], "work": work,
                       "status": status, "pre": pre, "scores": scores})
 
     for row in w_rows:
         if len(row) != len(w_header):
-            errs.append(f"权重行列数不符：{' | '.join(row)[:60]}")
+            E("P10", f"权重行列数不符：{' | '.join(row)[:60]}")
             continue
         try:
             total = sum(int(row[w_header.index(c)]) for c in dim_codes(w_header))
         except ValueError:
-            errs.append(f"权重行含非数字：{' | '.join(row)[:60]}")
+            E("P7", f"权重行含非数字：{' | '.join(row)[:60]}")
             continue
         if total == 0:
-            errs.append(f"视角「{row[0]}」权重全为 0")
+            E("P7", f"视角「{row[0]}」权重全为 0")
 
     return errs, items, codes, done, work_ids
 
@@ -232,7 +262,13 @@ def compute(weights, items, codes, done, work_ids, cfg):
     statuses = {t["id"]: t["status"] for t in items}
     for t in items:
         pres = [p.strip() for p in re.split(r"[,，/]", t["pre"]) if p.strip() and p.strip() != "-"]
-        t["blocked_by"] = [p for p in pres if statuses.get(p) not in done]
+        blocked = []
+        for p in pres:
+            if p not in statuses:
+                blocked.append(f"前置不存在:{p}")
+            elif statuses[p] not in done:
+                blocked.append(p)
+        t["blocked_by"] = blocked
         if work_ids and t["work"] not in work_ids:
             t["blocked_by"].append(f"所属工作不存在:{t['work']}")
 
@@ -295,7 +331,10 @@ def main():
     docs = find_docs(docs_arg)
     if docs is None:
         return die("找不到文档目录（docs/ 文档/ documentation）。用 --docs 指定。", as_json)
-    schema = load_schema(docs)
+    try:
+        schema = load_schema(docs)
+    except SchemaError as exc:
+        return die(str(exc), as_json)
     fdir = layer_dir(schema, "facade")
     path = file_arg or os.path.join(docs, fdir or "", schema["names"]["plan"])
     if not os.path.exists(path):
@@ -313,7 +352,7 @@ def main():
         views = compute(weights, items, codes, done, work_ids, cfg)
         pending = [t for t in items if t["status"] not in done]
         if pending and not any(not o[1]["blocked_by"] for _, order in views for o in order):
-            errs.append("所有视角都无可排任务（全部被前置阻塞）")
+            errs.append({"code": "P8", "message": "所有视角都无可排任务（全部被前置阻塞）"})
         if as_json:
             print(json.dumps({"ok": not errs, "tasks": len(items),
                               "works": len(work_ids), "views": len(views), "errors": errs},
@@ -321,13 +360,13 @@ def main():
             return 1 if errs else 0
         print(f"tasks: {len(items)}  works: {len(work_ids)}  views: {len(views)}")
         for e in errs:
-            print(f"  ERROR {e}")
+            print(f"  ERROR [{e['code']}] {e['message']}")
         print(f"errors={len(errs)}")
         return 1 if errs else 0
 
     if errs:
         for e in errs:
-            print(f"  ERROR {e}")
+            print(f"  ERROR [{e['code']}] {e['message']}")
         print(f"errors={len(errs)}")
         return 1
 

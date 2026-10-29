@@ -1,0 +1,67 @@
+# QoderWork / QwenWork 技能卡片预填问句：点「使用」时按 capability 预填，避免通用问句浪费这个技能。
+# 每个字段都要 zh + en；{{占位符}} 只留给用户必须提供的信息。
+examples:
+  - id: init-docs-skeleton
+    title:
+      zh: 给项目铺文档骨架
+      en: Lay Down the Docs Skeleton
+    description:
+      zh: 在新项目或文档混乱的项目里建分层目录、模板、校验脚本与唯一事实源入口
+      en: Create the layered docs tree, templates, validators and single-source-of-truth entry in a new or messy project
+    prompt:
+      zh: |-
+        给这个项目搭一套文档驱动骨架：项目根目录 {{项目根目录}}
+        要求：默认 5 层（门面/契约/决策/运行/过程），需要架构/术语/规范时加 --full；
+        铺完先跑 doc_check 确认 errors=0，再把日常三动作写进 AGENTS.md。
+      en: |-
+        Lay down the doc-driven skeleton for {{project root}}.
+        Use the default 5 layers (facade/contract/decision/operation/process), add --full if the project needs architecture/glossary/norms.
+        Run doc_check afterwards and report the first-round result, then wire the daily three actions into AGENTS.md.
+  - id: start-session-record
+    title:
+      zh: 开一场会话档案并边做边记
+      en: Start a Session Record
+    description:
+      zh: 本场开发会话按双侧档案留档：用户侧 8 类、AI 侧 6 项、决策八维对比、开放项与交接
+      en: Record this development session both sides: 8 user-side categories, 6 AI-side items, 8-dimension decision comparison, open items and handoff
+    prompt:
+      zh: |-
+        从现在开始给这次会话建档，主题：{{本次主题}}；范围：{{范围，含明确不做什么}}。
+        过程中我说的每句话按 Q/R/F/E/D/C/X/O 归类并写落点；发现的问题当场进问题收件箱，不要打断我；
+        收尾时跑 devlog check / devlog index / plan check / plan index / doc_check，把结果贴出来。
+      en: |-
+        Open a session record for this work. Topic: {{topic}}; scope: {{scope, including what we explicitly will not do}}.
+        Classify each of my messages into Q/R/F/E/D/C/X/O with a landing point; log every finding into the issue inbox without interrupting me.
+        At wrap-up run devlog check / devlog index / plan check / plan index / doc_check and paste the results.
+  - id: rank-next-steps
+    title:
+      zh: 把下一步排成带优先级的计划
+      en: Rank the Next Steps
+    description:
+      zh: 建/改三层开发计划（方向/工作/任务），按六维打分并用多视角排序视图选出 Top-1
+      en: Build or update the three-level plan (direction/work/task), score six dimensions and pick Top-1 from the multi-view ranking
+    prompt:
+      zh: |-
+        更新 {{项目根目录}} 的开发计划：候选事项 {{贴一堆候选，或说“从收件箱里取”}}。
+        按 D/W/T 三层分解（分层判据：收尾能否一句话说清“这个做完了”），给每项打 U/C/S/R/V/E 六维分，
+        然后 plan.py check + plan.py index，告诉我三个视角各自的 Top-1 和被 ⛔ 卡住的原因。
+      en: |-
+        Update the plan in {{project root}}. Candidate items: {{paste them, or say "take them from the inbox"}}.
+        Split into direction/work/task (test: can you say "this is done" in one sentence at wrap-up), score each task on U/C/S/R/V/E,
+        then run plan.py check + plan.py index and tell me the Top-1 per view plus why anything is blocked with ⛔.
+  - id: adopt-into-existing-project
+    title:
+      zh: 接入已有文档体系的存量项目
+      en: Adopt Into an Existing Project
+    description:
+      zh: 不覆盖既有文档，先用棘轮基线记下存量债务，再逐条收敛
+      en: Do not overwrite existing docs; record legacy debt with the ratchet baseline first, then converge item by item
+    prompt:
+      zh: |-
+        这个项目已经有一套文档：{{项目根目录}}（文档目录 {{docs 或 文档 或自定义}}）。
+        不要 doc_init 覆盖。先只跑 doc_check 摸清现状，用 --update-baseline 记下存量债务，
+        再告诉我接下来该按什么顺序收敛，以及哪几条属于 P0/P1 该先修。
+      en: |-
+        This project already has its own docs: {{project root}} (docs dir {{docs / 文档 / custom}}).
+        Do not run doc_init destructively. First run doc_check to survey, record the debt with --update-baseline,
+        then propose the convergence order and flag which findings are P0/P1 to fix first.

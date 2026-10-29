@@ -5,7 +5,8 @@
 用法：
     python build.py                  # 体检 + 跑自测 + 打包 + 验包
     python build.py --no-test        # 跳过自测（仅调试打包逻辑时用）
-    python build.py --install        # 打完再覆盖安装到 ~/.workbuddy/skills/
+    python build.py --install        # 打完再覆盖安装到技能根目录（依次找 .qwenworkcn / .workbuddy）
+    python build.py --install --skills-dir ~/.qwenworkcn/skills   # 指定根目录
     python build.py --out DIR        # 改输出目录（默认 dist/）
     python build.py --json           # 机器可读结果，给 CI 用
 
@@ -38,11 +39,23 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 PY = sys.executable
 
 SKILL_NAME = "doc-driven-development"
-# 进入包的文件：根目录只允许 SKILL.md / VERSION / MANIFEST.txt，其余按目录整体收入
+# 进入包的文件：根目录只允许 SKILL.md / VERSION / MANIFEST.txt / .skill-metadata.yaml，
+# 其余按目录整体收入
 INCLUDE_DIRS = ("scripts", "references", "assets")
-ROOT_FILES = ("SKILL.md", "VERSION")
+ROOT_FILES = ("SKILL.md", "VERSION", ".skill-metadata.yaml")
+# 平台元数据不是“技能资源”，不需要在 SKILL.md 里被点名
+SELF_STATED = {"SKILL.md", "VERSION", ".skill-metadata.yaml"}
 EXCLUDE_NAMES = {"__pycache__", ".DS_Store", "Thumbs.db", ".pytest_cache"}
 EXCLUDE_SUFFIX = (".pyc", ".pyo", ".swp", ".orig", ".rej", "~")
+
+# 安装根目录候选：产品各用一个目录，写死任何一个都会造成“装成功但没人读”的假通过。
+# 顺序：显式环境变量 → 千问办公 → 其他 Agent 目录 → 旧值兜底。
+SKILL_ROOT_CANDIDATES = (
+    ("QWENWORK_SKILLS", None),
+    ("WORKBUDDY_SKILLS", None),
+    (None, os.path.join(".qwenworkcn", "skills")),
+    (None, os.path.join(".workbuddy", "skills")),
+)
 
 ZIP_DATE = (1980, 1, 1, 0, 0, 0)  # 固定时间戳，保证同样输入产出同样字节
 
@@ -142,6 +155,31 @@ def preflight() -> str:
     else:
         ok(f"description {len(desc)} 字符")
 
+    # 平台可见技能要求双语元数据；只配中文时，英文界面会退化到中文串。
+    for key in ("name_en", "name_zh", "description_en", "description_zh",
+                "argument-hint", "argument-hint_en", "argument-hint_zh", "user-invocable"):
+        if not fm.get(key):
+            err(f"SKILL.md front-matter 缺 {key}")
+    if fm.get("user-invocable") and fm["user-invocable"].lower() not in ("true", "false"):
+        err(f"user-invocable 必须是 true/false，实际 {fm['user-invocable']!r}")
+
+    md = os.path.join(ROOT, ".skill-metadata.yaml")
+    if not os.path.exists(md):
+        err("缺 .skill-metadata.yaml：用户点「使用」时只会预填通用问句，等于浪费这个文件")
+    else:
+        with open(md, encoding="utf-8") as fh:
+            meta = fh.read()
+        n_ex = len(re.findall(r"(?m)^\s*- id:", meta))
+        if n_ex < 2:
+            err(f".skill-metadata.yaml 只有 {n_ex} 条示例，主要能力应各有一条（2–5 条）")
+        for lang in ("zh", "en"):
+            if len(re.findall(rf"(?m)^\s*{lang}:", meta)) < max(2, n_ex * 2):
+                err(f".skill-metadata.yaml 的 {lang} 文案不完整（title/description/prompt 都要双语）")
+        if "{{" not in meta:
+            warn(".skill-metadata.yaml 没有 {{占位符}}：确认每条 query 都留了用户必填的位置")
+        else:
+            ok(f".skill-metadata.yaml：{n_ex} 条示例，双语齐")
+
     if len(text.splitlines()) > 500:
         warn(f"SKILL.md {len(text.splitlines())} 行，超过 500 行会让常驻上下文偏重")
 
@@ -159,7 +197,7 @@ def preflight() -> str:
     # "scripts/" 只是文件路径的前缀，不能让同目录下的孤儿文件蒙混过关。
     files = walk_package_files()
     for f in files:
-        if f in ("SKILL.md", "VERSION"):
+        if f in SELF_STATED:
             continue
         stem = os.path.basename(f)
         d = os.path.dirname(f)
@@ -214,7 +252,9 @@ def make_manifest(version: str, entries: list[tuple[str, bytes]]) -> bytes:
         f"skill: {SKILL_NAME}",
         f"version: {version}",
         "runtime: python >= 3.8, 仅标准库",
-        f"files: {len(entries) + 1}",
+        f"payload_files: {len(entries)}",
+        # 含本 MANIFEST.txt 自身；MANIFEST 不给自己算哈希，所以两个数会差 1
+        f"files_in_package: {len(entries) + 1}",
         "",
         "# sha256  path",
     ]
@@ -322,11 +362,29 @@ def verify(artifact: str, version: str) -> bool:
 
 
 # ---------------------------------------------------------------- 安装
-def install(artifact: str) -> bool:
-    target_root = os.environ.get("WORKBUDDY_SKILLS") or os.path.join(
-        os.path.expanduser("~"), ".workbuddy", "skills")
-    dest = os.path.join(target_root, SKILL_NAME)
-    print(f"\n5. 安装到 {dest}")
+def resolve_skills_root(explicit: str | None) -> tuple[str, str]:
+    """返回 (skills_root, 来源说明)。写死单一产品目录会造成“装成功但没人读”的假通过。"""
+    if explicit:
+        return os.path.abspath(os.path.expanduser(explicit)), "--skills-dir"
+    for env_key, sub in SKILL_ROOT_CANDIDATES:
+        if env_key:
+            val = os.environ.get(env_key)
+            if val:
+                return os.path.abspath(os.path.expanduser(val)), f"环境变量 {env_key}"
+        else:
+            cand = os.path.join(os.path.expanduser("~"), sub)
+            if os.path.isdir(cand):
+                return cand, f"默认目录 {sub}"
+    cand = os.path.join(os.path.expanduser("~"), ".qwenworkcn", "skills")
+    return cand, "默认首选（目录不存在，将创建）"
+
+
+def install(artifact: str, skills_root: str | None = None) -> bool:
+    root, why = resolve_skills_root(skills_root)
+    dest = os.path.join(root, SKILL_NAME)
+    print(f"\n5. 安装到 {dest}   （根目录来源：{why}）")
+    if not os.path.isdir(root):
+        warn(f"技能根目录不存在：{root}")
     tmp = tempfile.mkdtemp(prefix="ddd-install-")
     try:
         with zipfile.ZipFile(artifact) as zf:
@@ -334,7 +392,12 @@ def install(artifact: str) -> bool:
         if os.path.isdir(dest):
             shutil.rmtree(dest)
         shutil.copytree(tmp, dest)
-        ok("已覆盖安装（旧的 __pycache__ 一并清掉）")
+        if not os.path.exists(os.path.join(dest, "SKILL.md")):
+            err(f"安装后 {dest} 里没有 SKILL.md，等于没装上")
+            return False
+        ok(f"已覆盖安装：{dest}")
+        print(f"         提示：技能列表通常要重开会话/窗口才会刷新；"
+              f"确认方式是重启后能看到 {SKILL_NAME}，而不是本脚本打印成功")
         return run_self_test(dest, "安装后自测")
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -345,6 +408,9 @@ def main() -> int:
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
     ap.add_argument("--no-test", action="store_true")
     ap.add_argument("--install", action="store_true")
+    ap.add_argument("--skills-dir", default=None,
+                    help="技能根目录；不给就按 QWENWORK_SKILLS / WORKBUDDY_SKILLS / "
+                         "~/.qwenworkcn/skills / ~/.workbuddy/skills 依次找")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
 
@@ -368,7 +434,7 @@ def main() -> int:
             print("\n验包未通过，产物未发布（dist/ 保持上一次的好版本）。")
             return 1
         artifact = publish(tmp, version, args.out)
-        if args.install and not install(artifact):
+        if args.install and not install(artifact, args.skills_dir):
             return 1
     finally:
         shutil.rmtree(os.path.dirname(tmp), ignore_errors=True)
