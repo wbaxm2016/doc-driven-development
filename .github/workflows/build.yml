@@ -1,0 +1,42 @@
+name: build-skill
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # 体检 → 自测 → 打包 → 验包。走的是人工发版同一条路径，
+      # 不存在"CI 绿了但本地打包出来不一样"的可能。
+      - name: Build & verify
+        run: python build.py
+
+      # 可重复构建自证：两次打包的 sha256 必须相同
+      - name: Reproducibility
+        shell: bash
+        run: |
+          a=$(sha256sum dist/doc-driven-development.skill | cut -d' ' -f1)
+          python build.py --no-test >/dev/null
+          b=$(sha256sum dist/doc-driven-development.skill | cut -d' ' -f1)
+          echo "$a"; echo "$b"
+          [ "$a" = "$b" ] || { echo "构建不可重复"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.python-version == '3.12'
+        with:
+          name: doc-driven-development-skill
+          path: dist/*.skill
+          if-no-files-found: error
