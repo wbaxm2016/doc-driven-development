@@ -1,0 +1,50 @@
+# 文档门禁：GitHub Actions
+# 用法：复制到 .github/workflows/docs.yml
+#
+# 分工：
+#   本仓库脚本  —— 管仓库内一致性（front-matter / 相对链接 / ADR / 取代链 / 术语 / 编号 / 排序区幂等）
+#   lychee      —— 管仓库外失效（外链、锚点）。它会联网，所以只在 cron 跑，不阻塞每次 push。
+name: docs
+
+on:
+  push:
+    paths: ["docs/**", "scripts/doc_*.py", "scripts/devlog.py", "scripts/plan.py"]
+  pull_request:
+    paths: ["docs/**"]
+  schedule:
+    - cron: "0 1 * * 1"   # 每周一 09:00 GMT+8，查外链
+
+jobs:
+  consistency:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: front-matter / 相对链接 / ADR / 取代链 / 术语
+        run: python scripts/doc_check.py --quiet
+      - name: 棘轮（存量债只许降不许升）
+        run: python scripts/doc_check.py --baseline --quiet
+      - name: 会话档案与收件箱
+        run: python scripts/devlog.py check
+      - name: 计划编号与分值
+        run: python scripts/plan.py check
+      - name: 生成区幂等（排序视图 / 时间线）
+        run: |
+          python scripts/plan.py index --check
+          python scripts/devlog.py index --check
+
+  external-links:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: lychee（外链 + 锚点，带缓存）
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress --include-fragments --max-concurrency 8
+            --accept 200,206,429
+            "docs/**/*.md"
+          fail: true

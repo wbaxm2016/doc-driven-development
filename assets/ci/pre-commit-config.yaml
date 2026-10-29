@@ -1,0 +1,40 @@
+# 文档门禁：本地 pre-commit
+# 用法：复制到项目根，`pip install pre-commit && pre-commit install`
+# 全部用本地 hook，不依赖第三方仓库的 hook 元数据。
+repos:
+  - repo: local
+    hooks:
+      - id: docs-check
+        name: doc_check（front-matter / 链接 / ADR / 术语 / 取代链）
+        entry: python scripts/doc_check.py --quiet
+        language: system
+        pass_filenames: false
+        files: ^docs/.*\.md$
+
+      - id: devlog-check
+        name: devlog（七段 / ISS 引用 / 收件箱）
+        entry: python scripts/devlog.py check
+        language: system
+        pass_filenames: false
+        files: ^docs/.*\.md$
+
+      - id: plan-check
+        name: plan（编号 / 分值 / 状态词 / 所属工作）
+        entry: python scripts/plan.py check
+        language: system
+        pass_filenames: false
+        files: ^docs/.*开发计划\.md$
+
+      - id: plan-rank-idempotent
+        name: plan 排序视图是否已重建
+        entry: python scripts/plan.py index --check
+        language: system
+        pass_filenames: false
+        files: ^docs/.*开发计划\.md$
+
+      - id: timeline-idempotent
+        name: 时间线是否已重建
+        entry: python scripts/devlog.py index --check
+        language: system
+        pass_filenames: false
+        files: ^docs/.*\.md$

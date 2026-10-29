@@ -1,0 +1,28 @@
+---
+title: "时间线"
+layer: process
+domain: 协作
+status: active
+authority: 4
+updated: {{DATE}}
+summary: "按时间回顾开发过程的入口：生成区由 scripts/devlog.py index 维护，勿手改。"
+tags: [时间线, 生成区]
+---
+
+# 时间线
+
+> 生成区由脚本从各会话档案 front-matter 汇总，**不要手改**。重建：`python scripts/devlog.py index`。
+
+<!-- BEGIN:devlog-index -->
+_运行 `python scripts/devlog.py index` 生成。_
+<!-- END:devlog-index -->
+
+## 三种回看方式
+
+| 想看 | 怎么看 |
+|---|---|
+| 某天做了什么 | 上表按日期倒序，点进档案 |
+| 某件事怎么演变的 | 按 `ISS` 编号在收件箱与档案间串（同一问题跨会话时用它连起来） |
+| 某个决定当时还摆着什么选项 | 进对应档案 §4 的八维表 |
+
+> 生成区之前的空白是**真实的**：本实践只记启动之后的过程，不回填（回填＝编造讨论过程）。
