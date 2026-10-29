@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "layers": {
+    "00-门面": "facade",
+    "20-契约": "contract",
+    "30-决策": "decision",
+    "40-运行": "operation",
+    "70-过程": "process",
+    "10-架构": "architecture",
+    "50-术语": "glossary",
+    "60-规范": "norm"
+  },
+  "status": [
+    "active",
+    "proposed",
+    "draft",
+    "implemented",
+    "superseded",
+    "snapshot",
+    "reference"
+  ],
+  "authority": [
+    "1",
+    "2",
+    "3",
+    "4"
+  ],
+  "domain": null,
+  "session_sections": [
+    "本次范围",
+    "用户侧记录",
+    "AI 侧记录",
+    "决策与选项对比",
+    "开放项",
+    "本次产出",
+    "交接"
+  ],
+  "adr_sections": [
+    "状态",
+    "背景",
+    "决策",
+    "备选方案",
+    "影响",
+    "撤销条件"
+  ],
+  "names": {
+    "plan": "开发计划.md",
+    "inbox": "问题收件箱.md",
+    "timeline": "时间线.md",
+    "session_template": "会话档案模板.md",
+    "sessions_dir": "会话",
+    "adr_dir": "adr",
+    "adr_index": "decisions.md",
+    "alias_table": "别名表.md"
+  },
+  "ids": {
+    "issue": "ISS",
+    "adr": "ADR",
+    "req": "REQ",
+    "digits": 3
+  },
+  "plan": {
+    "done_states": [
+      "已完成"
+    ],
+    "states": [
+      "待开工",
+      "进行中",
+      "已实现（未验收）",
+      "已完成",
+      "阻塞",
+      "搁置"
+    ],
+    "task_pattern": "^T\\d+\\.\\d+\\.\\d+$",
+    "work_pattern": "^W\\d+\\.\\d+$",
+    "direction_pattern": "^D\\d+$"
+  },
+  "ears": {
+    "enabled": true
+  },
+  "baseline": ".docs-baseline.json"
+}

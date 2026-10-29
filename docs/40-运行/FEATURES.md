@@ -1,0 +1,31 @@
+---
+title: "已实现能力清单"
+layer: operation
+domain: 全局
+status: active
+authority: 2
+updated: 2026-10-29
+summary: "现在能做到什么；只记已验收的，不记计划。当前版本 2.1.0。"
+tags: [能力, 验收]
+---
+
+# 已实现能力清单
+
+> 只记**已验收**的能力。计划中的（`_delta`、`verify:` 回检、改动分级、交接锚点）在 [开发计划](../00-门面/开发计划.md) 里，不写在这里。
+
+当前版本：`VERSION` = 2.1.0（`dist/doc-driven-development-2.1.0.skill`）。
+
+| 能力 | 一条判据 | 证据 |
+|---|---|---|
+| 铺骨架 | `doc_init.py --target . --full` 幂等，不覆盖已有文件 | 本仓库自举：14 篇、首跑 `errors=0` |
+| 全库校验 | `doc_check.py` 的 E1–E17 / W1–W7 | `self_test.py` 32/32 |
+| 会话档案 | `devlog.py new` 编号与文件名正确；七段/S5 引用/文件名前缀可判 | `self_test.py` 第 2、9 组 |
+| 时间线 | `devlog.py index` 按日期倒序、链接可点 | `self_test.py` 第 5 组 |
+| 计划排序 | `plan.py index` 三视角加权；改一行后 `--check` 报过时 | `self_test.py` 第 4 组 |
+| 带码报错 | 三份脚本的错误行都带 `[E/W/D/S/P]` 码 | `self_test.py` 第 3 组（`[P4]` 必带码） |
+| 引用存在性 | 前置编号 P11、工作→方向 P12 会被报出 | `self_test.py` 第 10 组 |
+| 存量债棘轮 | `--update-baseline` 接入，`--baseline` 只许降 | `self_test.py` 第 8 组 |
+| 跨天建档 | 模板日期停在昨天时开档仍自洽（2.1.0 修复） | `self_test.py` 第 9 组 |
+| 配置损坏不抛回溯 | `_schema.json` 非法时三份脚本 exit 2 + 一行说明 | `self_test.py` 第 11 组 |
+| 打包与验包 | `build.py` 体检→自测→打包→验包，包内文件与源仓库逐一一致 | 2.1.0 构建：27 条目、26 个哈希吻合 |
+| 按包安装 | `--skills-dir` 指定根目录，安装后按 MANIFEST 逐文件核对 | 本机安装：不符 0 / 缺失 0 / 多余 0 |
