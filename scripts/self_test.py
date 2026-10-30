@@ -367,6 +367,158 @@ def main():
         finally:
             shutil.rmtree(tmp7, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 15
+        print("\n15. 契约增量：未合并 delta / 锚点冲突 / 归档不一致（T1.1.2）")
+        tmp8 = tempfile.mkdtemp(prefix="ddd-selftest8-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp8)
+            docs8 = os.path.join(tmp8, "docs")
+            req8 = os.path.join(docs8, "20-契约", "requirements.md")
+            delta_dir = os.path.join(docs8, "20-契约", "_delta")
+            arch_dir = os.path.join(delta_dir, "_archive")
+            os.makedirs(arch_dir)
+            today8 = datetime.date.today().isoformat()
+            base8 = read(req8)
+            row1 = next(l for l in base8.splitlines() if l.startswith("| **REQ-001**"))
+            row4 = row1.replace("REQ-001", "REQ-004", 1)
+            row5 = row1.replace("REQ-001", "REQ-005", 1)
+
+            def build_delta(no, status, changes, target="docs/20-契约/requirements.md"):
+                return (
+                    "---\n"
+                    f'title: "DELTA-{no} · 自测增量"\n'
+                    "layer: contract\ndomain: 全局\n"
+                    f"status: {status}\nauthority: 1\n"
+                    f"updated: {today8}\n"
+                    f'summary: "自测增量 {no}：验证 doc_check 对 delta 的机器判据。"\n'
+                    "tags: [契约, 增量]\n"
+                    f"delta_id: DELTA-{no}\ntarget: {target}\n---\n\n"
+                    f"# DELTA-{no} · 自测增量\n\n"
+                    "本增量**必须**逐字应用锚点；**不得**手工凑合目标行。\n\n"
+                    "## 2. 逐字变更\n\n" + changes
+                )
+
+            def put(no, status, changes, target="docs/20-契约/requirements.md", archived=False):
+                d = arch_dir if archived else delta_dir
+                p = os.path.join(d, f"DELTA-{no}-自测增量.md")
+                write(p, build_delta(no, status, changes, target))
+                return p
+
+            added4 = (
+                "**变更 1 · ADDED · REQ-004**\n\n"
+                "位置：需求表末尾\n\n"
+                "```markdown\n" + row4 + "\n```\n"
+            )
+            valid_mod = (
+                "**变更 1 · MODIFIED · REQ-001**\n\n"
+                "锚点（before，逐字，含首尾）：\n\n"
+                "```markdown\n" + row1 + "\n```\n\n"
+                "合并后（after，逐字）：\n\n"
+                "```markdown\n" + row1.replace("待实现", "已实现") + "\n```\n"
+            )
+
+            p4 = put("004", "proposed", added4)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("根目录 status: proposed 的 delta → E19、exit 1",
+                  c == 1 and "E19" in codes(out) and "DELTA-004" in out, out[-300:])
+            check("同一篇的 ADDED 锚点合法时不报 E20（不误伤）",
+                  "E20" not in codes(out), out[-300:])
+            check("围栏内的增量行带 verify: → 不报 E18",
+                  "E18" not in codes(out), out[-300:])
+
+            os.remove(p4)
+            put("004", "snapshot", added4, archived=True)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("归档 delta 的 after 未进目标 → E21、exit 1",
+                  c == 1 and "E21" in codes(out), out[-300:])
+
+            write(req8, base8.replace(row1 + "\n", row1 + "\n" + row4 + "\n", 1))
+            merged8 = read(req8)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("合并后（目标含 after、delta 已归档）→ 0 error（W1.1 验收：主文件无冲突）",
+                  c == 0 and "errors=0" in out, out[-300:])
+
+            put("006", "proposed", added4)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("ADDED 的编号已存在于目标 → E20",
+                  c == 1 and "E20" in codes(out) and "已出现" in out, out[-300:])
+            os.remove(os.path.join(delta_dir, "DELTA-006-自测增量.md"))
+
+            dup_before = (
+                "**变更 1 · MODIFIED · REQ-001**\n\n"
+                "锚点（before，逐字，含首尾）：\n\n"
+                "```markdown\n| `python tests/test_xxx.py` | 待实现 |\n```\n\n"
+                "合并后（after，逐字）：\n\n"
+                "```markdown\n| `python tests/test_xxx.py` | 已实现 |\n```\n"
+            )
+            p7 = put("007", "proposed", dup_before)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("before 锚点出现 2 次 → E20（不唯一）",
+                  c == 1 and "E20" in codes(out) and "2 次" in out, out[-300:])
+
+            put("007", "proposed", dup_before.replace(
+                "| `python tests/test_xxx.py` | 待实现 |",
+                "| **REQ-009** | 目标里没有这一行 |"))
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("before 锚点 0 次 → E20（不存在）",
+                  c == 1 and "E20" in codes(out) and "0 次" in out, out[-300:])
+
+            put("007", "proposed",
+                "**变更 1 · MODIFIED · REQ-001**\n\n"
+                "合并后（after，逐字）：\n\n"
+                "```markdown\n| `python tests/test_xxx.py` | 已实现 |\n```\n")
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("缺 before 代码块 → E20", c == 1 and "缺 before" in out, out[-300:])
+            os.remove(p7)
+
+            write(req8, merged8.replace(row4, row4.replace("待实现", "已实现"), 1))
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("归档的 after 与目标不再一致 → E21",
+                  c == 1 and "E21" in codes(out), out[-300:])
+
+            write(req8, merged8 + "\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> branch\n")
+            p8 = put("008", "proposed", valid_mod)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("目标文件含合并冲突标记 → E20", c == 1 and "冲突标记" in out, out[-300:])
+            write(req8, merged8)
+            os.remove(p8)
+
+            row5_bad = row5.replace("`python tests/test_xxx.py`", "—")
+            p9 = put("009", "proposed",
+                     "**变更 1 · ADDED · REQ-005**\n\n位置：需求表末尾\n\n"
+                     "```markdown\n" + row5_bad + "\n```\n")
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("围栏内增量行缺 verify: → 仍报 E18（围栏不是假通过通道）",
+                  c == 1 and "E18" in codes(out) and "REQ-005" in out, out[-300:])
+            os.remove(p9)
+
+            p10 = put("010", "proposed", valid_mod, archived=True)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("归档目录里的 delta 仍是 proposed → E19",
+                  c == 1 and "E19" in codes(out) and "snapshot" in out, out[-300:])
+            os.remove(p10)
+
+            removed4 = (
+                "**变更 1 · REMOVED · REQ-004**\n\n"
+                "锚点（before，逐字，含首尾）：\n\n"
+                "```markdown\n" + row4 + "\n```\n"
+            )
+            p11 = put("011", "snapshot", removed4, archived=True)
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("归档的 REMOVED 行仍在目标里 → E21",
+                  c == 1 and "E21" in codes(out), out[-300:])
+            os.remove(p11)
+
+            p12 = put("012", "proposed", valid_mod,
+                      target="docs/20-契约/不存在.md")
+            c, out = run("doc_check.py", cwd=tmp8)
+            check("target 指向不存在的文件 → E20",
+                  c == 1 and "E20" in codes(out) and "不存在" in out, out[-300:])
+            os.remove(p12)
+        finally:
+            shutil.rmtree(tmp8, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

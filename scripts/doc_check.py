@@ -80,6 +80,7 @@ VERIFY_PLACEHOLDERS = {"", "-", "—", "–", "待补", "待填", "待定", "无
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
+         "E19", "E20", "E21",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7"]
 
 
@@ -172,6 +173,167 @@ def read_tables(text):
                 tables.append((header, rows))
             block = []
     return tables
+
+
+# ---------------------------------------------------------------- 契约增量（_delta）
+# 只定机器判据，约定本身见 <contract>/_delta/README.md（T1.1.1）。三条码各管一段：
+#   E19 目录与 status 不符（根目录有未合并 delta / 归档不是 snapshot）；
+#   E20 待合并 delta 的锚点与目标冲突（不能机械应用）；
+#   E21 已归档 delta 的合并结果与目标不一致（合并丢失或目标被改）。
+DELTA_README = "README.md"
+DELTA_ARCHIVE = "_archive"
+# git 的冲突标记只认行首 7 个字符后跟空格/行尾，避免误伤 Markdown 分隔线
+CONFLICT_MARK_RE = re.compile(r"^(?:<{7}|={7}|>{7})(?: |$)", re.M)
+
+
+def delta_change_re(req_prefix):
+    return re.compile(
+        rf"^\*{{0,2}}变更\s*(\d+)\s*[·・•]\s*(ADDED|MODIFIED|REMOVED)\s*[·・•]\s*"
+        rf"({re.escape(req_prefix)}-\d+)\*{{0,2}}\s*$")
+
+
+def parse_delta(body, req_prefix):
+    """把一篇 DELTA 拆成 [{no, op, req, before, after, position}]。
+
+    每个变更段落由 `**变更 N · 操作 · REQ-nnn**` 开头，后面跟 1–2 个代码围栏。
+    围栏属于 before 还是 after，看它上方最近的标注（「锚点（before…）」/
+    「合并后（after…）」）；ADDED 只有一个围栏时按 after 处理。
+    返回 (changes, problems)：problems 是结构性问题（重复块），由调用方带码报出。
+    """
+    changes, problems = [], []
+    change_re = delta_change_re(req_prefix)
+    cur, role = None, None
+    lines = body.splitlines()
+    i = 0
+    while i < len(lines):
+        s = lines[i].strip()
+        m = change_re.match(s)
+        if m:
+            cur = {"no": int(m.group(1)), "op": m.group(2), "req": m.group(3),
+                   "before": None, "after": None, "position": ""}
+            changes.append(cur)
+            role = None
+            i += 1
+            continue
+        if not s.startswith(("```", "~~~")):
+            if cur is not None:
+                low = s.lower()
+                if "位置" in s:
+                    cur["position"] = s.split("：", 1)[-1].strip()
+                elif "before" in low or "锚点" in s:
+                    role = "before"
+                elif "after" in low or "合并后" in s:
+                    role = "after"
+            i += 1
+            continue
+        fence = s[:3]
+        j = i + 1
+        block = []
+        while j < len(lines) and not lines[j].strip().startswith(fence):
+            block.append(lines[j])
+            j += 1
+        # 只去掉块首尾的空行，行内空白必须原样保留——逐字匹配的前提
+        while block and not block[0].strip():
+            block.pop(0)
+        while block and not block[-1].strip():
+            block.pop()
+        if cur is not None:
+            key = role or ("after" if cur["op"] == "ADDED" else "")
+            if key and cur.get(key) is None:
+                cur[key] = "\n".join(block)
+            elif key:
+                problems.append(
+                    f"变更 {cur['no']}（{cur['op']} {cur['req']}）有多个 {key} 代码块")
+        i = j + 1
+    return changes, problems
+
+
+def row_req_ids(text, req_re):
+    """表格行里「编号单元格就是整条 REQ-nnn」的编号（与 E18 的判定口径一致）。"""
+    ids = []
+    for line in text.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        for cell in s.strip("|").split("|"):
+            m = req_re.fullmatch(strip_md(cell))
+            if m:
+                ids.append(m.group(0))
+    return ids
+
+
+def requirement_header(text, req_re):
+    """目标文件里需求表的表头（用来定位 verify 列与列数）。"""
+    for header, rows in read_tables(strip_fences(text)):
+        if verify_col(header) is not None:
+            return header
+        for row in rows:
+            if any(req_re.fullmatch(strip_md(c)) for c in row):
+                return header
+    return None
+
+
+def check_delta(changes, problems, target_text, archived, req_re):
+    """返回 [(code, message)]：proposed 按 _delta/README.md §5 判冲突，归档判合并结果。"""
+    out = []
+    code = "E21" if archived else "E20"
+    for msg in problems:
+        out.append((code, msg))
+    if not changes:
+        out.append((code, "没解析出「**变更 N · ADDED|MODIFIED|REMOVED · REQ-nnn**」段落"))
+        return out
+    if CONFLICT_MARK_RE.search(target_text):
+        out.append((code, "target 含合并冲突标记（<<<<<<< / ======= / >>>>>>>）"))
+    target_ids = set()
+    for _h, rows in read_tables(strip_fences(target_text)):
+        for row in rows:
+            target_ids.update(row_req_ids("|" + "|".join(row) + "|", req_re))
+    for ch in changes:
+        tag = f"变更 {ch['no']}（{ch['op']} {ch['req']}）"
+        before, after = ch["before"], ch["after"]
+        at_ids = row_req_ids(after or "", req_re)
+        if archived:
+            if ch["op"] == "REMOVED":
+                if not before:
+                    out.append((code, f"{tag} 缺 before 代码块，无法核对是否已删除"))
+                elif target_text.count(before):
+                    out.append((code, f"{tag} 声明删除该行，但目标里仍能找到"
+                                      f"（{target_text.count(before)} 次）"))
+            elif not after:
+                out.append((code, f"{tag} 缺 after 代码块，无法核对合并结果"))
+            else:
+                n = target_text.count(after)
+                if n != 1:
+                    out.append((code, f"{tag} 的 after 在目标中出现 {n} 次（应为 1 次；"
+                                      f"合并丢失或目标被后续改动）"))
+            continue
+        if ch["op"] == "ADDED":
+            if not after:
+                out.append((code, f"{tag} 缺 after 代码块（新增行原文）"))
+            elif ch["req"] not in at_ids:
+                out.append((code, f"{tag} 的 after 行不是 {ch['req']}（编号与声明不一致）"))
+            if ch["req"] in target_ids:
+                out.append((code, f"{tag} 的编号已出现于目标（ADDED 只能新增）"))
+            for n in req_re.findall(ch["position"]):
+                if n not in target_ids:
+                    out.append((code, f"{tag} 的插入位置「{n} 行之后」在目标里找不到"))
+        else:
+            if not before:
+                out.append((code, f"{tag} 缺 before 代码块（锚点）"))
+            else:
+                n = target_text.count(before)
+                if n == 0:
+                    out.append((code, f"{tag} 的 before 锚点在目标中出现 0 次"
+                                      f"（不存在，需按目标原文重写）"))
+                elif n > 1:
+                    out.append((code, f"{tag} 的 before 锚点在目标中出现 {n} 次"
+                                      f"（不唯一，需按目标原文重写）"))
+                elif at_ids and ch["req"] not in at_ids:
+                    out.append((code, f"{tag} 的 after 行不是 {ch['req']}"
+                                      f"（MODIFIED 不得改编号）"))
+            if ch["op"] == "MODIFIED" and not after:
+                out.append((code, f"{tag} 缺 after 代码块（合并后原文）"))
+    return out
 
 
 # ---------------------------------------------------------------- 配置
@@ -293,6 +455,11 @@ def main():
 
     decision_dir = layer_dir(schema, "decision")
     adr_index_rel = f"{decision_dir}/{names['adr_index']}" if decision_dir else None
+    # 契约增量目录固定在契约层下（_delta/README.md §2）；target 是仓库根相对路径
+    contract_dir = layer_dir(schema, "contract")
+    delta_prefix = f"{contract_dir}/_delta/" if contract_dir else None
+    delta_archive_prefix = (f"{delta_prefix}{DELTA_ARCHIVE}/" if delta_prefix else None)
+    repo_root = os.path.dirname(os.path.abspath(docs))
 
     def add(bucket, rel, code, msg):
         bucket.append({"file": rel, "code": code, "message": msg})
@@ -429,6 +596,63 @@ def main():
                     elif vcol >= len(row) or verify_missing(row[vcol]):
                         add(errors, rel, "E18",
                             f"{ids[0]} 缺 verify:（应写可执行命令或测试路径）")
+
+        # ---- 契约增量（E19 / E20 / E21，T1.1.2）
+        # 机器判据只覆盖 _delta/README.md 里能机械判的部分：目录与 status、
+        # 锚点能否唯一匹配、归档后的 after 是否仍在目标里。README 本身不是 delta。
+        if delta_prefix and rel.startswith(delta_prefix) and base != DELTA_README:
+            archived = rel.startswith(delta_archive_prefix)
+            status = fm.get("status", "")
+            if archived and status != "snapshot":
+                add(errors, rel, "E19",
+                    f"归档 delta 的 status 应为 snapshot，实际 {status!r}"
+                    f"（{DELTA_ARCHIVE}/ 是只读留档）")
+            elif not archived and status != "proposed":
+                add(errors, rel, "E19",
+                    f"根目录只放未合并 delta（status 应为 proposed），实际 {status!r}；"
+                    f"已合并的请移入 {DELTA_ARCHIVE}/ 并改 status: snapshot")
+            elif not archived:
+                add(errors, rel, "E19",
+                    f"未合并的契约增量：{fm.get('delta_id') or base} 仍在根目录——"
+                    f"先按锚点合并进 {fm.get('target') or '目标文件'}，"
+                    f"再移入 {DELTA_ARCHIVE}/ 并改 status: snapshot")
+
+            req_re = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
+            target = (fm.get("target") or "").strip()
+            if not target:
+                add(errors, rel, "E20", "缺 target（仓库根相对路径），无法核对锚点")
+            elif not os.path.isfile(os.path.normpath(os.path.join(repo_root, target))):
+                add(errors, rel, "E20", f"target 指向的文件不存在：{target}")
+            else:
+                ttext = read(os.path.normpath(os.path.join(repo_root, target)))
+                changes, problems = parse_delta(body, schema["ids"]["req"])
+                for c_code, msg in check_delta(changes, problems, ttext, archived, req_re):
+                    add(errors, rel, c_code, msg)
+                header = requirement_header(ttext, req_re)
+                row_code = "E21" if archived else "E20"
+                for ch in changes:
+                    for line in (ch["after"] or "").splitlines():
+                        s = line.strip()
+                        if not s.startswith("|"):
+                            continue
+                        cells = [c.strip() for c in s.strip("|").split("|")]
+                        ids = [strip_md(c) for c in cells if req_re.fullmatch(strip_md(c))]
+                        if not ids:
+                            continue
+                        if header is None:
+                            add(errors, rel, "E18",
+                                f"{ids[0]} 增量行缺 verify:（目标表里没有 verify: 列）")
+                            continue
+                        if len(cells) != len(header):
+                            add(errors, rel, row_code,
+                                f"{ids[0]} 增量行有 {len(cells)} 列，主表是 {len(header)} 列")
+                        vcol = verify_col(header)
+                        if vcol is None:
+                            add(errors, rel, "E18",
+                                f"{ids[0]} 增量行缺 verify:（目标表里没有 verify: 列）")
+                        elif vcol >= len(cells) or verify_missing(cells[vcol]):
+                            add(errors, rel, "E18",
+                                f"{ids[0]} 增量行缺 verify:（应写可执行命令或测试路径）")
 
         # ---- E16 术语旧称
         if aliases and layer in ALIAS_LAYERS and fm.get("status") not in ALIAS_SKIP_STATUS:
