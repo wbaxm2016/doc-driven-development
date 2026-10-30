@@ -32,11 +32,17 @@ VERBOSE = "-v" in sys.argv
 PASS, FAIL = [], []
 
 
-def run(script, *args, cwd):
+def run(script, *args, cwd, timeout=180):
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
-    p = subprocess.run([PY, os.path.join("scripts", script), *args],
-                       cwd=cwd, capture_output=True, text=True,
-                       encoding="utf-8", errors="replace", env=env)
+    try:
+        p = subprocess.run([PY, os.path.join("scripts", script), *args],
+                           cwd=cwd, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env=env, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # 卡住必须变成一次明确失败，而不是让 CI 一直等（ISS-025）
+        if VERBOSE:
+            print(f"    $ {script} {' '.join(args)}  -> TIMEOUT {timeout}s")
+        return 124, f"TIMEOUT after {timeout}s: {script} {' '.join(args)}"
     if VERBOSE:
         print(f"    $ {script} {' '.join(args)}  -> exit {p.returncode}")
     return p.returncode, (p.stdout or "") + (p.stderr or "")
@@ -811,6 +817,41 @@ def main():
             check("最新一篇写「无」而计划仍有任务 → S9", c == 1 and "S9" in out, out[-300:])
         finally:
             shutil.rmtree(tmp15, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 23
+        print("\n23. 存量误报与假绿收敛（ISS-013 / ISS-018 / ISS-019）")
+        tmp16 = tempfile.mkdtemp(prefix="ddd-selftest16-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp16)
+            docs16 = os.path.join(tmp16, "docs")
+            req16 = os.path.join(docs16, "20-契约", "requirements.md")
+            base16 = read(req16)
+
+            # W7 误报：变更记录里提到需求编号，不是条款行
+            write(req16, base16 + "\n| 2026-10-31 | 调整了 REQ-001 的措辞 | — |\n")
+            c, out = run("doc_check.py", cwd=tmp16)
+            check("变更记录提到 REQ 不报 W7（ISS-018）", "W7" not in codes(out), out[-300:])
+
+            # W7 真阳性：编号在首列、没有规范措辞的条款行仍要报
+            write(req16, base16 + "\n| **REQ-009** | 性能要好 | 看跑分 | `python tests/t.py` | 待实现 | — |\n")
+            c, out = run("doc_check.py", cwd=tmp16)
+            check("真正的条款行缺措辞仍报 W7", c == 0 and "W7" in codes(out), out[-300:])
+
+            # 跳过不等于通过（ISS-019）：模板那条 REQ-001 是「待实现」
+            c, out = run("verify.py", "--quiet", cwd=tmp16)
+            check("有跳过行时默认仍 0，但打印跳过数",
+                  c == 0 and "skipped=1" in out and "跳过 1 条" in out, out[-300:])
+            c, out = run("verify.py", "--strict", cwd=tmp16)
+            check("--strict 下跳过行直接失败", c == 1, out[-300:])
+
+            # 缺配置不猜层表（ISS-013）
+            os.remove(os.path.join(docs16, "_schema.json"))
+            c, out = run("doc_check.py", cwd=tmp16)
+            check("缺 _schema.json 直接 exit 2 并说清原因",
+                  c == 2 and "既没有" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp16, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -3,7 +3,7 @@
 """按契约的 `verify:` 真跑可执行入口（T1.2.3）。
 
 用法：
-    python scripts/verify.py [--root .] [--docs docs] [--timeout 300] [--quiet] [--dry-run]
+    python scripts/verify.py [--root .] [--docs docs] [--timeout 300] [--quiet] [--dry-run] [--strict]
 
 做什么：
     * 读契约层里带 REQ 编号的表格行，取 `verify:` 单元格里**第一个反引号包住的命令**；
@@ -17,6 +17,8 @@
 跳过规则：需求行状态是 `待实现 / 待开工 / 未实现 / 阻塞 / 搁置` 时跳过。
 这样铺完骨架的新项目不会因为示例行（指向尚不存在的测试）一上来就红；
 状态改成「已实现」后，verify 必须真的跑通——状态只被证据推进。
+**跳过不等于通过**（ISS-019）：每次都会打印跳过条数；`--strict` 下跳过即失败，
+成熟项目应该用它，否则「全部实现」这件事永远缺证据。
 
 设计：
     * 命令来自仓库自己的契约，等同代码评审的一部分；`--dry-run` 可先看要跑什么；
@@ -132,6 +134,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=300, help="每条命令的超时秒数（默认 300）")
     ap.add_argument("--quiet", action="store_true", help="只打印失败与汇总")
     ap.add_argument("--dry-run", action="store_true", help="只列出要跑的命令，不执行")
+    ap.add_argument("--strict", action="store_true",
+                    help="被状态跳过的需求也算失败（成熟项目用；默认只提醒）")
     args = ap.parse_args()
 
     root = os.path.abspath(args.root)
@@ -199,6 +203,12 @@ def main():
 
     print(f"verify: contracts={len(items)} commands={len(by_cmd)} "
           f"passed={passed} failed={failures} skipped={skipped}")
+    # 跳过不等于通过：不把这句话打出来，"全部绿"就会把「没验过」也算进去（ISS-019）
+    if skipped:
+        print(f"WARN  跳过 {skipped} 条（状态=待实现/待开工/未实现/阻塞/搁置）："
+              f"它们既没被验证，也没被算作失败；成熟项目用 --strict 让跳过直接失败")
+    if args.strict and skipped:
+        return 1
     return 1 if failures else 0
 
 

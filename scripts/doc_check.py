@@ -365,7 +365,10 @@ def load_schema(docs):
             if "layers" in raw:
                 merged["layers"] = raw["layers"]
             return merged, name
-    return json.loads(json.dumps(DEFAULT_SCHEMA)), None
+    # 缺配置就**不猜**：内置 8 层只是满配默认，按它判 5 层项目会多出 3 条假 E9（ISS-013）。
+    raise SchemaError(
+        f"{docs} 下既没有 _schema.json 也没有 _layers.json：层表/枚举/段结构无从判断。"
+        f"跑 `python <技能目录>/scripts/doc_init.py --target .` 补齐（幂等，不覆盖已有文件）")
 
 
 def layer_dir(schema, layer_name):
@@ -568,16 +571,21 @@ def main():
                 add(errors, rel, "E13", "契约层缺禁止措辞「不得/不许」")
 
         # ---- W7 EARS：带 REQ 编号的条款行必须有规范措辞
+        # 只认「编号单元格就是一整个 REQ-nnn」的行：变更记录/说明表里顺带提到需求编号
+        # 不是条款行（ISS-018：误报会让人把整条 W7 当噪声关掉）。
         if schema["ears"].get("enabled", True) and layer == "contract":
             req_re = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
             for line in strip_code(body).splitlines():
-                if not req_re.search(line) or not line.strip().startswith("|"):
+                if not line.strip().startswith("|"):
                     continue
                 cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                if not cells or not req_re.fullmatch(strip_md(cells[0])):
+                    continue
                 joined = " ".join(c for c in cells if not req_re.fullmatch(strip_md(c)))
                 if joined and not any(cue in joined for cue in EARS_CUES):
                     add(warns, rel, "W7",
-                        f"{req_re.search(line).group(0)} 未见规范措辞/触发条件：" + joined[:40])
+                        f"{req_re.fullmatch(strip_md(cells[0])).group(0)} 未见规范措辞/触发条件："
+                        + joined[:40])
 
         # ---- E18 契约行缺 verify（T1.2.2）：只认「编号单元格就是一整个 REQ-nnn」的行，
         # 变更记录里顺带提到需求编号不算条款行（否则会重复 ISS-018 的误报）。
