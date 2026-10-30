@@ -9,7 +9,7 @@
     1. 建层目录（默认 5 层：门面/契约/决策/运行/过程；--full 再加 架构/术语/规范）
     2. 落 README、开发计划、需求清单、问题收件箱、时间线、会话模板、过程层 README、ADR 示例、别名表
     3. 写 <docs>/_schema.json —— 层 / 枚举 / 段结构 / 编号规则 / 路径的唯一来源
-    4. 复制 scripts/{doc_check,devlog,plan}.py 到 <target>/scripts
+    4. 复制 scripts/{doc_check,devlog,plan,verify}.py 到 <target>/scripts
     5. --ci 时另写 .pre-commit-config.yaml 与 .github/workflows/docs.yml
 
 不覆盖已存在的文件（幂等，可反复跑）。
@@ -197,7 +197,7 @@ def main():
 
     scripts_dir = os.path.join(root, "scripts")
     os.makedirs(scripts_dir, exist_ok=True)
-    for name in ("doc_check.py", "devlog.py", "plan.py"):
+    for name in ("doc_check.py", "devlog.py", "plan.py", "verify.py"):
         src = os.path.join(SKILL, "scripts", name)
         with open(src, encoding="utf-8") as fh:
             write_if_absent(os.path.join(scripts_dir, name), fh.read())

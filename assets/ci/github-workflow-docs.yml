@@ -8,9 +8,10 @@ name: docs
 
 on:
   push:
-    paths: ["docs/**", "scripts/doc_*.py", "scripts/devlog.py", "scripts/plan.py"]
+    paths: ["docs/**", "tests/**", "scripts/doc_*.py", "scripts/devlog.py",
+            "scripts/plan.py", "scripts/verify.py"]
   pull_request:
-    paths: ["docs/**"]
+    paths: ["docs/**", "tests/**", "scripts/**"]
   schedule:
     - cron: "0 1 * * 1"   # 每周一 09:00 GMT+8，查外链
 
@@ -34,6 +35,9 @@ jobs:
         run: |
           python scripts/plan.py index --check
           python scripts/devlog.py index --check
+      # 契约的 verify: 指向的测试必须真跑：任一失败/超时 → 本步非 0 → workflow 失败
+      - name: "契约 verify: 真跑"
+        run: python scripts/verify.py --quiet
 
   external-links:
     if: github.event_name == 'schedule'

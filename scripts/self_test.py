@@ -251,7 +251,8 @@ def main():
         sch = os.path.join(tmp, "docs", "_schema.json")
         keep = read(sch)
         write(sch, "{ nope")
-        for script, arg in (("doc_check.py", None), ("devlog.py", "check"), ("plan.py", "check")):
+        for script, arg in (("doc_check.py", None), ("devlog.py", "check"),
+                            ("plan.py", "check"), ("verify.py", None)):
             c, out = run(script, *([arg] if arg else []), cwd=tmp)
             check(f"{script} 配置损坏时给可读错误（不是 Traceback）",
                   "Traceback" not in out and c == 2, f"exit={c} {out[:160]}")
@@ -295,6 +296,76 @@ def main():
             check("UTF-8 BOM 文件不报 E1", c == 0 and "errors=0" in out, out[-220:])
         finally:
             shutil.rmtree(tmp4, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 13
+        print("\n13. 契约行的 verify: 缺失（T1.2.2）")
+        tmp6 = tempfile.mkdtemp(prefix="ddd-selftest6-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp6)
+            req6 = os.path.join(tmp6, "docs", "20-契约", "requirements.md")
+            c, out = run("doc_check.py", "--quiet", cwd=tmp6)
+            check("模板自带 verify: 时首跑不报 E18", c == 0 and "errors=0" in out,
+                  out.strip()[-200:])
+
+            original = read(req6)
+            no_cell = original.replace("| `python tests/test_xxx.py` |", "|  |")
+            check("确实删掉了示例行的 verify 单元格", no_cell != original)
+            write(req6, no_cell)
+            c, out = run("doc_check.py", cwd=tmp6)
+            check("缺 verify 单元格 → exit 1 且报 E18",
+                  c == 1 and "E18" in codes(out) and "REQ-001" in out, out[-300:])
+
+            write(req6, original.replace("| `python tests/test_xxx.py` |", "| — |"))
+            c, out = run("doc_check.py", cwd=tmp6)
+            check("verify 写成占位「—」也算缺失（E18）",
+                  c == 1 and "E18" in codes(out), out[-300:])
+
+            # 变更记录里提到 REQ 编号不是条款行，不得误伤（ISS-018 的同类坑）
+            write(req6, original + "\n| 2026-10-29 | 变更提到 REQ-003 | — |\n")
+            c, out = run("doc_check.py", cwd=tmp6)
+            check("非条款表提到 REQ-003 不报 E18", "E18" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp6, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 14
+        print("\n14. 契约 verify 真跑（T1.2.3）")
+        tmp7 = tempfile.mkdtemp(prefix="ddd-selftest7-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", "--ci", cwd=tmp7)
+            req7 = os.path.join(tmp7, "docs", "20-契约", "requirements.md")
+            check("doc_init --ci 复制 verify.py",
+                  os.path.exists(os.path.join(tmp7, "scripts", "verify.py")))
+            ci7 = os.path.join(tmp7, ".github", "workflows", "docs.yml")
+            check("模板 docs.yml 挂上 verify.py",
+                  os.path.exists(ci7) and "verify.py" in read(ci7))
+
+            c, out = run("verify.py", "--quiet", cwd=tmp7)
+            check("示例行状态=待实现 时跳过，verify.py 0 退出",
+                  c == 0 and "skipped=1" in out, out[-250:])
+
+            original7 = read(req7)
+            ok_cmd = f'"{PY}" -c "print(\'ok\')"'
+            passing = original7.replace("| `python tests/test_xxx.py` |",
+                                        f"| `{ok_cmd}` |").replace("| 待实现 |", "| 已实现 |", 1)
+            check("测试夹具替换成功", f"`{ok_cmd}`" in passing and "| 已实现 |" in passing)
+            write(req7, passing)
+            c, out = run("verify.py", cwd=tmp7)
+            check("verify 真跑并通过", c == 0 and "PASS" in out and "REQ-001" in out,
+                  out[-250:])
+
+            bad_cmd = f'"{PY}" -c "import sys; sys.exit(3)"'
+            write(req7, passing.replace(ok_cmd, bad_cmd))
+            c, out = run("verify.py", cwd=tmp7)
+            check("verify 指向的测试失败 → exit 1",
+                  c == 1 and "FAIL" in out and "REQ-001" in out, out[-300:])
+
+            write(req7, passing.replace(f"| `{ok_cmd}` |", "|  |"))
+            c, out = run("verify.py", cwd=tmp7)
+            check("缺 verify 时 verify.py 也不假通过", c == 1 and "E18" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp7, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

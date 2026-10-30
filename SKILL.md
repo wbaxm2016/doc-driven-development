@@ -37,7 +37,7 @@ python "<技能目录>/scripts/doc_init.py" --target . --full --ci  # 另写 pre
 
 技能目录本机是 `~/.qwenworkcn/skills/doc-driven-development`。
 
-幂等，不覆盖已有文件。落地内容：层目录、**`docs/_schema.json`（层/枚举/段结构/编号规则/路径的唯一来源）**、README、开发计划、需求清单、收件箱、时间线、会话模板、ADR 模板、过程层协议入口、别名表、最小占位文档，并把**日常三件套** `doc_check.py` / `devlog.py` / `plan.py` 复制进 `<target>/scripts`——从此日常命令才是「在项目根目录跑 `python scripts/<三件套之一>.py`」这个形式。
+幂等，不覆盖已有文件。落地内容：层目录、**`docs/_schema.json`（层/枚举/段结构/编号规则/路径的唯一来源）**、README、开发计划、需求清单、收件箱、时间线、会话模板、ADR 模板、过程层协议入口、别名表、最小占位文档，并把 `doc_check.py` / `devlog.py` / `plan.py` / `verify.py` 复制进 `<target>/scripts`——日常命令才是「在项目根目录跑 `python scripts/<脚本>.py`」这个形式；前三件是收尾门禁，`verify.py` 供 CI 回检契约。
 
 铺完先跑 `python scripts/doc_check.py`，应为 `errors=0`（若有 `E9 层为空`，说明有层没内容：补一篇或从 `_schema.json` 删该层）。
 
@@ -63,6 +63,8 @@ python scripts/doc_check.py         # 全库字段与链接
 
 全部 0 error 才算收尾完成。新建档案在填完 §7 前会报 1 条 `S6 交接段过短` WARN，属正常。
 
+契约回检另有一条：`python scripts/verify.py` 按每条需求的 `verify:` 真跑（失败/超时 → exit 1，状态=`待实现/阻塞` 的行跳过）。它可能很慢，所以**不在收尾五连跑里**；CI 每次 push 跑它，改了契约或测试再本地跑一次。
+
 第一次接入**存量项目**时用棘轮，别试图一天清完：
 
 ```bash
@@ -83,7 +85,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 **决策对比 8 维**：语义正确性、实现成本、改动半径、可逆性、长期维护、用户可感知、可验证性、风险（允许"两者相当"）。
 被否决的选项**不删**：写清当时为什么没选 + **回到条件** + **触发信号**。
 
-**契约用 EARS 句式**：`WHEN <条件> THE SYSTEM SHALL <行为>`。写不出触发条件，说明还没想清楚——先去开 ADR，别在契约里糊一句"必须好用"。每条需求另带 `verify:` 列：一条能直接跑的命令或测试文件路径，供回检实现；写成"人工检查一下"等于没写。详见 `references/requirements-ears.md`。
+**契约用 EARS 句式**：`WHEN <条件> THE SYSTEM SHALL <行为>`。写不出触发条件，说明还没想清楚——先去开 ADR，别在契约里糊一句"必须好用"。每条需求另带 `verify:` 列：一条能直接跑的命令或测试文件路径，**用反引号包住**（`verify.py` 只执行第一个反引号片段）；写成"人工检查一下"等于没写。详见 `references/requirements-ears.md`。
 
 **开发计划三层**：方向 `D-n`（写成 `D1`）/ 工作 `W-n.m`（写成 `W1.1`）/ 任务 `T-n.m.k`（写成 `T1.1.1`）。唯一分层判据——**会话收尾能不能一句话说清"这个做完了"**。编号前缀是结构：`T1.2.3` 的所属必须是 `W1.2`；这三条格式与引用关系都由 `plan.py check` 机器判（码 `P1`–`P12`，输出里带 `[P?]`，可直接 grep）。
 
@@ -124,9 +126,10 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 |---|---|
 | `python` 不可用（Windows 常见，只有 `python3` / `py` / `py -3`） | 换 `python3` 或 `py -3` 重试；仍失败就如实报告"脚本没跑成"，**不要假装跑过了** |
 | `python scripts/doc_init.py` 报 `can't open file` | 正常——`doc_init.py` 只在技能目录里。改用 `python "<技能目录>/scripts/doc_init.py" --target <项目>`；装完之后 `doc_check/devlog/plan` 才在 `<项目>/scripts` 里 |
-| `docs/` 不在默认位置 | 用 `--docs 文档` 指定。三份脚本都会先找 `docs` / `文档` / `documentation`；找不到会**直接 exit 2 并说明**，不再返回 `errors=0` 的假通过 |
+| `docs/` 不在默认位置 | 用 `--docs 文档` 指定。各脚本都会先找 `docs` / `文档` / `documentation`；找不到会**直接 exit 2 并说明**，不再返回 `errors=0` 的假通过 |
 | 项目已有一套自己的文档体系 | 先只跑 `doc_check.py` 摸清现状，不要 `doc_init` 覆盖；用 `--update-baseline` 记下存量，再逐条收敛 |
 | 校验报错但用户说"先别管" | 把错误原文写进会话档案 §3.5 与收件箱，继续当前话题（符合"发现即登记"），不要静默丢弃 |
+| `verify.py` 很慢 / 命令要联网 | 调 `--timeout`、先 `--dry-run` 看要跑什么；不要为了变绿去删契约行或把状态改回「待实现」——那是拿掉证据，不是修好 |
 | 用户的项目要过合规审计（ISO 26262 / DO-178C / IEC 62304） | 契约层改用 StrictDoc 或 sphinx-needs 承载，本实践只保留过程层与计划层。见 `references/ecosystem.md` |
 | 用户想整套换成 Spec Kit / BMAD / Kiro | 说明它们解决的是"一次变更讲清楚"，不是"项目连续演化留痕"；可借鉴格式，不建议替换过程层 |
 
@@ -160,7 +163,8 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
 | `scripts/devlog.py` | `new` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
-| `scripts/self_test.py` | 自检：把本文「验收」1–10 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–11 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -181,6 +185,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 7. 在 `docs/文档` 而不是 `docs/` 下铺骨架 → `doc_check --docs 文档` 通过，`devlog.py` / `plan.py` 不报假通过。
 8. **跨天**：铺完骨架后把 `会话档案模板.md` 的日期改成昨天（模拟"骨架是昨天铺的"），再 `devlog.py new` → `check` 必须 0 error，文件名前缀 = `<session_date>-<session_no>-`，时间线日期列与档案标题同一天。2.0.0 就是缺这一条：`doc_init` 把模板里的 `{{DATE}}` 烤死在铺骨架那天，第二天起每次开档都自相矛盾。
 9. 前置写一个表里不存在的编号 → `plan.py check` 报 `[P11]`；工作表方向列写 `D9`（方向表里没有）→ 报 `[P12]`。查不出这两条时，任务会被永久标 ⛔ 且没有任何诊断。
-10. 把 `_schema.json` 改成非法 JSON → 三份脚本都给 `exit 2` + 一行说明（不是回溯）。
+10. 把 `_schema.json` 改成非法 JSON → 四份脚本（`doc_check` / `devlog` / `plan` / `verify`）都给 `exit 2` + 一行说明（不是回溯）。
+11. 把某条需求 `verify:` 指向的测试改成必然失败 → `python scripts/verify.py` 退出码 1；状态=`待实现` 的行跳过。
 
-`scripts/self_test.py` 把上面 1–10 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–11 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

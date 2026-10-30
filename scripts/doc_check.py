@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""docs/ 全库校验：front-matter / 链接 / ADR 结构 / 取代链 / 术语 / 棘轮基线。
+"""docs/ 全库校验：front-matter / 链接 / ADR 结构 / 取代链 / 术语 / 契约 verify / 棘轮基线。
 
 用法：
     python scripts/doc_check.py [--docs docs] [--quiet] [--json]
@@ -73,10 +73,13 @@ ALIAS_LAYERS = {"facade", "contract", "norm"}
 ALIAS_SKIP_STATUS = {"snapshot", "reference", "implemented", "superseded"}
 EARS_CUES = ("WHEN", "IF", "WHILE", "GIVEN", "SHALL",
              "当", "若", "一旦", "必须", "应", "不得", "不许")
+# verify 列里这些写法等于没写：占位符不是可执行入口（T1.2.2）
+VERIFY_PLACEHOLDERS = {"", "-", "—", "–", "待补", "待填", "待定", "无",
+                       "n/a", "na", "tbd", "todo", "none"}
 
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
-         "E11", "E12", "E13", "E14", "E15", "E16", "E17",
+         "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7"]
 
 
@@ -122,6 +125,25 @@ def strip_code(text):
     """剔除围栏代码块与行内代码，链接检查只看真实正文。"""
     text = re.sub(r"(?ms)^[ \t]*(```|~~~).*?^[ \t]*\1", "", text)
     return re.sub(r"`[^`\n]*`", "", text)
+
+
+def strip_fences(text):
+    """只剔除围栏代码块，保留行内代码——E18 要看 verify 单元格里的命令本身。"""
+    return re.sub(r"(?ms)^[ \t]*(```|~~~).*?^[ \t]*\1", "", text)
+
+
+def verify_col(header):
+    """需求表里 verify 列的索引；表里没有这一列返回 None。"""
+    for i, h in enumerate(header):
+        s = strip_md(h).strip().rstrip(":：").strip().lower()
+        if s == "verify" or s.startswith("verify"):
+            return i
+    return None
+
+
+def verify_missing(cell):
+    """空单元格与占位符（— / 待补 / TBD…）都等于没写可执行入口。"""
+    return strip_md(cell).strip().lower() in VERIFY_PLACEHOLDERS
 
 
 def strip_md(s):
@@ -389,6 +411,24 @@ def main():
                 if joined and not any(cue in joined for cue in EARS_CUES):
                     add(warns, rel, "W7",
                         f"{req_re.search(line).group(0)} 未见规范措辞/触发条件：" + joined[:40])
+
+        # ---- E18 契约行缺 verify（T1.2.2）：只认「编号单元格就是一整个 REQ-nnn」的行，
+        # 变更记录里顺带提到需求编号不算条款行（否则会重复 ISS-018 的误报）。
+        if layer == "contract" and base != "README.md":
+            req_id_re = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
+            for header, rows in read_tables(strip_fences(body)):
+                vcol = verify_col(header)
+                for row in rows:
+                    ids = [strip_md(c) for c in row
+                           if req_id_re.fullmatch(strip_md(c))]
+                    if not ids:
+                        continue
+                    if vcol is None:
+                        add(errors, rel, "E18",
+                            f"{ids[0]} 所在表缺 verify: 列（应写可执行命令或测试路径）")
+                    elif vcol >= len(row) or verify_missing(row[vcol]):
+                        add(errors, rel, "E18",
+                            f"{ids[0]} 缺 verify:（应写可执行命令或测试路径）")
 
         # ---- E16 术语旧称
         if aliases and layer in ALIAS_LAYERS and fm.get("status") not in ALIAS_SKIP_STATUS:

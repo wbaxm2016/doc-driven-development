@@ -18,7 +18,7 @@ tags: [架构, 校验, 打包]
 | `SKILL.md` | 技能本体：常驻上下文，只放"什么时候做什么" | 是 |
 | `references/` | 按需加载的详细说明（层模型、过程记录、计划模型、EARS、码表、生态） | 是 |
 | `assets/templates/` | 铺骨架用的模板；`assets/ci/` 为 pre-commit 与 Actions 样例 | 是 |
-| `scripts/` | `doc_init` / `doc_check` / `devlog` / `plan` / `self_test` | 是 |
+| `scripts/` | `doc_init` / `doc_check` / `devlog` / `plan` / `verify` / `self_test` | 是 |
 | `build.py` | 体检 + 自测 + 打包 + 验包 + 安装（`dist/` 的唯一生成者） | 否 |
 | `dist/` | 构建产物：稳定别名 + 带版本号两份 | 否（产物本身） |
 | `docs/` | 本项目的自举文档层（过程、决策、计划、契约） | **否** |
@@ -31,10 +31,11 @@ tags: [架构, 校验, 打包]
 ```
 doc_init.py  ──> docs/_schema.json （层/枚举/段结构/编号规则/路径的唯一来源）
                  │
-doc_check.py ───> E1–E17 阻断 / W1–W7 提醒（front-matter、链接、ADR 六段与取代链、术语旧称、棘轮基线）
+doc_check.py ───> E1–E18 阻断 / W1–W7 提醒（front-matter、链接、ADR 六段与取代链、术语旧称、契约 verify、棘轮基线）
 devlog.py    ───> D1–D2 收件箱 / S1–S7 会话档案与七段顺序
 plan.py      ───> P1–P12 编号、分值、状态词、所属与前置、方向引用
-self_test.py ───> 把 SKILL.md 的验收 1–10 跑成断言（临时目录，不碰真实项目）
+verify.py    ───> 按契约 `verify:` 真跑（退出码即结论；CI 在 build 前跑它）
+self_test.py ───> 把 SKILL.md 的验收 1–11 跑成断言（临时目录，不碰真实项目）
 build.py     ───> 体检 front-matter/引用路径/语法 → 自测 → 打包 → 解包再自测 → 安装后自测
 ```
 

@@ -19,6 +19,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # 契约 verify: 指向的测试必须真跑；任一失败 → 本步非 0 → workflow 失败
+      - name: Verify contracts
+        run: python scripts/verify.py --quiet
+
       # 体检 → 自测 → 打包 → 验包。走的是人工发版同一条路径，
       # 不存在"CI 绿了但本地打包出来不一样"的可能。
       - name: Build & verify
