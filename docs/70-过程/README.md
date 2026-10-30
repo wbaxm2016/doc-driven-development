@@ -29,6 +29,7 @@ tags: [过程, 记录协议, 入口]
 python scripts/devlog.py brief                               # 开场先读：上一场锚点/计划未完成/收件箱
 python scripts/devlog.py new --title "主题" --scope "范围"   # 开场建档
 python scripts/devlog.py check                               # 收尾：七段/字段/ISS 引用
+python scripts/devlog.py pending                             # 收尾：待分诊清零（有 open 项时 new 会被拒）
 python scripts/devlog.py index                               # 收尾：重建时间线
 python scripts/plan.py check && python scripts/plan.py index  # 收尾：计划与排序视图
 python scripts/doc_check.py                                  # 收尾：全库字段与链接

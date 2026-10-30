@@ -716,6 +716,46 @@ def main():
         finally:
             shutil.rmtree(tmp12, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 20
+        print("\n20. 待分诊问题与开工门禁（T2.5.1）")
+        tmp13 = tempfile.mkdtemp(prefix="ddd-selftest13-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp13)
+            run("devlog.py", "new", "--title", "第一场", "--scope", "自测", cwd=tmp13)
+            c, out = run("devlog.py", "ask", "要不要拆任务？", "--if", "计划里还是一个任务",
+                         cwd=tmp13)
+            check("ask 记下一条待分诊", c == 0 and "Q1" in out, out[-300:])
+            c, out = run("devlog.py", "pending", cwd=tmp13)
+            check("pending 列出该条", c == 0 and "Q1" in out and "要不要拆任务" in out, out[-300:])
+
+            c, out = run("devlog.py", "new", "--title", "第二场", cwd=tmp13)
+            check("有待分诊项时 new 被拒、exit 1", c == 1 and "Q1" in out, out[-300:])
+
+            c, out = run("devlog.py", "pending", "--clear", "Q1", "--as", "drop",
+                         "--note", "问题已过期", cwd=tmp13)
+            check("--as drop 写回状态并留理由", c == 0 and "dropped" in out, out[-300:])
+            c, out = run("devlog.py", "new", "--title", "第二场", cwd=tmp13)
+            check("清完之后 new 通过", c == 0, out[-300:])
+
+            # 延期不阻断，但超过 5 条要挡住开工
+            for i in range(6):
+                run("devlog.py", "ask", "问题%d" % i, "--if", "前提还在", cwd=tmp13)
+            for i in range(1, 7):
+                run("devlog.py", "pending", "--clear", "Q%d" % i,
+                    "--as", "defer", cwd=tmp13)
+            c, out = run("devlog.py", "new", "--title", "第三场", cwd=tmp13)
+            check("延期超过 5 条 → new 仍拒绝", c == 1 and "延期" in out, out[-300:])
+
+            c, out = run("devlog.py", "brief", cwd=tmp13)
+            check("brief 首屏给出待分诊计数", "待分诊" in out and "deferred 6" in out, out[-300:])
+
+            pend13 = os.path.join(tmp13, ".dd", "pending")
+            check("分诊后的 pending 文件保留（不静默删除）",
+                  os.path.isdir(pend13) and any(f.endswith(".md") for f in os.listdir(pend13)))
+        finally:
+            shutil.rmtree(tmp13, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -66,7 +66,7 @@
 
 ## 收尾动作（关会话语义）
 
-1. 每场开发会话开头：先 `python scripts/devlog.py brief` 读一眼——上一场交接锚点、计划里还没完成的任务、收件箱 `open`/`deferred` 计数；再 `python scripts/devlog.py new --title "主题"` 建档。**轻档**改动（只改措辞、错字、格式、注释，不碰契约/ADR/计划/码表/脚本行为）不建档，只跑改动触及的校验——判据见 `SKILL.md` 硬规则 12，分级不豁免任何检查。
-2. 过程中：用户侧分类边聊边记；AI 发现问题立刻进收件箱。
-3. 收尾：填 §3/§5/§6/§7 → `devlog.py check` → `devlog.py index` → 回写计划文档状态。
+1. 每场开发会话开头：先 `python scripts/devlog.py brief` 读一眼——上一场交接锚点、计划里还没完成的任务、收件箱 `open`/`deferred` 计数、待分诊条数；再 `python scripts/devlog.py new --title "主题"` 建档。**门禁**：上一场还有 `open` 待分诊项、或延期超过 5 条时，`new` 直接拒绝（exit 1），先把它们分诊掉。**轻档**改动（只改措辞、错字、格式、注释，不碰契约/ADR/计划/码表/脚本行为）不建档，只跑改动触及的校验——判据见 `SKILL.md` 硬规则 12，分级不豁免任何检查。
+2. 过程中：用户侧分类边聊边记；AI 发现问题立刻进收件箱；**要用户定的问题**（「要不要 X」「A 还是 B」）用 `python scripts/devlog.py ask "问题" --if "什么变了它就作废"` 进待分诊——不占 `ISS` 号，所以门槛低，但一样会留到下一次开场。
+3. 收尾：先把待分诊分完（`python scripts/devlog.py pending` 应为空：转 `ISS` / 转 §5 / `drop` 带理由 / `defer` 带回条件）→ 填 §3/§5/§6/§7 → `devlog.py check` → `devlog.py index` → 回写计划文档状态。
 4. 交接段必须能独立读：**首行是「下一步：<任务编号>」**（编号必须存在于计划 §5；计划全部完成时写「下一步：无」）、现在在哪、别踩的坑、读哪几篇。`devlog.py check` 的 `S8` / `S9` 会校验锚点与计划表是否对得上。

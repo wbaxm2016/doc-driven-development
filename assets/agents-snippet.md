@@ -6,7 +6,7 @@
 ## 文档约定（docs/ 是唯一事实源）
 
 - 每个开发会话开头：先 `python scripts/devlog.py brief` 读现状（上一场交接锚点 / 计划未完成 / 收件箱计数），再 `python scripts/devlog.py new --title "主题" --scope "范围"` 建档，按 `docs/70-过程/会话档案模板.md` 写。
-- 过程中发现任何问题（缺陷/口径冲突/文档债/风险/待决/机会）：立刻在 `docs/70-过程/问题收件箱.md` 加一行，然后继续当前话题，**不要停下来问要不要处理**。
+- 过程中发现任何问题（缺陷/口径冲突/文档债/风险/待决/机会）：立刻在 `docs/70-过程/问题收件箱.md` 加一行，然后继续当前话题，**不要停下来问要不要处理**。要用户定的问题用 `python scripts/devlog.py ask`（收尾前 `pending --clear` 分诊；未清完，下一场 `new` 会被拒）。
 - 收尾五条命令，全部 0 error 才算完：`doc_check.py` → `devlog.py check` → `devlog.py index` → `plan.py check` → `plan.py index`。
 - 一个事实只有一处：出现两份定义同类内容，删弱的那份或降为 `reference`，不要两边同步维护。
 - 过程档案（`status: snapshot` / `authority: 4`）**不是约束**；要成为约束必须回写契约或新开 ADR。

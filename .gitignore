@@ -4,3 +4,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.bak
+# 会话级待分诊问题：临时、本机、不进历史（见 SKILL.md「待分诊」）
+.dd/

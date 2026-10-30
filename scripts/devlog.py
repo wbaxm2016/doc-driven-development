@@ -4,7 +4,9 @@
 
 用法：
     python scripts/devlog.py new --title "主题" [--date 2026-10-29] [--scope 范围]
-    python scripts/devlog.py brief [--json]        # 开场先读：上一场锚点/计划未完成/收件箱
+    python scripts/devlog.py brief [--json]        # 开场先读：上一场锚点/计划未完成/收件箱/待分诊
+    python scripts/devlog.py ask "问题" [--if "前提"]   # 记一条要用户定的问题（不占 ISS 号）
+    python scripts/devlog.py pending [--clear Q1 --as iss|s5|drop|defer --note "…"]
     python scripts/devlog.py check [--json]
     python scripts/devlog.py index [--check]
 
@@ -195,6 +197,7 @@ class Ctx:
         pdir = layer_dir(schema, "process") or ""
         fdir = layer_dir(schema, "facade") or ""
         self.docs = docs
+        self.root = os.path.dirname(os.path.abspath(docs))
         self.pdir = os.path.join(docs, pdir)
         n = schema["names"]
         self.sess = os.path.join(self.pdir, n["sessions_dir"])
@@ -239,8 +242,175 @@ def plan_tasks(ctx):
     return ids, pending, False
 
 
+# ---------------------------------------------------------------- 待分诊
+def pending_dir(ctx):
+    """待分诊文件住仓库根的 .dd/pending/：不进 docs/（躲开 doc_check 的形状检查），
+    也不进 git（临时问题不该进历史），但关掉会话仍留在盘上。"""
+    return os.path.join(ctx.root, ".dd", "pending")
+
+
+def pending_files(ctx):
+    d = pending_dir(ctx)
+    if not os.path.isdir(d):
+        return []
+    return sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith(".md"))
+
+
+def _col(heads, *names):
+    for i, h in enumerate(heads):
+        if any(h == n or h.startswith(n) for n in names):
+            return i
+    return None
+
+
+def pending_rows(ctx):
+    """读所有待分诊文件 → [{file,id,question,premise,state,note}]。"""
+    rows = []
+    for path in pending_files(ctx):
+        for header, trows in read_tables(read(path)):
+            heads = [strip_md(h) for h in header]
+            if "id" not in heads or "问题" not in heads or "状态" not in heads:
+                continue
+            i_id, i_q, i_st = heads.index("id"), heads.index("问题"), heads.index("状态")
+            i_pre, i_note = _col(heads, "前提"), _col(heads, "处置")
+            for r in trows:
+                if len(r) != len(heads):
+                    continue
+                qid = strip_md(r[i_id])
+                if not re.fullmatch(r"Q\d+", qid):
+                    continue
+                rows.append({
+                    "file": path,
+                    "id": qid,
+                    "question": strip_md(r[i_q]),
+                    "premise": strip_md(r[i_pre]) if i_pre is not None else "",
+                    "state": strip_md(r[i_st]),
+                    "note": strip_md(r[i_note]) if i_note is not None else "",
+                })
+    return rows
+
+
+def pending_gate(ctx):
+    """开工门禁：还有 open 项、或延期超过 5 条，就不许开新会话建档。
+
+    它挡的不是「没写」，而是「写了没人清」——只要问题记下来，下一次开场一定被摆到眼前。
+    """
+    rows = pending_rows(ctx)
+    opened = [r for r in rows if r["state"] == "open"]
+    deferred = [r for r in rows if r["state"] == "deferred"]
+    errs = []
+    if opened:
+        errs.append("仍有 %d 条待分诊：" % len(opened))
+        for r in opened[:8]:
+            errs.append("  %s  %s（%s）" % (r["id"], r["question"],
+                                            os.path.basename(r["file"])))
+        errs.append("先 `devlog.py pending` 看全量，再 "
+                    "`pending --clear <id> --as iss|s5|drop|defer` 分诊")
+    if len(deferred) > 5:
+        errs.append("延期项 %d 条（上限 5）：先排优先级，别拿延期绕开门禁" % len(deferred))
+    return errs
+
+
+def set_pending_state(path, qid, state, note):
+    out = []
+    for ln in read(path).splitlines(True):
+        s = ln.strip()
+        if s.startswith("|") and s.endswith("|") and s.count("|") >= 5:
+            parts = s[1:-1].split("|")
+            if parts[0].strip().strip("*` ") == qid:
+                parts[-2] = " %s " % state
+                parts[-1] = " %s " % cell(note)
+                out.append("|" + "|".join(parts) + "|\n")
+                continue
+        out.append(ln)
+    write(path, "".join(out))
+
+
+def cmd_ask(ctx, args):
+    """记一条「要用户定」的问题：不占 ISS 号（所以门槛低），但不等于不进历史。"""
+    files = ctx.sessions()
+    if not files:
+        return die("先跑 devlog.py new 建档，再记待分诊问题")
+    stem = os.path.splitext(os.path.basename(files[-1]))[0]
+    d = pending_dir(ctx)
+    os.makedirs(d, exist_ok=True)
+    path = os.path.join(d, stem + ".md")
+    if not os.path.exists(path):
+        write(path, "# 待分诊（会话 %s）\n\n"
+                    "| id | 提出 | 问题 | 前提（什么变了就作废） | 状态 | 处置 |\n"
+                    "|---|---|---|---|---|---|\n" % stem)
+    text = read(path)
+    nums = [int(m.group(1)) for m in re.finditer(r"\|\s*Q(\d+)\s*\|", text)]
+    qid = "Q%d" % (nums[-1] + 1 if nums else 1)
+    premise = (args.premise or "").strip()
+    row = "| %s | %s | %s | %s | open | — |\n" % (
+        qid, datetime.datetime.now().strftime("%H:%M"),
+        cell(args.question), cell(premise or "未写"))
+    if not text.endswith("\n"):
+        text += "\n"
+    write(path, text + row)
+    print("added: %s -> %s" % (qid, path))
+    if not premise:
+        print("WARN  没写前提：`--as defer` 时会被拒（说不出什么变了它就作废，通常不是待决项）")
+    print("收尾前用 `devlog.py pending --clear` 分诊；未清项会挡住下一场的 `devlog.py new`")
+    return 0
+
+
+def cmd_pending(ctx, args):
+    rows = pending_rows(ctx)
+    if args.clear:
+        # 编号在同一会话文件内唯一，跨会话会重号（Q1 各有一份）；只认还 open 的那条，
+        # 已分诊的历史行不参与匹配——否则上一场留下的 Q1 会把这一场的 Q1 顶掉。
+        target = next((r for r in rows
+                       if r["id"] == args.clear and r["state"] == "open"), None)
+        if target is None:
+            seen = [r["state"] for r in rows if r["id"] == args.clear]
+            if seen:
+                return die("%s 已经分诊过：%s" % (args.clear, "、".join(seen)))
+            return die("找不到 %s（`devlog.py pending` 看现有条目）" % args.clear)
+        kind = args.export
+        if kind is None:
+            return die("--clear 需要同时给 --as iss|s5|drop|defer")
+        note = (args.note or "").strip()
+        if kind == "iss":
+            if note not in set(parse_inbox(ctx)[0]):
+                return die("--as iss 的 --note 要写收件箱里已有的 ISS 编号"
+                           "（先登记进收件箱，再回来分诊）")
+            state = "→" + note
+        elif kind == "s5":
+            state, note = "→§5", note or "转开放项"
+        elif kind == "drop":
+            if not note:
+                return die("--as drop 需要 --note 写清为什么丢弃")
+            state = "dropped"
+        else:
+            if target["premise"] in ("", "未写"):
+                return die("--as defer 需要该条先有前提（重新 ask 时加 --if \"…\"）")
+            state, note = "deferred", note or "延期"
+        set_pending_state(target["file"], args.clear, state, note)
+        print("%s -> %s（%s）" % (args.clear, state, note))
+        print("剩余待分诊：%d" % len([r for r in pending_rows(ctx) if r["state"] == "open"]))
+        return 0
+
+    opened = [r for r in rows if r["state"] == "open"]
+    deferred = [r for r in rows if r["state"] == "deferred"]
+    print("待分诊：open %d · deferred %d" % (len(opened), len(deferred)))
+    for r in opened + deferred:
+        extra = "" if r["premise"] in ("", "未写") else "（前提：%s）" % r["premise"]
+        print("  %s  [%s]  %s  %s" % (r["id"], r["state"], r["question"], extra))
+    if not opened and not deferred:
+        print("  无（可以开工）")
+    return 0
+
+
 # ---------------------------------------------------------------- new
 def cmd_new(ctx, args):
+    blocked = pending_gate(ctx)
+    if blocked:
+        print("ERROR 待分诊没清完，先分诊再开工：")
+        for line in blocked:
+            print("  " + line)
+        return 1
     date = args.date or datetime.date.today().isoformat()
     if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", date):
         return die(f"--date 格式应为 YYYY-MM-DD：{date}")
@@ -505,6 +675,9 @@ def cmd_brief(ctx, as_json=False):
     path = latest_session(ctx)
     ids, pending, plan_ok = plan_tasks(ctx)
     _, rows, _ = parse_inbox(ctx)
+    wait = pending_rows(ctx)
+    p_open = [r for r in wait if r["state"] == "open"]
+    p_def = [r for r in wait if r["state"] == "deferred"]
     counts = {"open": 0, "deferred": 0, "done": 0}
     for r in rows:
         counts[r["state"]] = counts.get(r["state"], 0) + 1
@@ -533,6 +706,7 @@ def cmd_brief(ctx, as_json=False):
             "handoff": anchor,
             "plan_ok": plan_ok,
             "pending": sorted(pending),
+            "awaiting": {"open": len(p_open), "deferred": len(p_def)},
             "inbox": counts,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
@@ -545,6 +719,11 @@ def cmd_brief(ctx, as_json=False):
         print(f"上一场：{os.path.basename(path)}")
         print("  " + (anchor or "（交接段为空，收尾时补首行「下一步：<任务编号>」）"))
     print(plan_line)
+    if p_open:
+        print("待分诊：open %d · deferred %d  ← 未清完不许开工（devlog.py pending）"
+              % (len(p_open), len(p_def)))
+    else:
+        print("待分诊：open 0 · deferred %d" % len(p_def))
     print(f"收件箱：open {counts.get('open', 0)} · deferred {counts.get('deferred', 0)}"
           f" · 已闭环 {counts.get('done', 0)}")
     print("最近 3 场：" + (" / ".join(recent) if recent else "无"))
@@ -617,6 +796,14 @@ def main():
     p_new.add_argument("--date", default=None)
     p_new.add_argument("--scope", default="待填")
     sub.add_parser("brief")
+    p_ask = sub.add_parser("ask")
+    p_ask.add_argument("question")
+    p_ask.add_argument("--if", dest="premise", default="")
+    p_pend = sub.add_parser("pending")
+    p_pend.add_argument("--clear", default=None)
+    p_pend.add_argument("--as", dest="export", default=None,
+                        choices=["iss", "s5", "drop", "defer"])
+    p_pend.add_argument("--note", default="")
     sub.add_parser("check")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
@@ -639,6 +826,10 @@ def main():
         return cmd_new(ctx, args)
     if args.cmd == "brief":
         return cmd_brief(ctx, as_json)
+    if args.cmd == "ask":
+        return cmd_ask(ctx, args)
+    if args.cmd == "pending":
+        return cmd_pending(ctx, args)
     if args.cmd == "check":
         return cmd_check(ctx, as_json)
     return cmd_index(ctx, args.check)
