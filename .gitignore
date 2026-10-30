@@ -6,3 +6,5 @@ Thumbs.db
 *.bak
 # 会话级待分诊问题：临时、本机、不进历史（见 SKILL.md「待分诊」）
 .dd/
+# 各 agent 会话的临时指引文件（direction.md 等），性质同 .dd/
+.dsh/
