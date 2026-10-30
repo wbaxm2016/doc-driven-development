@@ -28,9 +28,11 @@ DEFAULT_SCHEMA = {
                "60-规范": "norm", "70-过程": "process"},
     "session_sections": ["本次范围", "用户侧记录", "AI 侧记录",
                          "决策与选项对比", "开放项", "本次产出", "交接"],
-    "names": {"inbox": "问题收件箱.md", "timeline": "时间线.md",
+    "names": {"plan": "开发计划.md", "inbox": "问题收件箱.md",
+              "timeline": "时间线.md",
               "session_template": "会话档案模板.md", "sessions_dir": "会话"},
     "ids": {"issue": "ISS", "digits": 3},
+    "plan": {"done_states": ["已完成"], "task_pattern": r"^T\d+\.\d+\.\d+$"},
 }
 
 BEGIN = "<!-- BEGIN:devlog-index -->"
@@ -190,6 +192,7 @@ def load_schema(docs):
 class Ctx:
     def __init__(self, docs, schema):
         pdir = layer_dir(schema, "process") or ""
+        fdir = layer_dir(schema, "facade") or ""
         self.docs = docs
         self.pdir = os.path.join(docs, pdir)
         n = schema["names"]
@@ -197,6 +200,7 @@ class Ctx:
         self.inbox = os.path.join(self.pdir, n["inbox"])
         self.timeline = os.path.join(self.pdir, n["timeline"])
         self.template = os.path.join(self.pdir, n["session_template"])
+        self.plan = os.path.join(docs, fdir, n.get("plan", "开发计划.md"))
         self.schema = schema
 
     def sessions(self):
@@ -204,6 +208,34 @@ class Ctx:
             return []
         return sorted(os.path.join(self.sess, f)
                       for f in os.listdir(self.sess) if f.endswith(".md"))
+
+
+def plan_tasks(ctx):
+    """读开发计划 §5 的任务表 → (全部编号, 未完成编号, 表是否可读)。
+
+    交接锚点的「互校」只判编号存在性，不判状态：历史档案的「下一步」指向的任务
+    后来完成了，档案仍是对的（它记录的是当时）。「无」才是唯一需要状态的出口。
+    """
+    ids, pending = set(), set()
+    if not os.path.exists(ctx.plan):
+        return ids, pending, False
+    done = set(ctx.schema["plan"]["done_states"])
+    for header, rows in read_tables(read(ctx.plan)):
+        heads = [strip_md(h) for h in header]
+        if not heads or heads[0] != "ID" or "任务" not in heads:
+            continue
+        i_state = heads.index("状态") if "状态" in heads else None
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            tid = strip_md(r[0])
+            ids.add(tid)
+            if i_state is not None:
+                status = strip_md(r[i_state])
+                if status not in done:
+                    pending.add(tid)
+        return ids, pending, True
+    return ids, pending, False
 
 
 # ---------------------------------------------------------------- new
@@ -278,10 +310,73 @@ def parse_inbox(ctx):
     return ids, rows, dups
 
 
+def is_placeholder_handoff(body):
+    """§7 是否还是模板占位：每行都只是「- **标签**（说明）：」且值为空。"""
+    lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+    if not lines:
+        return True
+    for ln in lines:
+        if not re.fullmatch(r"[-*]?\s*\*\*[^*]+\*\*(?:（[^）]*）)?[：:]?", ln):
+            return False
+    return True
+
+
+def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg):
+    """S8/S9：交接段首行必须是「下一步：<任务编号>」，并与计划任务表互校。
+
+    首行是唯一锚点位置：下一场会话先读到的就是这一行。
+    §7 还是空模板时只提醒 S8，不阻断——填完再校验。
+    """
+    errs, warns = [], []
+    if not m:
+        return errs, warns
+    body = m.group(1)
+    placeholder = is_placeholder_handoff(body)
+    first = next((ln.strip() for ln in body.splitlines() if ln.strip()), "")
+    anchor = re.search(r"下一步[^：:\n]*[：:]", first)
+    if not anchor:
+        msg = "交接段首行缺「下一步：<计划任务编号>」（锚点只认首行）"
+        if placeholder:
+            warns.append({"file": rel, "code": "S8", "message": msg + "；§7 仍是占位，填完再校验"})
+        else:
+            errs.append({"file": rel, "code": "S8", "message": msg})
+        return errs, warns
+    tail = first[anchor.end():].strip().lstrip("*_` ")
+    if tail.startswith("无"):
+        if not plan_ok:
+            errs.append({"file": rel, "code": "S9",
+                         "message": "写「下一步：无」但读不到计划任务表，无法确认没有可排任务"})
+        elif pending:
+            errs.append({"file": rel, "code": "S9",
+                         "message": "写「下一步：无」但计划表仍有未完成任务："
+                                    + "、".join(sorted(pending)[:5])})
+        return errs, warns
+    ids = re.findall(cfg["task_pattern"].strip("^$"), first)
+    if not ids:
+        msg = ("交接段首行没有任务编号（应为「下一步：T1.1.1」；"
+               "计划全部完成时才写「下一步：无」）")
+        if placeholder:
+            warns.append({"file": rel, "code": "S8", "message": msg + "；§7 仍是占位"})
+        else:
+            errs.append({"file": rel, "code": "S8", "message": msg})
+        return errs, warns
+    if not plan_ok:
+        errs.append({"file": rel, "code": "S9",
+                     "message": f"交接锚点 {ids[0]} 无法互校：读不到计划任务表"})
+        return errs, warns
+    for tid in ids:
+        if tid not in plan_ids:
+            errs.append({"file": rel, "code": "S9",
+                         "message": f"交接锚点 {tid} 不在计划任务表"
+                                    f"（写错编号会让下一个会话从不存在的地方开始）"})
+    return errs, warns
+
+
 def cmd_check(ctx, as_json=False):
     errors, warns = [], []
     sections = ctx.schema["session_sections"]
     ids, rows, dups = parse_inbox(ctx)
+    plan_ids, pending, plan_ok = plan_tasks(ctx)
 
     for d in dups:
         errors.append({"file": os.path.basename(ctx.inbox), "code": "D1",
@@ -324,6 +419,9 @@ def cmd_check(ctx, as_json=False):
         m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
         if m and len(re.sub(r"[>\-*#\s]", "", m.group(1))) < 40:
             warns.append({"file": rel, "code": "S6", "message": "交接段过短，可能没写可执行下一步"})
+        e2, w2 = check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, ctx.schema["plan"])
+        errors.extend(e2)
+        warns.extend(w2)
 
         base = os.path.basename(path)
         expect = f"{fm.get('session_date', '')}-{fm.get('session_no', '')}-"

@@ -519,6 +519,112 @@ def main():
         finally:
             shutil.rmtree(tmp8, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 16
+        print("\n16. 改动分级不改变校验结果（T2.1.1）")
+        skill_md = read(os.path.join(SKILL, "SKILL.md"))
+        rules = [ln for ln in skill_md.splitlines()
+                 if re.match(r"^\d+\. \*\*改动分级\*\*", ln)]
+        check("SKILL.md 硬规则里恰有一条「改动分级」判据", len(rules) == 1,
+              f"{len(rules)} 条")
+        check("体量判据同时给出轻档与重档（判据只有一条，不按 diff 行数）",
+              bool(rules) and "轻档" in rules[0] and "重档" in rules[0],
+              rules[0][:120] if rules else "缺改动分级规则")
+
+        tmp9 = tempfile.mkdtemp(prefix="ddd-selftest9-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp9)
+            vision9 = os.path.join(tmp9, "docs", "00-门面", "vision.md")
+            req9 = os.path.join(tmp9, "docs", "20-契约", "requirements.md")
+            c0, out0 = run("doc_check.py", "--quiet", cwd=tmp9)
+            d0, dout0 = run("devlog.py", "check", cwd=tmp9)
+            p0, pout0 = run("plan.py", "check", cwd=tmp9)
+
+            # 轻档：只改一段正文（措辞），不碰契约 / ADR / 计划 / 码表 / 脚本
+            write(vision9, read(vision9) + "\n这句只改措辞，不改任何事实源。\n")
+            c1, out1 = run("doc_check.py", "--quiet", cwd=tmp9)
+            check("轻档改动后 doc_check 结论不变（0 error / 0 warning）",
+                  c1 == 0 and "errors=0" in out1 and "warnings=0" in out1
+                  and out1.strip() == out0.strip(), out1[-200:])
+            d1, dout1 = run("devlog.py", "check", cwd=tmp9)
+            p1, pout1 = run("plan.py", "check", cwd=tmp9)
+            check("轻档改动不改变 devlog / plan 的结论",
+                  (d1, dout1.strip()) == (d0, dout0.strip())
+                  and (p1, pout1.strip()) == (p0, pout0.strip()), pout1[-160:])
+
+            # 轻档不是豁免：同一处改动里制造断链，照样报 E7
+            write(vision9, read(vision9) + "\n[断链](不存在.md)\n")
+            c2, out2 = run("doc_check.py", cwd=tmp9)
+            check("轻档改动里制造断链 → E7 照报、exit 1",
+                  c2 == 1 and "E7" in codes(out2), out2[-250:])
+
+            # 分级不看 diff 行数：只删一个单元格的条款，仍完整过 E18
+            write(req9, read(req9).replace("| `python tests/test_xxx.py` |", "|  |"))
+            c3, out3 = run("doc_check.py", cwd=tmp9)
+            check("条款行只改一个单元格照样报 E18（分级不按改动大小放行）",
+                  c3 == 1 and "E18" in codes(out3) and "REQ-001" in out3, out3[-250:])
+        finally:
+            shutil.rmtree(tmp9, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 17
+        print("\n17. 交接锚点与计划表互校（T2.2.1）")
+        tmp10 = tempfile.mkdtemp(prefix="ddd-selftest10-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp10)
+            sess10 = os.path.join(tmp10, "docs", "70-过程", "会话")
+            plan10 = os.path.join(tmp10, "docs", "00-门面", "开发计划.md")
+            run("devlog.py", "new", "--title", "交接锚点", "--scope", "自测", cwd=tmp10)
+            f10 = os.path.join(sess10, sorted(os.listdir(sess10))[0])
+            base10 = read(f10)
+
+            def handoff(body):
+                write(f10, re.sub(r"(?ms)^## 7\..*$",
+                                  "## 7. 交接（下次从这里开始）\n\n" + body + "\n", base10))
+
+            # 正例：首行「下一步：T1.1.1」，T1.1.1 在计划表里
+            handoff("- **下一步**（用计划文档的任务编号）：**T1.1.1** —— 跑通并记录。\n"
+                    "- **现在在哪**：自测；交接段首行已经锚定计划表里的任务编号。\n")
+            c, out = run("devlog.py", "check", cwd=tmp10)
+            check("交接首行锚定计划表里的编号 → 0 error",
+                  c == 0 and "S8" not in out and "S9" not in out, out[-300:])
+
+            # 缺锚点：首行是正文，锚点退到第二行且没有编号
+            handoff("- **现在在哪**：自测；这一段已经写满四十个字，用来模拟收尾时忘了写锚点。\n"
+                    "- **下一步**（用计划文档的任务编号）：待定。\n")
+            c, out = run("devlog.py", "check", cwd=tmp10)
+            check("交接首行没有锚点 → S8、exit 1", c == 1 and "S8" in out, out[-300:])
+
+            # 编号不存在：计划表里没有 T9.9.9
+            handoff("- **下一步**：**T9.9.9** —— 计划表里没有这条任务。\n"
+                    "- **现在在哪**：自测；故意写一个不存在的编号。\n")
+            c, out = run("devlog.py", "check", cwd=tmp10)
+            check("交接锚点不在计划表 → S9、exit 1",
+                  c == 1 and "S9" in out and "T9.9.9" in out, out[-300:])
+
+            # 「无」不是省略：计划表还有未完成任务时不允许
+            handoff("- **下一步**：无（自测收口）。\n"
+                    "- **现在在哪**：自测；计划表里仍有待开工任务，不能写无。\n")
+            c, out = run("devlog.py", "check", cwd=tmp10)
+            check("写「下一步：无」但计划表仍有未完成任务 → S9",
+                  c == 1 and "S9" in out, out[-300:])
+
+            # 全部完成时，「无」是允许的显式出口
+            write(plan10, read(plan10).replace("| 待开工 |", "| 已完成 |"))
+            handoff("- **下一步**：无（计划表全部完成，本方向收口）。\n"
+                    "- **现在在哪**：自测；计划表里已没有可排任务，显式写明没有下一步。\n")
+            c, out = run("devlog.py", "check", cwd=tmp10)
+            check("计划表全部完成时「下一步：无」→ 0 error",
+                  c == 0 and "S9" not in out, out[-300:])
+
+            # 模板本身要示范格式：交接段首行就是锚点行
+            tpl_md = read(os.path.join(tmp10, "docs", "70-过程", "会话档案模板.md"))
+            m = re.search(r"(?ms)^## 7\.[^\n]*\n(.*)$", tpl_md)
+            first = next((ln for ln in (m.group(1).splitlines() if m else []) if ln.strip()), "")
+            check("会话模板交接段首行是「下一步」", "下一步" in first, first[:100])
+        finally:
+            shutil.rmtree(tmp10, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
