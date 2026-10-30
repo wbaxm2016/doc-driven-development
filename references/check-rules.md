@@ -69,6 +69,8 @@
 | S8 | 交接段首行不是「下一步：<任务编号>」：§7 仍是空模板时只提醒；已写正文却没有锚点行即错误 | 提醒 / 错误 |
 | S9 | 交接锚点与计划表对不上：编号不在计划任务表；读不到计划任务表；或写「下一步：无」但计划表仍有未完成任务 | 错误 |
 
+> `devlog.py brief` 是**开场**用的只读命令，不产生任何码、不参与门禁：一屏给出上一场交接首行、计划未完成任务、收件箱 `open`/`deferred` 计数与最近三场。`check` 只在收尾跑，判不了「这一场开场有没有读」——把现状读成一屏，是这件事唯一能省力的落点。
+
 ## plan.py check
 
 | 码 | 规则 |
@@ -121,6 +123,7 @@
 ## 收尾命令
 
 ```bash
+python scripts/devlog.py brief         # 开场先读（不是收尾）：上一场锚点 / 计划未完成 / 收件箱计数
 python scripts/doc_check.py            # 0 error
 python scripts/doc_check.py --quiet    # 只打印汇总
 python scripts/doc_check.py --json     # 给 CI / 看板用

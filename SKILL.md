@@ -46,8 +46,11 @@ python "<技能目录>/scripts/doc_init.py" --target . --full --ci  # 另写 pre
 **开场**：
 
 ```bash
+python scripts/devlog.py brief                                    # 先读：上一场交接锚点 / 计划未完成 / 收件箱计数
 python scripts/devlog.py new --title "本次主题" --scope "范围"
 ```
+
+> `brief` 是只读命令，不写文件、不产生码。开场先跑它，是因为「先读现状」靠自觉必然失效——不读就不会知道自己落后在哪。
 
 > 只改措辞 / 错字 / 格式 / 注释的**轻档**改动不建档、不跑收尾五连跑；判据与「不豁免校验」的边界见硬规则 12。
 
@@ -165,10 +168,10 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `assets/agents-snippet.md` | 粘进 `AGENTS.md` 的 8 行约定，让习惯默认生效 |
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
-| `scripts/devlog.py` | `new` / `check` / `index [--check]` |
+| `scripts/devlog.py` | `new` / `brief` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–13 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–14 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -193,5 +196,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 11. 把某条需求 `verify:` 指向的测试改成必然失败 → `python scripts/verify.py` 退出码 1；状态=`待实现` 的行跳过。
 12. **改动分级不改变校验结果**：只改一段正文的轻档改动，`doc_check` 的 `errors/warnings` 与改前一致；在同一处制造断链、删掉条款的 `verify:` → `E7` / `E18` 照报；`SKILL.md` 硬规则里恰有一条这样的体量判据。
 13. **交接锚点与计划表互校**：交接段首行写「下一步：T1.1.1」（计划表里有）→ `devlog.py check` 0 error；写一个不存在的编号 → `S9` 且 exit 1；首行没有锚点 → `S8`；计划表还有未完成任务却写「下一步：无」→ `S9`。
+14. **开场简报**：还没有任何档案时跑 `devlog.py brief` → 0 error 且提示「尚无会话档案」；建一档、把 §7 首行写成「下一步：T1.1.1」→ brief 复述该锚点并列出计划未完成任务与收件箱 `open`/`deferred` 计数；计划全部完成时显示「未完成 0」；跑前跑后 `docs/` 字节不变（只读）。
 
-`scripts/self_test.py` 把上面 1–13 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–14 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

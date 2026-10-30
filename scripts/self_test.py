@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -624,6 +625,60 @@ def main():
             check("会话模板交接段首行是「下一步」", "下一步" in first, first[:100])
         finally:
             shutil.rmtree(tmp10, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 18
+        print("\n18. 开场简报：先读一条命令（T2.3.1）")
+        tmp11 = tempfile.mkdtemp(prefix="ddd-selftest11-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp11)
+
+            # 空项目也必须能用：开场第一件事就是跑它，此时还没有任何档案
+            c, out = run("devlog.py", "brief", cwd=tmp11)
+            check("无档案时 brief 可用并提示先建档",
+                  c == 0 and "尚无会话档案" in out, out[-300:])
+
+            docs11 = os.path.join(tmp11, "docs")
+
+            def snapshot(root):
+                snap = {}
+                for base, _, files in os.walk(root):
+                    for f in files:
+                        p = os.path.join(base, f)
+                        with open(p, "rb") as fh:
+                            snap[p] = hashlib.sha256(fh.read()).hexdigest()
+                return snap
+
+            run("devlog.py", "new", "--title", "开场简报", "--scope", "自测", cwd=tmp11)
+            sess11 = os.path.join(docs11, "70-过程", "会话")
+            f11 = os.path.join(sess11, sorted(os.listdir(sess11))[0])
+            write(f11, re.sub(r"(?m)^- \*\*下一步\*\*[^\n]*$",
+                              "- **下一步**：**T1.1.1** —— 跑通并记录。",
+                              read(f11), count=1))
+
+            before = snapshot(docs11)
+            c, out = run("devlog.py", "brief", cwd=tmp11)
+            after = snapshot(docs11)
+            check("brief 复述上一场交接首行",
+                  c == 0 and "下一步" in out and "T1.1.1" in out, out[-300:])
+            check("brief 列出计划未完成任务", "未完成" in out and "T1.1.1" in out, out[-300:])
+            check("brief 只读：跑前跑后文档字节不变", c == 0 and before == after, "brief 改动了文件")
+
+            inbox11 = os.path.join(docs11, "70-过程", "问题收件箱.md")
+            row11 = "| **ISS-002** | 2026-10-30 | 自测 | 风险 | 甲 | 乙 | `deferred` | 未排期 | 需要时 |"
+            write(inbox11, read(inbox11).replace(
+                "| **ISS-001**", row11 + "\n| **ISS-001**", 1))
+            c, out = run("devlog.py", "brief", cwd=tmp11)
+            check("brief 给出收件箱 open / deferred 计数",
+                  c == 0 and "open 1" in out and "deferred 1" in out, out[-300:])
+
+            plan11 = os.path.join(docs11, "00-门面", "开发计划.md")
+            write(plan11, read(plan11).replace("| 待开工 |", "| 已完成 |"))
+            c, out = run("devlog.py", "brief", cwd=tmp11)
+            check("计划全部完成时 brief 报未完成 0",
+                  c == 0 and "未完成 0" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp11, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

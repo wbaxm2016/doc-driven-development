@@ -4,6 +4,7 @@
 
 用法：
     python scripts/devlog.py new --title "主题" [--date 2026-10-29] [--scope 范围]
+    python scripts/devlog.py brief [--json]        # 开场先读：上一场锚点/计划未完成/收件箱
     python scripts/devlog.py check [--json]
     python scripts/devlog.py index [--check]
 
@@ -442,6 +443,76 @@ def cmd_check(ctx, as_json=False):
     return 1 if errors else 0
 
 
+# ---------------------------------------------------------------- brief
+def latest_session(ctx):
+    """最后一篇会话档案（按文件名排序）；没有返回 None。"""
+    files = ctx.sessions()
+    return files[-1] if files else None
+
+
+def handoff_first_line(text):
+    """§7 交接段的首个非空行；没有交接段返回空串。"""
+    m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
+    if not m:
+        return ""
+    return next((ln.strip() for ln in m.group(1).splitlines() if ln.strip()), "")
+
+
+def cmd_brief(ctx, as_json=False):
+    """开场简报：上一场交接锚点 / 计划未完成 / 收件箱计数 / 最近三场。
+
+    只读命令：不写文件、不产生码、不参与门禁。它存在的理由只有一个——
+    让「开场先读现状」从一句纪律变成一条命令；不读就不会知道自己落后在哪。
+    """
+    path = latest_session(ctx)
+    ids, pending, plan_ok = plan_tasks(ctx)
+    _, rows, _ = parse_inbox(ctx)
+    counts = {"open": 0, "deferred": 0, "done": 0}
+    for r in rows:
+        counts[r["state"]] = counts.get(r["state"], 0) + 1
+
+    recent = []
+    for p in ctx.sessions()[-3:][::-1]:
+        fm = parse_fm(read(p))
+        title = re.sub(
+            rf"^{re.escape(fm.get('session_date', ''))}\s*·\s*{re.escape(fm.get('session_no', ''))}\s*·\s*",
+            "", fm.get("title", os.path.basename(p)))
+        recent.append(f"{fm.get('session_date', '')} {fm.get('session_no', '')} {title}")
+
+    anchor = handoff_first_line(read(path)) if path else ""
+    if not plan_ok:
+        plan_line = "计划：读不到计划任务表（§5 不可读）"
+    elif not pending:
+        plan_line = f"计划：未完成 0 / {len(ids)}（计划表全部已完成）"
+    else:
+        shown = "、".join(sorted(pending)[:5]) + ("…" if len(pending) > 5 else "")
+        plan_line = f"计划：未完成 {len(pending)} / {len(ids)}（{shown}）"
+
+    if as_json:
+        print(json.dumps({
+            "ok": True,
+            "session": os.path.basename(path) if path else None,
+            "handoff": anchor,
+            "plan_ok": plan_ok,
+            "pending": sorted(pending),
+            "inbox": counts,
+            "recent": recent,
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    print("=== 开场简报 ===")
+    if not path:
+        print("上一场：无（尚无会话档案，先 devlog.py new）")
+    else:
+        print(f"上一场：{os.path.basename(path)}")
+        print("  " + (anchor or "（交接段为空，收尾时补首行「下一步：<任务编号>」）"))
+    print(plan_line)
+    print(f"收件箱：open {counts.get('open', 0)} · deferred {counts.get('deferred', 0)}"
+          f" · 已闭环 {counts.get('done', 0)}")
+    print("最近 3 场：" + (" / ".join(recent) if recent else "无"))
+    return 0
+
+
 # ---------------------------------------------------------------- index
 def build_timeline(ctx):
     rows = []
@@ -507,6 +578,7 @@ def main():
     p_new.add_argument("--title", required=True)
     p_new.add_argument("--date", default=None)
     p_new.add_argument("--scope", default="待填")
+    sub.add_parser("brief")
     sub.add_parser("check")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
@@ -527,6 +599,8 @@ def main():
 
     if args.cmd == "new":
         return cmd_new(ctx, args)
+    if args.cmd == "brief":
+        return cmd_brief(ctx, as_json)
     if args.cmd == "check":
         return cmd_check(ctx, as_json)
     return cmd_index(ctx, args.check)

@@ -26,6 +26,7 @@ tags: [过程, 记录协议, 入口]
 ## 2. 每场会话的固定动作
 
 ```bash
+python scripts/devlog.py brief                               # 开场先读：上一场锚点/计划未完成/收件箱
 python scripts/devlog.py new --title "主题" --scope "范围"   # 开场建档
 python scripts/devlog.py check                               # 收尾：七段/字段/ISS 引用
 python scripts/devlog.py index                               # 收尾：重建时间线
