@@ -28,10 +28,9 @@
     },
     {
       "id": "workbuddy",
-      "name": "WorkBuddy（旧安装，仅核对，不默认覆盖）",
+      "name": "WorkBuddy",
       "env": ["WORKBUDDY_SKILLS"],
-      "paths": ["~/.workbuddy/skills"],
-      "enabled": false
+      "paths": ["~/.workbuddy/skills"]
     }
   ]
 }
