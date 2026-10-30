@@ -1,0 +1,37 @@
+{
+  "skill": "doc-driven-development",
+  "note": "每个产品一个条目：先看 env（环境变量优先），再看 paths（按顺序取第一个存在的目录）。加产品只改这里，不改 install.py。",
+  "targets": [
+    {
+      "id": "qwenworkcn",
+      "name": "千问办公",
+      "env": ["QWENWORK_SKILLS"],
+      "paths": ["~/.qwenworkcn/skills"]
+    },
+    {
+      "id": "dsh",
+      "name": "DeepSeek Harness Desktop",
+      "env": ["DSH_SKILLS"],
+      "paths": ["~/.dsh/skills"]
+    },
+    {
+      "id": "doubao",
+      "name": "豆包",
+      "env": ["DOUBAO_SKILLS"],
+      "paths": ["~/Doubao/skills"]
+    },
+    {
+      "id": "qoder-cn",
+      "name": "Qoder CN",
+      "env": ["QODER_CN_SKILLS"],
+      "paths": ["~/.qoder-cn/skills"]
+    },
+    {
+      "id": "workbuddy",
+      "name": "WorkBuddy（旧安装，仅核对，不默认覆盖）",
+      "env": ["WORKBUDDY_SKILLS"],
+      "paths": ["~/.workbuddy/skills"],
+      "enabled": false
+    }
+  ]
+}

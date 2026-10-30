@@ -25,6 +25,7 @@ tags: [能力, 验收]
 | 开场简报 | `devlog.py brief` 只读输出：上一场交接首行 + 计划未完成任务 + 收件箱 `open`/`deferred` 计数 + 最近三场 | `self_test.py` 第 18 组（78→84） |
 | 用户侧落点 | `devlog check` 的 `S10`：§2 已填类型的行必须有落点，空值 / `—` / `待补` / `无` 即报；模板占位不报 | `self_test.py` 第 19 组（84→89） |
 | 待分诊与门禁 | `devlog ask` 记一条要用户定的问题（不占 ISS 号）；`pending --clear` 分诊（ISS / §5 / drop / defer）；未清完 `new` 拒绝（exit 1），延期 >5 条也拒 | `self_test.py` 第 20 组（89→97） |
+| 清单化安装 | `install.py` 按 `install-targets.json` 探查各宿主技能目录并安装；装完写 `MANIFEST.txt` + `.install.json`，可逐文件核对 | 本机四目标（千问办公 / DSH / 豆包 / Qoder CN）各 29 文件、0 缺失 0 不一致 |
 | 契约回检 | `verify.py` 按 `verify:` 真跑；失败/超时 exit 1，`待实现/阻塞` 行跳过 | `self_test.py` 第 14 组；CI 步骤 `.github/workflows/build.yml` |
 | 会话档案 | `devlog.py new` 编号与文件名正确；七段/S5 引用/文件名前缀可判 | `self_test.py` 第 2、9 组 |
 | 时间线 | `devlog.py index` 按日期倒序、链接可点 | `self_test.py` 第 5 组 |
