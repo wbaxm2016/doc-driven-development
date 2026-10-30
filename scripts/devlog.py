@@ -322,6 +322,42 @@ def is_placeholder_handoff(body):
     return True
 
 
+LANDING_PLACEHOLDERS = {"", "—", "-", "–", "待补", "待填", "tbd", "无", "同上", "n/a"}
+
+
+def section_body(text, keyword):
+    """取以 keyword 命名的 ## 段正文（到下一个 ## 为止）。"""
+    m = re.search(rf"(?ms)^##\s+[^\n]*{re.escape(keyword)}[^\n]*\n(.*?)(?=^##\s|\Z)", text)
+    return m.group(1) if m else ""
+
+
+def check_user_side(rel, text):
+    """S10：§2 用户侧记录里**已填类型**的行必须给出落点。
+
+    「每行都要有落点」一直只是散文：漏写一行，四件照样全绿。这里只判
+    「有没有给」——落点写得对不对仍需人读，脚本不假装能判。模板占位行
+    （类型列为空）不算，否则新开的档案一建就红。
+    """
+    errs = []
+    for header, rows in read_tables(section_body(text, "用户侧记录")):
+        heads = [strip_md(h) for h in header]
+        if "落点" not in heads:
+            continue
+        i_land = heads.index("落点")
+        i_type = heads.index("类型") if "类型" in heads else None
+        for n, r in enumerate(rows, 1):
+            if len(r) != len(heads):
+                continue
+            kind = strip_md(r[i_type]) if i_type is not None else ""
+            if not kind:
+                continue
+            if strip_md(r[i_land]).lower() in LANDING_PLACEHOLDERS:
+                errs.append({"file": rel, "code": "S10",
+                             "message": f"§2 第 {n} 行（类型 {kind}）没有落点："
+                                        f"写清它落到哪一段 / 哪个 ISS / 哪份文档"})
+    return errs
+
+
 def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg):
     """S8/S9：交接段首行必须是「下一步：<任务编号>」，并与计划任务表互校。
 
@@ -416,6 +452,8 @@ def cmd_check(ctx, as_json=False):
 
         for r in sorted(set(re.findall(rf"{ctx.schema['ids']['issue']}-\d+", text)) - set(ids)):
             errors.append({"file": rel, "code": "S5", "message": f"引用了收件箱不存在的 {r}"})
+
+        errors.extend(check_user_side(rel, text))
 
         m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
         if m and len(re.sub(r"[>\-*#\s]", "", m.group(1))) < 40:

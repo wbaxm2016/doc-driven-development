@@ -81,6 +81,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 **会话档案七段**（顺序固定）：本次范围 → 用户侧记录 → AI 侧记录 → 决策与选项对比 → 开放项 → 本次产出 → 交接。
 交接段**首行**必须是「下一步：<计划任务编号>」——编号要在计划 §5 的任务表里（`devlog check` 的 `S8`/`S9` 互校）；计划全部完成时写「下一步：无」。
+§2 每一行都必须有**落点**（`Q` 答在哪段、`D` 进了哪份 ADR、`X` 为什么排除）；`S10` 把空落点和 `—`/`待补`/`无` 这类占位判成错误——「没回答的问题」最先消失的就是这一格。
 档案 `status: snapshot` + `authority: 4`：它是记录，**不构成约束**。
 
 **用户侧 8 类**：`Q` 提问 / `R` 需求 / `F` 功能 / `E` 实现探讨 / `D` 决策 / `C` 确认否决 / `X` 明确排除 / `O` 其它。
@@ -171,7 +172,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/devlog.py` | `new` / `brief` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–14 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–15 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -197,5 +198,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 12. **改动分级不改变校验结果**：只改一段正文的轻档改动，`doc_check` 的 `errors/warnings` 与改前一致；在同一处制造断链、删掉条款的 `verify:` → `E7` / `E18` 照报；`SKILL.md` 硬规则里恰有一条这样的体量判据。
 13. **交接锚点与计划表互校**：交接段首行写「下一步：T1.1.1」（计划表里有）→ `devlog.py check` 0 error；写一个不存在的编号 → `S9` 且 exit 1；首行没有锚点 → `S8`；计划表还有未完成任务却写「下一步：无」→ `S9`。
 14. **开场简报**：还没有任何档案时跑 `devlog.py brief` → 0 error 且提示「尚无会话档案」；建一档、把 §7 首行写成「下一步：T1.1.1」→ brief 复述该锚点并列出计划未完成任务与收件箱 `open`/`deferred` 计数；计划全部完成时显示「未完成 0」；跑前跑后 `docs/` 字节不变（只读）。
+15. **用户侧落点必填**：把 §2 一行的落点留空或写成 `—` / `待补` → `devlog.py check` 报 `S10` 且 exit 1；写成「§3.1」→ 0 error；刚建出的档案（§2 仍是模板占位）不报 `S10`。
 
-`scripts/self_test.py` 把上面 1–14 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–15 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

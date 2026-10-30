@@ -680,6 +680,42 @@ def main():
         finally:
             shutil.rmtree(tmp11, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 19
+        print("\n19. 用户侧落点必填（S10）")
+        tmp12 = tempfile.mkdtemp(prefix="ddd-selftest12-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp12)
+            run("devlog.py", "new", "--title", "落点必填", "--scope", "自测", cwd=tmp12)
+            sess12 = os.path.join(tmp12, "docs", "70-过程", "会话")
+            f12 = os.path.join(sess12, sorted(os.listdir(sess12))[0])
+            base12 = read(f12)
+            place = "| 1 | | | | | |"
+            # 模板占位行变了就让自测先红，别静默跳过整条断言
+            assert place in base12, "模板 §2 占位行格式变了"
+
+            c, out = run("devlog.py", "check", cwd=tmp12)
+            check("模板占位的 §2 行不报 S10", c == 0 and "S10" not in out, out[-300:])
+
+            def with_row(row):
+                write(f12, base12.replace(place, row, 1))
+                return run("devlog.py", "check", cwd=tmp12)
+
+            c, out = with_row("| 1 | Q | 「会不会自动记？」 | 机制追问 |  | 已答 |")
+            check("§2 已填类型但落点为空 → S10、exit 1",
+                  c == 1 and "S10" in out, out[-300:])
+
+            c, out = with_row("| 1 | Q | 「会不会自动记？」 | 机制追问 | — | 已答 |")
+            check("落点写成「—」占位 → S10", c == 1 and "S10" in out, out[-300:])
+
+            c, out = with_row("| 1 | Q | 「会不会自动记？」 | 机制追问 | 待补 | 已答 |")
+            check("落点写成「待补」→ S10", c == 1 and "S10" in out, out[-300:])
+
+            c, out = with_row("| 1 | Q | 「会不会自动记？」 | 机制追问 | §3.1 | 已答 |")
+            check("落点有实际指向 → 不报 S10", c == 0 and "S10" not in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp12, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
