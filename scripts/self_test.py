@@ -756,6 +756,62 @@ def main():
         finally:
             shutil.rmtree(tmp13, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 21
+        print("\n21. 跨项目找目录 + 时间线同步（ISS-028 / ISS-030）")
+        tmp14 = tempfile.mkdtemp(prefix="ddd-selftest14-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp14)
+            repo_sess = os.path.join(SKILL, "docs", "70-过程", "会话")
+            before = sorted(os.listdir(repo_sess)) if os.path.isdir(repo_sess) else []
+            env = dict(os.environ, PYTHONIOENCODING="utf-8")
+            p = subprocess.run([PY, os.path.join(SKILL, "scripts", "devlog.py"),
+                                "new", "--title", "串档探针", "--scope", "自测"],
+                               cwd=tmp14, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", env=env)
+            tmp_sess = os.path.join(tmp14, "docs", "70-过程", "会话")
+            after = sorted(os.listdir(repo_sess)) if os.path.isdir(repo_sess) else []
+            made = sorted(os.listdir(tmp_sess)) if os.path.isdir(tmp_sess) else []
+            check("开发副本的脚本按 cwd 找 docs（ISS-028）",
+                  p.returncode == 0 and len(made) == 1 and before == after,
+                  f"rc={p.returncode} tmp={made} repo_diff={sorted(set(after) - set(before))}")
+
+            c, out = run("devlog.py", "check", cwd=tmp14)
+            check("新建档案后 check 报 S11（时间线陈旧）", "S11" in out, out[-300:])
+            run("devlog.py", "index", cwd=tmp14)
+            c, out = run("devlog.py", "check", cwd=tmp14)
+            check("重建时间线后 S11 消失", "S11" not in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp14, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 22
+        print("\n22. 历史交接的「无」不追溯（ISS-032）")
+        tmp15 = tempfile.mkdtemp(prefix="ddd-selftest15-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp15)
+            sess15 = os.path.join(tmp15, "docs", "70-过程", "会话")
+
+            def first_line(path, text):
+                write(path, re.sub(r"(?m)^- \*\*下一步\*\*[^\n]*$", text, read(path), count=1))
+
+            run("devlog.py", "new", "--title", "旧场", "--scope", "自测", cwd=tmp15)
+            f_old = os.path.join(sess15, sorted(os.listdir(sess15))[0])
+            first_line(f_old, "- **下一步**：无（当时计划确实清空）")
+            run("devlog.py", "new", "--title", "新场", "--scope", "自测", cwd=tmp15)
+            f_new = os.path.join(sess15, sorted(os.listdir(sess15))[1])
+            first_line(f_new, "- **下一步**：**T1.1.1** —— 跑通并记录。")
+
+            c, out = run("devlog.py", "check", cwd=tmp15)
+            check("更早的档案写「无」不因后来插任务变红",
+                  c == 0 and "S9" not in out, out[-300:])
+
+            first_line(f_new, "- **下一步**：无（最新一篇也说没有下一步）")
+            c, out = run("devlog.py", "check", cwd=tmp15)
+            check("最新一篇写「无」而计划仍有任务 → S9", c == 1 and "S9" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp15, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

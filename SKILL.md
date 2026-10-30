@@ -172,7 +172,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–16 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–17 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -196,9 +196,10 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 10. 把 `_schema.json` 改成非法 JSON → 四份脚本（`doc_check` / `devlog` / `plan` / `verify`）都给 `exit 2` + 一行说明（不是回溯）。
 11. 把某条需求 `verify:` 指向的测试改成必然失败 → `python scripts/verify.py` 退出码 1；状态=`待实现` 的行跳过。
 12. **改动分级不改变校验结果**：只改一段正文的轻档改动，`doc_check` 的 `errors/warnings` 与改前一致；在同一处制造断链、删掉条款的 `verify:` → `E7` / `E18` 照报；`SKILL.md` 硬规则里恰有一条这样的体量判据。
-13. **交接锚点与计划表互校**：交接段首行写「下一步：T1.1.1」（计划表里有）→ `devlog.py check` 0 error；写一个不存在的编号 → `S9` 且 exit 1；首行没有锚点 → `S8`；计划表还有未完成任务却写「下一步：无」→ `S9`。
+13. **交接锚点与计划表互校**：交接段首行写「下一步：T1.1.1」（计划表里有）→ `devlog.py check` 0 error；写一个不存在的编号 → `S9` 且 exit 1；首行没有锚点 → `S8`；计划表还有未完成任务却写「下一步：无」→ `S9`（「无」只对最新一篇判：更早的档案写下「无」后又被插任务，不追溯）。
 14. **开场简报**：还没有任何档案时跑 `devlog.py brief` → 0 error 且提示「尚无会话档案」；建一档、把 §7 首行写成「下一步：T1.1.1」→ brief 复述该锚点并列出计划未完成任务与收件箱 `open`/`deferred` 计数；计划全部完成时显示「未完成 0」；跑前跑后 `docs/` 字节不变（只读）。
 15. **用户侧落点必填**：把 §2 一行的落点留空或写成 `—` / `待补` → `devlog.py check` 报 `S10` 且 exit 1；写成「§3.1」→ 0 error；刚建出的档案（§2 仍是模板占位）不报 `S10`。
 16. **待分诊与开工门禁**：`devlog.py ask "要不要拆任务？" --if "计划里还是一个任务"` → `pending` 能看到 `Q1`；此时 `new` 退出码 1 并列出 `Q1`；`pending --clear Q1 --as drop --note "已过期"` 后 `new` 通过；延期 6 条时 `new` 仍拒绝；`brief` 首屏给「待分诊」计数；分诊过的 pending 文件保留（不静默删除）。
+17. **跨项目找目录 + 时间线同步**：用开发副本的脚本在**另一个项目目录**跑 `devlog.py new` → 档案建在那个项目里，本仓库会话数不变（`find_docs` 先 cwd 后脚本目录，ISS-028）；`new` 之后 `devlog.py check` 报 `S11`，跑 `devlog.py index` 之后消失（ISS-030）。
 
-`scripts/self_test.py` 把上面 1–16 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–17 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

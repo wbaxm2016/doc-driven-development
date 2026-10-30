@@ -69,15 +69,25 @@ def layer_dir(schema, name):
 
 
 def find_docs(arg):
+    """找文档目录：显式 --docs → **当前工作目录** → 脚本所在仓库。
+
+    cwd 必须排在脚本目录之前：用开发副本的脚本去别的项目跑时，读写的必须是
+    那个项目的 docs；排在后面就会静默串档（ISS-028，实测把探针写进本仓库）。
+    """
     if arg:
         return arg if os.path.isdir(arg) else None
     here = os.path.dirname(os.path.abspath(__file__))
-    for root in (os.path.dirname(here), os.getcwd()):
+    found = []
+    for root in (os.getcwd(), os.path.dirname(here)):
         for name in ("docs", "文档", "documentation"):
             p = os.path.join(root, name)
             if os.path.isdir(p):
-                return p
-    return None
+                found.append(p)
+                break
+    if len({os.path.abspath(p) for p in found}) > 1:
+        print(f"WARN 同时存在两个文档目录，用当前目录的 {found[0]}（忽略 {found[1]}）",
+              file=sys.stderr)
+    return found[0] if found else None
 
 
 class SchemaError(Exception):

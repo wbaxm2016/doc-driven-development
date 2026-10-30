@@ -155,15 +155,25 @@ def layer_dir(schema, name):
 
 # ---------------------------------------------------------------- 定位
 def find_docs(arg):
+    """找文档目录：显式 --docs → **当前工作目录** → 脚本所在仓库。
+
+    cwd 必须排在脚本目录之前：用开发副本的脚本去别的项目跑时，读写的必须是
+    那个项目的 docs；排在后面就会静默串档（ISS-028，实测把探针写进本仓库）。
+    """
     if arg:
         return arg if os.path.isdir(arg) else None
     here = os.path.dirname(os.path.abspath(__file__))
-    for root in (os.path.dirname(here), os.getcwd()):
+    found = []
+    for root in (os.getcwd(), os.path.dirname(here)):
         for name in ("docs", "文档", "documentation"):
             p = os.path.join(root, name)
             if os.path.isdir(p):
-                return p
-    return None
+                found.append(p)
+                break
+    if len({os.path.abspath(p) for p in found}) > 1:
+        print(f"WARN 同时存在两个文档目录，用当前目录的 {found[0]}（忽略 {found[1]}）",
+              file=sys.stderr)
+    return found[0] if found else None
 
 
 class SchemaError(Exception):
@@ -528,11 +538,14 @@ def check_user_side(rel, text):
     return errs
 
 
-def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg):
+def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg, is_latest=True):
     """S8/S9：交接段首行必须是「下一步：<任务编号>」，并与计划任务表互校。
 
     首行是唯一锚点位置：下一场会话先读到的就是这一行。
     §7 还是空模板时只提醒 S8，不阻断——填完再校验。
+
+    「无」只对**最新一篇**判：更早的档案写下「无」时计划确实已清空，是当时的真话；
+    后来又被插进新任务，不该让历史档案倒过来变红（ISS-032）。
     """
     errs, warns = [], []
     if not m:
@@ -550,6 +563,8 @@ def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg):
         return errs, warns
     tail = first[anchor.end():].strip().lstrip("*_` ")
     if tail.startswith("无"):
+        if not is_latest:
+            return errs, warns
         if not plan_ok:
             errs.append({"file": rel, "code": "S9",
                          "message": "写「下一步：无」但读不到计划任务表，无法确认没有可排任务"})
@@ -579,6 +594,19 @@ def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg):
     return errs, warns
 
 
+def timeline_row_count(ctx):
+    """时间线生成区里有多少条会话行；没有时间线或生成区返回 None。"""
+    if not os.path.exists(ctx.timeline):
+        return None
+    text = read(ctx.timeline)
+    i, j = text.find(BEGIN), text.find(END)
+    if i < 0 or j < 0:
+        return None
+    block = text[i + len(BEGIN):j]
+    return sum(1 for ln in block.splitlines()
+               if re.match(r"^\|\s*20\d{2}-\d{2}-\d{2}\s*\|", ln))
+
+
 def cmd_check(ctx, as_json=False):
     errors, warns = [], []
     sections = ctx.schema["session_sections"]
@@ -593,7 +621,8 @@ def cmd_check(ctx, as_json=False):
             errors.append({"file": os.path.basename(ctx.inbox), "code": "D2",
                            "message": f"{r['id']} 为 deferred 但缺「回到条件」"})
 
-    for path in ctx.sessions():
+    sessions = ctx.sessions()
+    for i, path in enumerate(sessions):
         rel = os.path.relpath(path, ctx.docs).replace(os.sep, "/")
         text = read(path)
         fm = parse_fm(text)
@@ -628,7 +657,9 @@ def cmd_check(ctx, as_json=False):
         m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
         if m and len(re.sub(r"[>\-*#\s]", "", m.group(1))) < 40:
             warns.append({"file": rel, "code": "S6", "message": "交接段过短，可能没写可执行下一步"})
-        e2, w2 = check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, ctx.schema["plan"])
+        e2, w2 = check_handoff_anchor(rel, m, plan_ids, pending, plan_ok,
+                                      ctx.schema["plan"],
+                                      is_latest=(i == len(sessions) - 1))
         errors.extend(e2)
         warns.extend(w2)
 
@@ -636,6 +667,13 @@ def cmd_check(ctx, as_json=False):
         expect = f"{fm.get('session_date', '')}-{fm.get('session_no', '')}-"
         if fm.get("session_date") and not base.startswith(expect):
             errors.append({"file": rel, "code": "S7", "message": f"文件名应以 {expect} 开头"})
+
+    # 时间线陈旧是静默的：new 之后不重建，按时间线回溯就会漏掉最近的会话（ISS-030）。
+    rows = timeline_row_count(ctx)
+    if rows is not None and rows != len(ctx.sessions()):
+        warns.append({"file": os.path.basename(ctx.timeline), "code": "S11",
+                      "message": f"时间线 {rows} 行、档案 {len(ctx.sessions())} 篇——"
+                                 f"跑 devlog.py index 重建"})
 
     if as_json:
         print(json.dumps({"ok": not errors, "sessions": len(ctx.sessions()),
