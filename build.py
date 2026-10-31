@@ -392,6 +392,44 @@ def verify(artifact: str, version: str) -> bool:
         shutil.rmtree(tmp, ignore_errors=True)
 
 
+# ---------------------------------------------------------------- dist 一致性
+def check_dist(version: str) -> int:
+    """校验 dist 里的产物与**当前 HEAD 的包内文件**逐字节一致。
+
+    正确的发版顺序：改 VERSION / CHANGELOG → **提交** → `build.py` → 提交 dist。
+    先提交再打包，包里字节就等于某个提交的字节，`.install.json` 记的 commit 才有意义；
+    反过来（先打包后提交）会出现「产物来自脏工作区」，说不清它对应哪一版。
+    """
+    print(f"\n检查 dist 与 HEAD：")
+    art = os.path.join(ROOT, "dist", f"{SKILL_NAME}-{version}.skill")
+    if not os.path.exists(art):
+        err(f"缺少产物 {art}（先跑 build.py）")
+        return 1
+    dirty = subprocess.run(["git", "status", "--porcelain", "--", *INCLUDE_DIRS, *ROOT_FILES],
+                           cwd=ROOT, capture_output=True, text=True)
+    if dirty.stdout.strip():
+        err("包内文件还有未提交改动，先提交再打包：\n  " + dirty.stdout.strip().replace("\n", "\n  "))
+        return 1
+    expected = walk_package_files()
+    with zipfile.ZipFile(art) as zf:
+        packed = {n: zf.read(n) for n in zf.namelist() if not n.endswith("/")}
+    missing = [n for n in expected if n not in packed]
+    extra = [n for n in packed if n not in expected and n != "MANIFEST.txt"]
+    if missing or extra:
+        err(f"包内文件与 HEAD 不一致  缺={missing} 多={extra}")
+        return 1
+    wrong = []
+    for n in expected:
+        want, _ = normalize(n, open(os.path.join(ROOT, n), "rb").read())
+        if packed[n] != want:
+            wrong.append(n)
+    if wrong:
+        err(f"内容与 HEAD 不一致（{len(wrong)} 个）：{wrong[:5]}")
+        return 1
+    ok(f"dist/{os.path.basename(art)} 与 HEAD 包内 {len(expected)} 个文件逐字节一致")
+    return 0
+
+
 # ---------------------------------------------------------------- 安装
 def resolve_skills_root(explicit: str | None) -> tuple[str, str]:
     """返回 (skills_root, 来源说明)。写死单一产品目录会造成“装成功但没人读”的假通过。"""
@@ -439,6 +477,8 @@ def main() -> int:
     ap.add_argument("--out", default=os.path.join(ROOT, "dist"))
     ap.add_argument("--no-test", action="store_true")
     ap.add_argument("--install", action="store_true")
+    ap.add_argument("--check-dist", action="store_true",
+                    help="只校验 dist 产物与 HEAD 是否逐字节一致（发版后、CI 可跑）")
     ap.add_argument("--skills-dir", default=None,
                     help="技能根目录；不给就按 QWENWORK_SKILLS / WORKBUDDY_SKILLS / "
                          "~/.qwenworkcn/skills / ~/.workbuddy/skills 依次找")
@@ -450,6 +490,9 @@ def main() -> int:
     if ERRORS:
         print(f"\n体检未通过（{len(ERRORS)} 处），未打包。")
         return 1
+
+    if args.check_dist:
+        return check_dist(version)
 
     if args.no_test:
         print("\n2. 自测 —— 已按 --no-test 跳过")
