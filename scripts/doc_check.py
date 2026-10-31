@@ -77,10 +77,17 @@ EARS_CUES = ("WHEN", "IF", "WHILE", "GIVEN", "SHALL",
 VERIFY_PLACEHOLDERS = {"", "-", "—", "–", "待补", "待填", "待定", "无",
                        "n/a", "na", "tbd", "todo", "none"}
 
+# 需求行的状态词白名单（E22）：与 verify.py 的跳过集合对齐——
+# 只有「待实现 / 阻塞 / 搁置」会被跳过，其余状态意味着 verify 必须真跑。
+REQ_STATES = {"待实现", "已实现", "阻塞", "搁置"}
+# 标了「已实现」就必须指得出出处（E23）：「依据」里要有可核对的锚
+TRACE_REF_RE = re.compile(r"(ADR-\d+|ISS-\d+|T\d+\.\d+\.\d+|W\d+\.\d+|D\d+\b|[\w\-./]+\.md)")
+REF_PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "tbd"}
+
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
-         "E19", "E20", "E21",
+         "E19", "E20", "E21", "E22", "E23",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7"]
 
 
@@ -604,6 +611,32 @@ def main():
                     elif vcol >= len(row) or verify_missing(row[vcol]):
                         add(errors, rel, "E18",
                             f"{ids[0]} 缺 verify:（应写可执行命令或测试路径）")
+
+            # ---- E22 状态词白名单 / E23 「已实现」必须指得出出处（G1/G3）
+            # 需求的「实现」不能只改一个词：状态词要合法，且「依据」能指回 ADR /
+            # 任务 / 文件——这是"先设计后实现"唯一能机器判的那一半（判不了先后，
+            # 只判"声称实现了，就说得清依据是什么"）。
+            for header, rows in read_tables(strip_fences(body)):
+                heads = [strip_md(h) for h in header]
+                if "状态" not in heads:
+                    continue
+                i_st = heads.index("状态")
+                i_ref = heads.index("依据") if "依据" in heads else None
+                for row in rows:
+                    if len(row) != len(heads) or not req_id_re.fullmatch(strip_md(row[0])):
+                        continue
+                    rid = strip_md(row[0])
+                    st = strip_md(row[i_st])
+                    if st not in REQ_STATES:
+                        add(errors, rel, "E22",
+                            f"{rid} 的状态词不在白名单：{st!r}"
+                            f"（允许：{'、'.join(sorted(REQ_STATES))}）")
+                    if st == "已实现":
+                        ref = strip_md(row[i_ref]) if i_ref is not None and i_ref < len(row) else ""
+                        if ref in REF_PLACEHOLDERS or not TRACE_REF_RE.search(ref):
+                            add(errors, rel, "E23",
+                                f"{rid} 标了「已实现」，但「依据」指不出设计出处："
+                                f"{ref or '(空)'}（写 ADR- / ISS- / 任务号或文件路径）")
 
         # ---- 契约增量（E19 / E20 / E21，T1.1.2）
         # 机器判据只覆盖 _delta/README.md 里能机械判的部分：目录与 status、

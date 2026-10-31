@@ -893,6 +893,35 @@ def main():
         finally:
             shutil.rmtree(tmp17, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 25
+        print("\n25. 需求状态与出处（E22 / E23）")
+        tmp18 = tempfile.mkdtemp(prefix="ddd-selftest18-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp18)
+            req18 = os.path.join(tmp18, "docs", "20-契约", "requirements.md")
+            base18 = read(req18)
+            row = "| 待实现 | — |"
+
+            c, out = run("doc_check.py", cwd=tmp18)
+            check("骨架里的「待实现 + 依据 —」不报 E22/E23",
+                  c == 0 and "E22" not in codes(out) and "E23" not in codes(out), out[-300:])
+
+            write(req18, base18.replace(row, "| 做完了 | — |", 1))
+            c, out = run("doc_check.py", cwd=tmp18)
+            check("状态词不在白名单 → E22", c == 1 and "E22" in codes(out), out[-300:])
+
+            write(req18, base18.replace(row, "| 已实现 | — |", 1))
+            c, out = run("doc_check.py", cwd=tmp18)
+            check("「已实现」但依据是占位 → E23", c == 1 and "E23" in codes(out), out[-300:])
+
+            write(req18, base18.replace(row, "| 已实现 | ADR-001 |", 1))
+            c, out = run("doc_check.py", cwd=tmp18)
+            check("「已实现」且依据指得出出处 → 不报",
+                  c == 0 and "E22" not in codes(out) and "E23" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp18, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

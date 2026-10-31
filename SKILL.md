@@ -205,5 +205,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 16. **待分诊与开工门禁**：`devlog.py ask "要不要拆任务？" --if "计划里还是一个任务"` → `pending` 能看到 `Q1`；此时 `new` 退出码 1 并列出 `Q1`；`pending --clear Q1 --as drop --note "已过期"` 后 `new` 通过；延期 6 条时 `new` 仍拒绝；`brief` 首屏给「待分诊」计数；分诊过的 pending 文件保留（不静默删除）。
 17. **跨项目找目录 + 时间线同步**：用开发副本的脚本在**另一个项目目录**跑 `devlog.py new` → 档案建在那个项目里，本仓库会话数不变（`find_docs` 先 cwd 后脚本目录，ISS-028）；`new` 之后 `devlog.py check` 报 `S11`，跑 `devlog.py index` 之后消失（ISS-030）。
 18. **转正一步 + 新增前查重**：`pending --clear Q1 --as iss` 不给 `--relation` → 先摆候选再 exit 2；`--relation new --type … --impact … --to …` → 自动分配下一个 `ISS-nnn` 并追加收件箱行；`--relation merge:ISS-nnn` → 不新增行、只标「合并入」；`devlog.py inbox --similar "…"` 能按字面找到候选。
+19. **需求状态与出处**：需求行状态写成 `做完了` → `[E22]`；状态 `已实现` 但「依据」是 `—` → `[E23]`；改成 `已实现` + `ADR-001` → 0 error；骨架里 `待实现` + `—` 不报（E22/E23 只要求"声称实现了就指得出出处"）。
 
-`scripts/self_test.py` 把上面 1–18 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–19 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
