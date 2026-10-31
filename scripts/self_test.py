@@ -999,6 +999,28 @@ def main():
         finally:
             shutil.rmtree(tmp20, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 28
+        print("\n28. 功能对照的取数（devlog features）")
+        tmp21 = tempfile.mkdtemp(prefix="ddd-selftest21-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp21)
+            feat21 = os.path.join(tmp21, "docs", "40-运行", "FEATURES.md")
+            base21 = read(feat21)
+
+            c, out = run("devlog.py", "features", cwd=tmp21)
+            check("features 列出骨架里的 F-001", c == 0 and "F-001" in out, out[-300:])
+
+            c, out = run("devlog.py", "features", "--state", "实施中", cwd=tmp21)
+            check("按状态筛无命中时说明清楚", c == 0 and "没有状态" in out, out[-300:])
+
+            write(feat21, base21.replace("| 待评审 |", "| 实施中 |", 1))
+            c, out = run("devlog.py", "features", "--state", "实施中", cwd=tmp21)
+            check("筛选命中实施中的功能并给出对照模板名",
+                  c == 0 and "F-001" in out and "feature-check" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp21, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

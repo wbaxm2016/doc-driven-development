@@ -447,6 +447,70 @@ def cmd_inbox(ctx, args):
     return 0
 
 
+# ---------------------------------------------------------------- 功能台账（读）
+def features_path(ctx):
+    d = layer_dir(ctx.schema, "operation")
+    if not d:
+        return None
+    p = os.path.join(ctx.docs, d, "FEATURES.md")
+    return p if os.path.exists(p) else None
+
+
+def feature_rows(ctx):
+    """功能台账的行（id / 功能 / 需求 / 状态 / 入口）。只读，不判合规——那有 E24。"""
+    path = features_path(ctx)
+    if not path:
+        return []
+    out = []
+    for header, rows in read_tables(read(path)):
+        heads = [strip_md(h) for h in header]
+        if not {"ID", "功能", "状态"} <= set(heads):
+            continue
+        i_id, i_fn, i_req = heads.index("ID"), heads.index("功能"), _col(heads, "满足的需求")
+        i_st, i_to = heads.index("状态"), _col(heads, "代码入口")
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            fid = strip_md(r[i_id])
+            if not re.fullmatch(r"F-\d+", fid):
+                continue
+            out.append({
+                "id": fid,
+                "feature": strip_md(r[i_fn]),
+                "req": strip_md(r[i_req]) if i_req is not None else "",
+                "state": strip_md(r[i_st]),
+                "to": strip_md(r[i_to]) if i_to is not None else "",
+            })
+    return out
+
+
+def cmd_features(ctx, args):
+    rows = feature_rows(ctx)
+    if not rows:
+        print("没有功能台账（%s）。先跑 doc_init.py，或按模板建 40-运行/FEATURES.md"
+              % (features_path(ctx) or "未找到"))
+        return 0
+    want = (args.state or "").strip()
+    picked = [r for r in rows if not want or r["state"] == want]
+    if not picked:
+        print("功能台账 %d 行，没有状态为「%s」的行" % (len(rows), want))
+        return 0
+    if want:
+        print("功能台账：状态「%s」%d 行" % (want, len(picked)))
+    else:
+        counts = {}
+        for r in rows:
+            counts[r["state"]] = counts.get(r["state"], 0) + 1
+        print("功能台账：%d 行（%s）"
+              % (len(rows), " · ".join("%s %d" % (k, v) for k, v in counts.items())))
+    for r in picked:
+        print("  %s  [%s]  %s%s" % (r["id"], r["state"], r["feature"],
+                                    ("  ← " + r["req"]) if r["req"] else ""))
+    if want in ("实施中", "已对照"):
+        print("对照清单：assets/templates/feature-check.md（三栏：功能 / 该验什么 / 结论与差异）")
+    return 0
+
+
 def cmd_ask(ctx, args):
     """记一条「要用户定」的问题：不占 ISS 号（所以门槛低），但不等于不进历史。"""
     files = ctx.sessions()
@@ -996,6 +1060,9 @@ def main():
     p_inbox = sub.add_parser("inbox")
     p_inbox.add_argument("--similar", default=None, help="给一段文字，列可能相关的开放条目")
     p_inbox.add_argument("--top", type=int, default=3)
+    p_features = sub.add_parser("features")
+    p_features.add_argument("--state", default=None,
+                            help="只看某个状态（实施中 / 已对照 / 已验收 …）")
     sub.add_parser("check")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
@@ -1024,6 +1091,8 @@ def main():
         return cmd_pending(ctx, args)
     if args.cmd == "inbox":
         return cmd_inbox(ctx, args)
+    if args.cmd == "features":
+        return cmd_features(ctx, args)
     if args.cmd == "check":
         return cmd_check(ctx, as_json)
     return cmd_index(ctx, args.check)

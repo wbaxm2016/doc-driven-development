@@ -73,6 +73,14 @@ python scripts/doc_check.py         # 全库字段与链接
 
 契约回检另有一条：`python scripts/verify.py` 按每条需求的 `verify:` 真跑（失败/超时 → exit 1，状态=`待实现/阻塞` 的行跳过）。它可能很慢，所以**不在收尾五连跑里**；CI 每次 push 跑它，改了契约或测试再本地跑一次。
 
+**实施完之后先对照，再测**（顺序别倒）：
+
+```bash
+python scripts/devlog.py features --state 实施中   # 取数：这次要对照的功能
+```
+
+按 `assets/templates/feature-check.md` 填三栏（功能 / 该验什么 / 结论与差异），结论只有 `一致 / 差异 / 未覆盖` 三种；写「差异」「未覆盖」必须同时登记一条 ISS。差异清完、入口与行为对得上，才把功能状态推到 `已对照`，再跑测试推 `已验收`——**测试证明符合断言，对照证明断言写的是需求那一句**。
+
 第一次接入**存量项目**时用棘轮，别试图一天清完：
 
 ```bash
@@ -166,14 +174,15 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `assets/templates/dev-plan.md` | 开发计划（三层 + 六维 + 三视角 + `plan-rank` 生成区） |
 | `assets/templates/adr.md` | ADR 六段 + `supersedes`/`superseded_by` 双向链 |
 | `assets/templates/requirements.md` | 契约层：EARS 句式 + `verify:` 可执行入口 + 验收口径 + 不得做的事 |
-| `assets/templates/features.md` | 功能台账：`F-nnn` + 满足的需求 + 状态链 + 代码入口 + 证据（一张表兼做设计与已实现清单） |
+| `assets/templates/features.md` | 功能台账：`F-nnn` + 满足的需求 + 状态链 + 评审 + 代码入口 + 证据（一张表兼做设计与已实现清单） |
+| `assets/templates/feature-check.md` | 实施后的功能对照清单：功能 / 该验什么 / 结论与差异（三栏，差异必须进收件箱） |
 | `assets/templates/alias-table.md` | 术语规范名/禁用别名（E16 的唯一清单） |
 | `assets/templates/process-readme.md` | 过程层协议入口：落进 `70-过程/README.md`，登记本项目的落点与惯例（协议正文仍只在 `references/process-recording.md`，这里不复写） |
 | `assets/ci/` | pre-commit 与 GitHub Actions 门禁样例 |
 | `assets/agents-snippet.md` | 粘进 `AGENTS.md` 的 8 行约定，让习惯默认生效 |
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
-| `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `check` / `index [--check]` |
+| `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
 | `scripts/self_test.py` | 自检：把本文「验收」1–17 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
@@ -210,4 +219,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 20. **功能台账**：功能行状态写 `做完了` → `[E24]`；`满足的需求` 引用不存在的 `REQ-999` → `[E24]`；`已验收` 但代码入口写 `—` → `[E24]`；入口存在 + `verify` + 证据 → 0 error；骨架里 `待评审` 那一行不报。
 21. **评审门**：功能行状态推到 `已评审` 但「评审」列是 `—` → `[E24]`；写上三问结论（满足✓ 可做✓ 代价S）→ 不报；历史行（`—（历史）`）带历史评审 → 不报；**挂需求的行拿 `—（历史）` 背书** → `[E24]`。
 
-`scripts/self_test.py` 把上面 1–21 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+22. **功能对照的取数**：`devlog.py features` 列出功能台账各行（含 `--state` 筛选）；筛到 `实施中` 时提示对照模板 `assets/templates/feature-check.md`；对照结论只有 `一致 / 差异 / 未覆盖`，写差异必须同时登记一条 ISS。
+
+`scripts/self_test.py` 把上面 1–22 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

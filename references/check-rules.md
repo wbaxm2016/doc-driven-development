@@ -90,6 +90,7 @@
 | `devlog.py pending --clear Q1 --as iss --relation new --type … --impact … --to …` | **转正**：自动分配下一个 `ISS-nnn` 并追加收件箱主表一行；三格人判字段必填 | 0 / 2 |
 | `devlog.py pending --clear Q1 --as iss --relation merge\|extends\|updates\|duplicate:ISS-nnn` | 不新增行，只把待分诊行标成「→合并入 / 扩展 / 更新 / 重复于 ISS-nnn」；内容并入靠人（脚本不动别人的行） | 0 / 2 |
 | `devlog.py inbox [--similar "一段文字"]` | 新增前查重：按字符二元组重合度列出可能相关的开放条目（**候选**，不是判定） | 0 |
+| `devlog.py features [--state 实施中]` | 功能对照的取数：列出功能台账里的行（只读；合规判定在 `doc_check` 的 `E24`） | 0 |
 | `devlog.py new` | 还有 `open` 项、或 `deferred` > 5 → 拒绝建档 | 0（通过）/ 1（被门禁拦下）/ 2（参数或环境） |
 
 > **转正前必须先查一次**（ISS-031）：`--as iss` 不给 `--relation` 时，脚本先摆出字面候选再 exit 2。候选只是候选——**包含、扩展、还是独立，要人判**；判完用哪一种 relation，就是把判断落成一次选择。
