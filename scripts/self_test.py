@@ -1021,6 +1021,18 @@ def main():
         finally:
             shutil.rmtree(tmp21, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 29
+        print("\n29. 主干道写进技能（需求→功能→工作→任务→实施→冒烟→对照→测试→回写）")
+        skill_text = read(os.path.join(SKILL, "SKILL.md"))
+        stages = ["需求", "功能", "工作", "任务", "实施", "冒烟", "对照", "测试", "回写"]
+        check("SKILL 有「主干道」一节且九个阶段齐全",
+              "## 主干道" in skill_text and all(s in skill_text for s in stages),
+              "缺：" + "、".join(s for s in stages if s not in skill_text))
+        check("主干道每格挂得上机器判据（E24 / verify / feature-check）",
+              all(k in skill_text for k in ("E24", "verify.py", "feature-check")), skill_text[:0])
+        check("写明对照在测试之前的理由",
+              "对照在测试之前" in skill_text and "假通过" in skill_text, "")
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
