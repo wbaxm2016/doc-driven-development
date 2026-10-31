@@ -59,12 +59,18 @@ python scripts/verify.py         # 按契约 verify: 真跑；失败/超时非 0
 
 ## 发版
 
-1. 改 `VERSION`（语义版本：改规则/码表算 minor，破兼容算 major）
-2. 在 `CHANGELOG.md` 加一节
-3. `python build.py --install`
-4. 提交 `VERSION`、`CHANGELOG.md`、源码与 `dist/`。`dist/doc-driven-development-<版本>.skill` 就是给其他 Agent 的安装包
+**先判要不要发版**：只有**包内文件**变了才要——`scripts/`、`references/`、`assets/`、`SKILL.md`、`VERSION`、`.skill-metadata.yaml`。只改 `docs/`、`CHANGELOG.md`、`README.md`、`build.py`、`install.py` 这类**包外**文件不用发版，`dist/` 仍然有效。
 
-`dist/doc-driven-development.skill` 是"最新版"的稳定别名，`dist/doc-driven-development-2.0.0.skill` 供锁定版本安装。
+要发版时，顺序是**先提交、后打包**——反过来会让产物来自脏工作区，说不清它对应哪个提交：
+
+1. 平时改包内文件就先在 `CHANGELOG.md` 的 `## Unreleased` 里攒一笔。
+2. 发版：把 `## Unreleased` 改名成 `## <新版本>`，改 `VERSION`（改规则/码表算 minor，破兼容算 major）。
+3. **先提交**（源码 + `VERSION` + `CHANGELOG`）。
+4. `python build.py`：体检 → 自测 → 打包 → 验包。
+5. `python build.py --check-dist`：确认产物与 HEAD 的包内文件逐字节一致；包内文件有未提交改动时直接拒绝。
+6. 提交 `dist/`，再 `python install.py --from dist` 装到各宿主（`.install.json` 记 `source=dist` 与产物路径）。
+
+`dist/doc-driven-development.skill` 是"最新版"的稳定别名，`dist/doc-driven-development-<版本>.skill` 供锁定版本安装。
 
 ## 安装（其他 Agent / 其他机器）
 
