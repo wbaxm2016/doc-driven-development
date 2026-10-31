@@ -84,10 +84,15 @@ REQ_STATES = {"待实现", "已实现", "阻塞", "搁置"}
 TRACE_REF_RE = re.compile(r"(ADR-\d+|ISS-\d+|T\d+\.\d+\.\d+|W\d+\.\d+|D\d+\b|[\w\-./]+\.md)")
 REF_PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "tbd"}
 
+# 功能台账的状态链（E24）：设计视图（待评审/已评审/实施中）与已实现（已对照/已验收）同表
+FEATURE_STATES = {"待评审", "已评审", "实施中", "已对照", "已验收", "搁置"}
+# 「—（历史）」只给先于契约存在的老功能，且只能停在已验收
+LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
+
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
-         "E19", "E20", "E21", "E22", "E23",
+         "E19", "E20", "E21", "E22", "E23", "E24",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7"]
 
 
@@ -471,6 +476,15 @@ def main():
     delta_archive_prefix = (f"{delta_prefix}{DELTA_ARCHIVE}/" if delta_prefix else None)
     repo_root = os.path.dirname(os.path.abspath(docs))
 
+    # 功能台账要判「引用的需求是否存在」，所以先把契约层出现过的 REQ 编号收一遍
+    req_ids = set()
+    if contract_dir:
+        req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
+        for path in files:
+            rel0 = os.path.relpath(path, docs).replace(os.sep, "/")
+            if rel0.startswith(contract_dir + "/"):
+                req_ids.update(req_pat.findall(read(path)))
+
     def add(bucket, rel, code, msg):
         bucket.append({"file": rel, "code": code, "message": msg})
 
@@ -637,6 +651,63 @@ def main():
                             add(errors, rel, "E23",
                                 f"{rid} 标了「已实现」，但「依据」指不出设计出处："
                                 f"{ref or '(空)'}（写 ADR- / ISS- / 任务号或文件路径）")
+
+        # ---- E24 功能台账（需求 → 功能 → 入口 → 证据）
+        # 一张表两种读法：待评审/已评审/实施中＝设计视图，已对照/已验收＝已实现清单。
+        # 只判能机械判的：编号、状态词、需求引用存在、入口存在、已验收有 verify 与证据。
+        for header, rows in read_tables(strip_fences(body)):
+            heads = [strip_md(h) for h in header]
+            if not {"ID", "功能", "满足的需求", "状态"} <= set(heads):
+                continue
+            i_id, i_req, i_st = heads.index("ID"), heads.index("满足的需求"), heads.index("状态")
+            i_to = heads.index("代码入口") if "代码入口" in heads else None
+            i_vf = next((i for i, h in enumerate(heads)
+                         if h.lower().startswith("verify")), None)
+            i_ev = heads.index("证据") if "证据" in heads else None
+            req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
+            for row in rows:
+                if len(row) != len(heads):
+                    continue
+                fid = strip_md(row[i_id])
+                if not re.fullmatch(r"F-\d+", fid):
+                    continue
+                st = strip_md(row[i_st])
+                reqcell = strip_md(row[i_req])
+                if st not in FEATURE_STATES:
+                    add(errors, rel, "E24",
+                        f"{fid} 的状态词不在白名单：{st!r}"
+                        f"（允许：{'、'.join(sorted(FEATURE_STATES))}）")
+                if reqcell in LEGACY_REQ:
+                    if st != "已验收":
+                        add(errors, rel, "E24",
+                            f"{fid} 用「—（历史）」只在已验收时允许："
+                            f"没挂需求的功能不能算已评审")
+                else:
+                    rids = [x for x in re.split(r"[、,，;；\s]+", reqcell) if x]
+                    if not rids:
+                        add(errors, rel, "E24",
+                            f"{fid} 没写满足哪条需求（REQ-nnn，可多条用「、」分隔）")
+                    for rid in rids:
+                        if not req_pat.fullmatch(rid):
+                            add(errors, rel, "E24",
+                                f"{fid} 的「满足的需求」里有非法编号：{rid!r}")
+                        elif rid not in req_ids:
+                            add(errors, rel, "E24", f"{fid} 引用了不存在的需求 {rid}")
+                if st in ("已对照", "已验收"):
+                    tocell = strip_md(row[i_to]) if i_to is not None else ""
+                    paths = [x for x in re.split(r"[、,，;；]+", tocell) if x] if tocell else []
+                    paths = [x for x in paths if x not in ("—", "-", "无")]
+                    if not paths:
+                        add(errors, rel, "E24", f"{fid} 是「{st}」却没有代码入口")
+                    for p in paths:
+                        if not os.path.exists(os.path.join(repo_root, p)):
+                            add(errors, rel, "E24", f"{fid} 的代码入口不存在：{p}")
+                if st == "已验收":
+                    if i_vf is None or verify_missing(row[i_vf]):
+                        add(errors, rel, "E24", f"{fid} 已验收但缺 verify 命令")
+                    ev = strip_md(row[i_ev]) if i_ev is not None else ""
+                    if ev in REF_PLACEHOLDERS:
+                        add(errors, rel, "E24", f"{fid} 已验收但没有证据（写命令/测试组号与日期）")
 
         # ---- 契约增量（E19 / E20 / E21，T1.1.2）
         # 机器判据只覆盖 _delta/README.md 里能机械判的部分：目录与 status、

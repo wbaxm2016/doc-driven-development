@@ -166,6 +166,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `assets/templates/dev-plan.md` | 开发计划（三层 + 六维 + 三视角 + `plan-rank` 生成区） |
 | `assets/templates/adr.md` | ADR 六段 + `supersedes`/`superseded_by` 双向链 |
 | `assets/templates/requirements.md` | 契约层：EARS 句式 + `verify:` 可执行入口 + 验收口径 + 不得做的事 |
+| `assets/templates/features.md` | 功能台账：`F-nnn` + 满足的需求 + 状态链 + 代码入口 + 证据（一张表兼做设计与已实现清单） |
 | `assets/templates/alias-table.md` | 术语规范名/禁用别名（E16 的唯一清单） |
 | `assets/templates/process-readme.md` | 过程层协议入口：落进 `70-过程/README.md`，登记本项目的落点与惯例（协议正文仍只在 `references/process-recording.md`，这里不复写） |
 | `assets/ci/` | pre-commit 与 GitHub Actions 门禁样例 |
@@ -206,5 +207,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 17. **跨项目找目录 + 时间线同步**：用开发副本的脚本在**另一个项目目录**跑 `devlog.py new` → 档案建在那个项目里，本仓库会话数不变（`find_docs` 先 cwd 后脚本目录，ISS-028）；`new` 之后 `devlog.py check` 报 `S11`，跑 `devlog.py index` 之后消失（ISS-030）。
 18. **转正一步 + 新增前查重**：`pending --clear Q1 --as iss` 不给 `--relation` → 先摆候选再 exit 2；`--relation new --type … --impact … --to …` → 自动分配下一个 `ISS-nnn` 并追加收件箱行；`--relation merge:ISS-nnn` → 不新增行、只标「合并入」；`devlog.py inbox --similar "…"` 能按字面找到候选。
 19. **需求状态与出处**：需求行状态写成 `做完了` → `[E22]`；状态 `已实现` 但「依据」是 `—` → `[E23]`；改成 `已实现` + `ADR-001` → 0 error；骨架里 `待实现` + `—` 不报（E22/E23 只要求"声称实现了就指得出出处"）。
+20. **功能台账**：功能行状态写 `做完了` → `[E24]`；`满足的需求` 引用不存在的 `REQ-999` → `[E24]`；`已验收` 但代码入口写 `—` → `[E24]`；入口存在 + `verify` + 证据 → 0 error；骨架里 `待评审` 那一行不报。
 
-`scripts/self_test.py` 把上面 1–19 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–20 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

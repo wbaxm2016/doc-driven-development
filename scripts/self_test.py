@@ -927,6 +927,40 @@ def main():
         finally:
             shutil.rmtree(tmp18, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 26
+        print("\n26. 功能台账：需求 → 功能 → 入口 → 证据（E24）")
+        tmp19 = tempfile.mkdtemp(prefix="ddd-selftest19-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp19)
+            feat19 = os.path.join(tmp19, "docs", "40-运行", "FEATURES.md")
+            base19 = read(feat19)
+
+            c, out = run("doc_check.py", cwd=tmp19)
+            check("骨架的功能台账不报 E24", c == 0 and "E24" not in codes(out), out[-300:])
+
+            write(feat19, base19.replace("REQ-001", "REQ-999", 1))
+            c, out = run("doc_check.py", cwd=tmp19)
+            check("引用不存在的需求 → E24", c == 1 and "E24" in codes(out), out[-300:])
+
+            write(feat19, base19.replace("| 待评审 |", "| 做完了 |", 1))
+            c, out = run("doc_check.py", cwd=tmp19)
+            check("状态词不在白名单 → E24", c == 1 and "E24" in codes(out), out[-300:])
+
+            write(feat19, base19.rstrip("\n")
+                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收 | — | 自测跑过 |\n")
+            c, out = run("doc_check.py", cwd=tmp19)
+            check("已验收却没有代码入口 → E24", c == 1 and "E24" in codes(out), out[-300:])
+
+            write(feat19, base19.rstrip("\n")
+                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                  " | docs/20-契约/requirements.md | self_test 2026-10-31 |\n")
+            c, out = run("doc_check.py", cwd=tmp19)
+            check("已验收：入口存在 + verify + 证据 → 不报",
+                  c == 0 and "E24" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp19, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

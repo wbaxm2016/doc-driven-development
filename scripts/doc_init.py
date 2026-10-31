@@ -179,8 +179,7 @@ def main():
 
     write_if_absent(os.path.join(docs, "00-门面", "vision.md"),
                     fm("产品定位", "facade", "这个产品是什么、为什么做。", date, authority="1"))
-    write_if_absent(os.path.join(docs, "40-运行", "FEATURES.md"),
-                    fm("已实现能力清单", "operation", "现在能做到什么；只记已验收的，不记计划。", date))
+    copy_tpl("features.md", os.path.join(docs, "40-运行", "FEATURES.md"), date)
     write_if_absent(os.path.join(docs, "30-决策", "decisions.md"),
                     fm("决策索引", "decision",
                        "ADR 的唯一入口：一文件一决策，编号只增不复用。", date, authority="1")
