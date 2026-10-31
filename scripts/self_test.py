@@ -948,18 +948,56 @@ def main():
             check("状态词不在白名单 → E24", c == 1 and "E24" in codes(out), out[-300:])
 
             write(feat19, base19.rstrip("\n")
-                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收 | — | 自测跑过 |\n")
+                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                  " | 满足✓ | — | 自测跑过 |\n")
             c, out = run("doc_check.py", cwd=tmp19)
             check("已验收却没有代码入口 → E24", c == 1 and "E24" in codes(out), out[-300:])
 
             write(feat19, base19.rstrip("\n")
                   + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | docs/20-契约/requirements.md | self_test 2026-10-31 |\n")
+                  " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-10-31 |\n")
             c, out = run("doc_check.py", cwd=tmp19)
             check("已验收：入口存在 + verify + 证据 → 不报",
                   c == 0 and "E24" not in codes(out), out[-300:])
         finally:
             shutil.rmtree(tmp19, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 27
+        print("\n27. 评审门：三问没答完不能推进（E24）")
+        tmp20 = tempfile.mkdtemp(prefix="ddd-selftest20-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp20)
+            feat20 = os.path.join(tmp20, "docs", "40-运行", "FEATURES.md")
+            base20 = read(feat20)
+
+            write(feat20, base20.rstrip("\n")
+                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
+                  " | — | — | — |\n")
+            c, out = run("doc_check.py", cwd=tmp20)
+            check("推到「已评审」却没写评审结论 → E24",
+                  c == 1 and "E24" in codes(out), out[-300:])
+
+            write(feat20, base20.rstrip("\n")
+                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
+                  " | 满足✓ 可做✓ 代价S | — | — |\n")
+            c, out = run("doc_check.py", cwd=tmp20)
+            check("三问结论写进「评审」列 → 不报", c == 0 and "E24" not in codes(out), out[-300:])
+
+            write(feat20, base20.rstrip("\n")
+                  + "\n| **F-003** | 旧功能 | —（历史） | 口径 | `python -c pass` | S | 已验收"
+                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 |\n")
+            c, out = run("doc_check.py", cwd=tmp20)
+            check("历史行带「—（历史）」评审 → 不报", c == 0 and "E24" not in codes(out), out[-300:])
+
+            write(feat20, base20.rstrip("\n")
+                  + "\n| **F-004** | 新功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 |\n")
+            c, out = run("doc_check.py", cwd=tmp20)
+            check("挂需求的行拿「—（历史）」背书 → E24",
+                  c == 1 and "E24" in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp20, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

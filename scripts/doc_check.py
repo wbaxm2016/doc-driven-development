@@ -664,6 +664,7 @@ def main():
             i_vf = next((i for i, h in enumerate(heads)
                          if h.lower().startswith("verify")), None)
             i_ev = heads.index("证据") if "证据" in heads else None
+            i_rv = heads.index("评审") if "评审" in heads else None
             req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
             for row in rows:
                 if len(row) != len(heads):
@@ -693,6 +694,18 @@ def main():
                                 f"{fid} 的「满足的需求」里有非法编号：{rid!r}")
                         elif rid not in req_ids:
                             add(errors, rel, "E24", f"{fid} 引用了不存在的需求 {rid}")
+                # 评审门（T5.1.2）：已评审及以后必须留下三问的结论；
+                # 「—（历史）」只给未挂需求的存量行背书，不能给新功能背书。
+                if st in ("已评审", "实施中", "已对照", "已验收"):
+                    rv = strip_md(row[i_rv]) if i_rv is not None else ""
+                    if rv in REF_PLACEHOLDERS:
+                        add(errors, rel, "E24",
+                            f"{fid} 是「{st}」却没有评审结论——"
+                            f"先答三问（满足需求 / 可实现 / 代价合理）并写进「评审」列")
+                    elif rv in LEGACY_REQ and reqcell not in LEGACY_REQ:
+                        add(errors, rel, "E24",
+                            f"{fid} 的评审写了「—（历史）」，但它挂着需求："
+                            f"历史结论不能给新功能背书")
                 if st in ("已对照", "已验收"):
                     tocell = strip_md(row[i_to]) if i_to is not None else ""
                     paths = [x for x in re.split(r"[、,，;；]+", tocell) if x] if tocell else []
