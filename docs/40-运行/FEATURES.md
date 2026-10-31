@@ -4,8 +4,8 @@ layer: operation
 domain: 全局
 status: active
 authority: 2
-updated: 2026-10-30
-summary: "现在能做到什么；只记已验收的，不记计划。当前版本 2.1.2。"
+updated: 2026-10-31
+summary: "现在能做到什么；只记已验收的，不记计划。当前版本 2.2.0。"
 tags: [能力, 验收]
 ---
 
@@ -13,7 +13,7 @@ tags: [能力, 验收]
 
 > 只记**已验收**的能力。计划中的在 [开发计划](../00-门面/开发计划.md) 里，不写在这里。
 
-当前版本：`VERSION` = 2.1.2（`dist/doc-driven-development-2.1.2.skill`）。下表 E18–E21、`verify.py`、契约增量、改动分级、交接锚点、开场简报、§2 落点必填与待分诊门禁只存在于源码，尚未随包发版。
+当前版本：`VERSION` = 2.2.0（`dist/doc-driven-development-2.2.0.skill`）。下表 E18–E21、`verify.py`、契约增量、改动分级、交接锚点、开场简报、§2 落点必填、待分诊门禁与清单化安装已随 2.2.0 发版。
 
 | 能力 | 一条判据 | 证据 |
 |---|---|---|

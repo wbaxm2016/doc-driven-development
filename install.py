@@ -26,9 +26,11 @@ import argparse
 import datetime
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+import zipfile
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -75,52 +77,76 @@ def git_commit() -> str:
         return "unknown"
 
 
-def payload() -> list[str]:
-    files = build.walk_package_files()
-    if "SKILL.md" not in files:
-        raise SystemExit("ERROR 源目录里没有 SKILL.md，不装")
-    return files
+def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, bytes]], dict]:
+    """把要装的东西读成 (相对路径, 字节) 列表。
+
+    source=worktree：按 ``build.walk_package_files()`` 从工作区取，行尾归一；
+    source=dist：从 ``dist/<skill>-<VERSION>.skill`` 解包，原样拷贝（包里已是 LF）。
+    装什么、装的是哪一份，必须能回答——所以返回的 meta 会写进目标目录的 ``.install.json``。
+    """
+    version = open(os.path.join(ROOT, "VERSION"), encoding="utf-8").read().strip()
+    if source == "worktree":
+        files = build.walk_package_files()
+        if "SKILL.md" not in files:
+            raise SystemExit("ERROR 源目录里没有 SKILL.md，不装")
+        entries = []
+        for rel in files:
+            data = open(os.path.join(ROOT, rel), "rb").read()
+            if build.is_text(rel):
+                data, _ = build.normalize(rel, data)   # 与打包同一条行尾规则（ISS-008）
+            entries.append((rel, data))
+        entries.append(("MANIFEST.txt", build.make_manifest(version, entries)))
+        return entries, {"source": "worktree", "version": version, "commit": git_commit()}
+
+    path = artifact or os.path.join(ROOT, "dist", "%s-%s.skill" % (SKILL_NAME, version))
+    if not os.path.isfile(path):
+        raise SystemExit("ERROR 找不到发版产物：%s（先跑 `python build.py`，或用 --artifact 指定）" % path)
+    with zipfile.ZipFile(path) as zf:
+        names = [n for n in zf.namelist() if not n.endswith("/")]
+        entries = [(n, zf.read(n)) for n in names]
+    man = dict(entries).get("MANIFEST.txt", b"").decode("utf-8", "replace")
+    m = re.search(r"(?m)^version:\s*(\S+)", man)
+    meta_version = m.group(1) if m else version
+    return entries, {"source": "dist", "version": meta_version,
+                     "artifact": os.path.relpath(path, ROOT).replace("\\", "/"),
+                     "commit": git_commit()}
 
 
-def install_one(target: dict, files: list[str], dry_run: bool) -> tuple[bool, str]:
+def install_one(target: dict, entries: list[tuple[str, bytes]], meta: dict,
+                dry_run: bool) -> tuple[bool, str]:
     root, why = probe(target)
     if root is None:
         return False, why
     dest = os.path.join(root, target["skill"] if "skill" in target else SKILL_NAME)
     if dry_run:
-        return True, f"将安装到 {dest}（{len(files)} 个文件；来源：{why}）"
+        return True, f"将安装到 {dest}（{len(entries)} 个文件；来源：{why}）"
 
     if os.path.isdir(dest):
         shutil.rmtree(dest)
     os.makedirs(dest, exist_ok=True)
-    entries: list[tuple[str, bytes]] = []
-    for rel in files:
-        src = os.path.join(ROOT, rel)
-        data = open(src, "rb").read()
-        if build.is_text(rel):
-            data, _ = build.normalize(rel, data)   # 与打包同一条行尾规则（ISS-008）
-        entries.append((rel, data))
-        out = os.path.join(dest, rel)
+    for rel, data in entries:
+        norm = os.path.normpath(rel)
+        if norm.startswith("..") or os.path.isabs(norm):
+            return False, f"包内路径越界：{rel}"
+        out = os.path.join(dest, norm)
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "wb") as fh:
             fh.write(data)
 
-    version = open(os.path.join(ROOT, "VERSION"), encoding="utf-8").read().strip()
-    # 与 dist 里的包同一份 MANIFEST 格式：装完仍能按哈希核对，不是「拷过去就算装好」
-    with open(os.path.join(dest, "MANIFEST.txt"), "wb") as fh:
-        fh.write(build.make_manifest(version, entries))
     marker = {
         "skill": SKILL_NAME,
-        "version": version,
-        "source": "worktree",
-        "commit": git_commit(),
+        "version": meta["version"],
+        "source": meta["source"],
+        "commit": meta["commit"],
         "installed_at": datetime.datetime.now().isoformat(timespec="seconds"),
-        "files": len(files) + 1,
+        "files": len(entries) + 1,   # 含 .install.json 自身
     }
+    if meta.get("artifact"):
+        marker["artifact"] = meta["artifact"]
     with open(os.path.join(dest, ".install.json"), "w", encoding="utf-8") as fh:
         json.dump(marker, fh, ensure_ascii=False, indent=2)
-    return True, (f"{dest}（{marker['files']} 个文件 + .install.json，"
-                  f"v{version}，commit {marker['commit']}）")
+    return True, (f"{dest}（{marker['files']} 个文件，v{marker['version']}，"
+                  f"source={marker['source']}，commit {marker['commit']}）")
 
 
 SKILL_NAME = "doc-driven-development"
@@ -133,6 +159,10 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="探查并打印，不写盘")
     ap.add_argument("--only", default="", help="只装这些 id（逗号分隔）")
     ap.add_argument("--self-test", action="store_true", help="装完在目标目录里跑自测")
+    ap.add_argument("--from", dest="source", default="worktree",
+                    choices=["worktree", "dist"],
+                    help="装工作区源码（默认）还是 dist 里的发版产物")
+    ap.add_argument("--artifact", default=None, help="--from dist 时显式指定 .skill 路径")
     args = ap.parse_args()
 
     try:
@@ -143,9 +173,9 @@ def main() -> int:
     targets = man.get("targets", [])
     only = {s.strip() for s in args.only.split(",") if s.strip()}
 
-    files = payload()
-    version = open(os.path.join(ROOT, "VERSION"), encoding="utf-8").read().strip()
-    print(f"技能 {SKILL_NAME}  源码 v{version}  文件 {len(files)}  清单 {args.manifest}")
+    entries, meta = materialize(args.source, args.artifact)
+    print(f"技能 {SKILL_NAME}  来源 {meta['source']} v{meta['version']}  "
+          f"文件 {len(entries)}  清单 {args.manifest}")
 
     results, failed = [], 0
     for t in targets:
@@ -173,7 +203,7 @@ def main() -> int:
                     cur = "  已装（.install.json 读不出）"
             print(f"  将装到：{dest}{cur}")
             continue
-        okk, detail = install_one(t, files, args.dry_run)
+        okk, detail = install_one(t, entries, meta, args.dry_run)
         print(("  " + ("dry-run" if args.dry_run else "installed") + "：" + detail))
         results.append((name, okk, detail))
         if not okk:
