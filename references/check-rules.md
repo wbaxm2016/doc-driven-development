@@ -83,8 +83,13 @@
 |---|---|---|
 | `devlog.py ask "…" --if "前提"` | 记一条要用户定的问题（`Q<n>`，不占 `ISS` 号） | 0 / 2 |
 | `devlog.py pending` | 列出 `open` / `deferred` 与各自前提 | 0 |
-| `devlog.py pending --clear Q1 --as iss\|s5\|drop\|defer [--note "…"]` | 给出出口；`iss` 的 `--note` 必须是收件箱里已有的编号，`drop` 必须写理由，`defer` 要求该条已有前提 | 0 / 2 |
+| `devlog.py pending --clear Q1 --as s5\|drop\|defer [--note "…"]` | 其它出口：`s5` 转开放项、`drop` 必须写理由、`defer` 要求该条已有前提 | 0 / 2 |
+| `devlog.py pending --clear Q1 --as iss --relation new --type … --impact … --to …` | **转正**：自动分配下一个 `ISS-nnn` 并追加收件箱主表一行；三格人判字段必填 | 0 / 2 |
+| `devlog.py pending --clear Q1 --as iss --relation merge\|extends\|updates\|duplicate:ISS-nnn` | 不新增行，只把待分诊行标成「→合并入 / 扩展 / 更新 / 重复于 ISS-nnn」；内容并入靠人（脚本不动别人的行） | 0 / 2 |
+| `devlog.py inbox [--similar "一段文字"]` | 新增前查重：按字符二元组重合度列出可能相关的开放条目（**候选**，不是判定） | 0 |
 | `devlog.py new` | 还有 `open` 项、或 `deferred` > 5 → 拒绝建档 | 0（通过）/ 1（被门禁拦下）/ 2（参数或环境） |
+
+> **转正前必须先查一次**（ISS-031）：`--as iss` 不给 `--relation` 时，脚本先摆出字面候选再 exit 2。候选只是候选——**包含、扩展、还是独立，要人判**；判完用哪一种 relation，就是把判断落成一次选择。
 
 > 文件在仓库根 `.dd/pending/`：不进 `docs/`（躲开 `doc_check` 的形状检查）、不进 git（临时问题不该进历史），但关掉会话仍留在盘上。它只判**「写了没清」**，判不了**「有没有写」**——没记下来的问题不会因为这套机制自己出现。
 

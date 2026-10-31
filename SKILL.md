@@ -57,6 +57,8 @@ python scripts/devlog.py new --title "本次主题" --scope "范围"
 
 **过程中**：用户说的每句话按 8 类归档（`Q R F E D C X O`），每行都要有落点；AI 侧边做边填需求理解、实现思路、组件归属、gap。发现任何问题——缺陷、口径冲突、文档债、风险、待决、机会——立刻在收件箱加一行，然后继续当前话题。**不要停下来问用户要不要处理它**。要用户定的事（「要不要 X」「A 还是 B」）进待分诊而不是收件箱：`python scripts/devlog.py ask "问题" --if "什么变了它就作废"`——不占 `ISS` 号，所以门槛低；收尾前必须分诊（`pending --clear`），否则下一场 `new` 会被挡住。
 
+**新增 ISS 前先查一次**：`python scripts/devlog.py inbox --similar "这条问题的表述"` 摆出字面候选，把「是包含 / 扩展 / 还是独立」讲给用户定；转正时 `pending --clear <Q> --as iss --relation new|merge:ISS-nnn|extends:ISS-nnn|updates:ISS-nnn|duplicate:ISS-nnn`——`new` 由脚本自动分配 `ISS-nnn`，但 `--type/--impact/--to` 三格必须由你给（那是它值得进台账的理由）。
+
 **收尾**：
 
 ```bash
@@ -170,7 +172,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `assets/agents-snippet.md` | 粘进 `AGENTS.md` 的 8 行约定，让习惯默认生效 |
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
-| `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `check` / `index [--check]` |
+| `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
 | `scripts/self_test.py` | 自检：把本文「验收」1–17 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
@@ -202,5 +204,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 15. **用户侧落点必填**：把 §2 一行的落点留空或写成 `—` / `待补` → `devlog.py check` 报 `S10` 且 exit 1；写成「§3.1」→ 0 error；刚建出的档案（§2 仍是模板占位）不报 `S10`。
 16. **待分诊与开工门禁**：`devlog.py ask "要不要拆任务？" --if "计划里还是一个任务"` → `pending` 能看到 `Q1`；此时 `new` 退出码 1 并列出 `Q1`；`pending --clear Q1 --as drop --note "已过期"` 后 `new` 通过；延期 6 条时 `new` 仍拒绝；`brief` 首屏给「待分诊」计数；分诊过的 pending 文件保留（不静默删除）。
 17. **跨项目找目录 + 时间线同步**：用开发副本的脚本在**另一个项目目录**跑 `devlog.py new` → 档案建在那个项目里，本仓库会话数不变（`find_docs` 先 cwd 后脚本目录，ISS-028）；`new` 之后 `devlog.py check` 报 `S11`，跑 `devlog.py index` 之后消失（ISS-030）。
+18. **转正一步 + 新增前查重**：`pending --clear Q1 --as iss` 不给 `--relation` → 先摆候选再 exit 2；`--relation new --type … --impact … --to …` → 自动分配下一个 `ISS-nnn` 并追加收件箱行；`--relation merge:ISS-nnn` → 不新增行、只标「合并入」；`devlog.py inbox --similar "…"` 能按字面找到候选。
 
-`scripts/self_test.py` 把上面 1–17 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–18 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

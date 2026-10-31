@@ -6,7 +6,8 @@
     python scripts/devlog.py new --title "主题" [--date 2026-10-29] [--scope 范围]
     python scripts/devlog.py brief [--json]        # 开场先读：上一场锚点/计划未完成/收件箱/待分诊
     python scripts/devlog.py ask "问题" [--if "前提"]   # 记一条要用户定的问题（不占 ISS 号）
-    python scripts/devlog.py pending [--clear Q1 --as iss|s5|drop|defer --note "…"]
+    python scripts/devlog.py pending [--clear Q1 --as iss|s5|drop|defer --relation … --type … --impact … --to …]
+    python scripts/devlog.py inbox [--similar "一段文字" --top 3]
     python scripts/devlog.py check [--json]
     python scripts/devlog.py index [--check]
 
@@ -336,6 +337,111 @@ def set_pending_state(path, qid, state, note):
     write(path, "".join(out))
 
 
+# ---------------------------------------------------------------- 收件箱（查重 / 转正）
+def inbox_entries(ctx):
+    """收件箱主表 + 已闭环表的条目（id/state/question/impact/to）。"""
+    out = []
+    if not os.path.exists(ctx.inbox):
+        return out
+    prefix = re.escape(ctx.schema["ids"]["issue"])
+    id_re = re.compile(rf"{prefix}-\d+")
+    for header, rows in read_tables(read(ctx.inbox)):
+        heads = [strip_md(h) for h in header]
+        if "ID" not in heads or "问题" not in heads:
+            continue
+        i_id, i_q = heads.index("ID"), heads.index("问题")
+        i_st, i_imp, i_to = _col(heads, "状态"), _col(heads, "影响"), _col(heads, "落点")
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            iid = strip_md(r[i_id])
+            if not id_re.fullmatch(iid):
+                continue
+            out.append({
+                "id": iid,
+                "state": strip_md(r[i_st]) if i_st is not None else "done",
+                "question": strip_md(r[i_q]),
+                "impact": strip_md(r[i_imp]) if i_imp is not None else "",
+                "to": strip_md(r[i_to]) if i_to is not None else "",
+            })
+    return out
+
+
+def _shingles(text, n=2):
+    s = re.sub(r"[^0-9A-Za-z\u4e00-\u9fff]+", "", text or "")
+    if len(s) < n:
+        return {s} if s else set()
+    return {s[i:i + n] for i in range(len(s) - n + 1)}
+
+
+def similar_issues(ctx, text, top=3, floor=0.10):
+    """按字符二元组重合度找近似条目——只给**候选**，是不是包含/扩展仍要人判。"""
+    scored = []
+    for e in inbox_entries(ctx):
+        if e["state"] not in ("open", "deferred"):
+            continue
+        a, b = _shingles(text), _shingles(e["question"] + " " + e["impact"])
+        score = len(a & b) / max(1, len(a | b))
+        if score >= floor:
+            scored.append((score, e))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored[:top]
+
+
+def next_issue_id(ctx):
+    nums = []
+    prefix = re.escape(ctx.schema["ids"]["issue"])
+    for e in inbox_entries(ctx):
+        m = re.fullmatch(rf"{prefix}-(\d+)", e["id"])
+        if m:
+            nums.append(int(m.group(1)))
+    return "%s-%03d" % (ctx.schema["ids"]["issue"], (max(nums) + 1) if nums else 1)
+
+
+def append_inbox_row(ctx, iid, kind, question, impact, to):
+    """只**追加**一行到收件箱主表末尾：不动别人的行、不重排、不改历史。"""
+    text = read(ctx.inbox)
+    lines = text.splitlines(True)
+    head = None
+    for i, ln in enumerate(lines):
+        if not ln.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        if cells and cells[0] == "ID" and "状态" in cells and "问题" in cells:
+            head = i
+            break
+    if head is None:
+        raise ValueError("收件箱里找不到「ID | … | 状态 | … | 问题 |」的主表")
+    end = head + 1
+    while end < len(lines) and lines[end].strip().startswith("|"):
+        end += 1
+    row = "| **%s** | %s | 分诊转正 | %s | %s | %s | `open` | %s | — |\n" % (
+        iid, datetime.date.today().isoformat(), cell(kind), cell(question),
+        cell(impact), cell(to))
+    lines.insert(end, row)
+    write(ctx.inbox, "".join(lines))
+
+
+def cmd_inbox(ctx, args):
+    if not args.similar:
+        entries = inbox_entries(ctx)
+        opened = [e for e in entries if e["state"] == "open"]
+        deferred = [e for e in entries if e["state"] == "deferred"]
+        print("收件箱：open %d · deferred %d · 已闭环 %d"
+              % (len(opened), len(deferred), len(entries) - len(opened) - len(deferred)))
+        for e in opened + deferred:
+            print("  %s  [%s]  %s" % (e["id"], e["state"], e["question"]))
+        return 0
+    hits = similar_issues(ctx, args.similar, top=args.top)
+    if not hits:
+        print("没有相近的开放条目（相似度下限 0.10）——可能是独立的新问题")
+        return 0
+    print("可能相关的开放条目（字面重合度，仅供人判包含 / 扩展 / 独立）：")
+    for score, e in hits:
+        print("  %s  %.2f  [%s]  %s" % (e["id"], score, e["state"], e["question"]))
+    return 0
+
+
 def cmd_ask(ctx, args):
     """记一条「要用户定」的问题：不占 ISS 号（所以门槛低），但不等于不进历史。"""
     files = ctx.sessions()
@@ -383,10 +489,45 @@ def cmd_pending(ctx, args):
             return die("--clear 需要同时给 --as iss|s5|drop|defer")
         note = (args.note or "").strip()
         if kind == "iss":
-            if note not in set(parse_inbox(ctx)[0]):
-                return die("--as iss 的 --note 要写收件箱里已有的 ISS 编号"
-                           "（先登记进收件箱，再回来分诊）")
-            state = "→" + note
+            # 新增 ISS 前必须先核对已有条目：包含 / 扩展 / 独立，由人决定（ISS-031）。
+            # 脚本只给字面候选，判断与取舍不代劳。
+            if not args.relation:
+                hits = similar_issues(ctx, target["question"] + " " + target["premise"])
+                print("新增 ISS 前先核对已有条目：包含 / 扩展 / 独立，由人决定。")
+                if hits:
+                    print("  候选（字面重合度，仅供人判）：")
+                    for score, e in hits:
+                        print("    %s  %.2f  [%s]  %s" % (e["id"], score, e["state"], e["question"]))
+                else:
+                    print("  候选：无（相似度 ≥0.10 的开放条目）")
+                if note and re.fullmatch(r"ISS-\d+", note):
+                    print("  提示：已有编号 %s 时用 `--relation merge:%s`（或 extends/updates/duplicate）" % (note, note))
+                return die("缺 --relation：new | merge:ISS-nnn | extends:ISS-nnn | updates:ISS-nnn | duplicate:ISS-nnn")
+            m = re.fullmatch(r"(new|merge|extends|updates|duplicate)(?::(ISS-\d+))?", args.relation.strip())
+            if not m:
+                return die("--relation 只接受 new | merge:ISS-nnn | extends:ISS-nnn | updates:ISS-nnn | duplicate:ISS-nnn")
+            how, ref = m.group(1), m.group(2)
+            if how == "new":
+                missing = [k for k in ("type", "impact", "to") if not getattr(args, k)]
+                if missing:
+                    return die("--relation new 需要收件箱行的三格人判字段：缺 "
+                               + "、".join("--" + k for k in missing))
+                iid = next_issue_id(ctx)
+                append_inbox_row(ctx, iid, args.type, target["question"],
+                                 args.impact, args.to)
+                state, note = "→" + iid, note or ("新登记 " + iid)
+                print("新增 %s（独立）" % iid)
+            else:
+                if not ref:
+                    return die("--relation %s 需要写成 %s:ISS-nnn" % (how, how))
+                ids = {e["id"] for e in inbox_entries(ctx)}
+                if ref not in ids:
+                    return die("收件箱里没有 %s" % ref)
+                label = {"merge": "合并入", "extends": "扩展", "updates": "更新",
+                         "duplicate": "重复于"}[how]
+                state, note = "→%s %s" % (label, ref), note or label
+                print("%s -> %s %s；脚本不改别人的行，请把内容并进 %s 后自行确认"
+                      % (args.clear, label, ref, ref))
         elif kind == "s5":
             state, note = "→§5", note or "转开放项"
         elif kind == "drop":
@@ -842,6 +983,14 @@ def main():
     p_pend.add_argument("--as", dest="export", default=None,
                         choices=["iss", "s5", "drop", "defer"])
     p_pend.add_argument("--note", default="")
+    p_pend.add_argument("--relation", default=None,
+                        help="转正关系：new | merge:ISS-nnn | extends:ISS-nnn | updates:ISS-nnn | duplicate:ISS-nnn")
+    p_pend.add_argument("--type", default=None, help="--relation new 时必填：缺陷/风险/文档债/口径冲突/待决/机会")
+    p_pend.add_argument("--impact", default=None, help="--relation new 时必填：不处理会怎样")
+    p_pend.add_argument("--to", default=None, help="--relation new 时必填：落点（计划任务/文件/ADR）")
+    p_inbox = sub.add_parser("inbox")
+    p_inbox.add_argument("--similar", default=None, help="给一段文字，列可能相关的开放条目")
+    p_inbox.add_argument("--top", type=int, default=3)
     sub.add_parser("check")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
@@ -868,6 +1017,8 @@ def main():
         return cmd_ask(ctx, args)
     if args.cmd == "pending":
         return cmd_pending(ctx, args)
+    if args.cmd == "inbox":
+        return cmd_inbox(ctx, args)
     if args.cmd == "check":
         return cmd_check(ctx, as_json)
     return cmd_index(ctx, args.check)

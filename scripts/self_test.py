@@ -853,6 +853,46 @@ def main():
         finally:
             shutil.rmtree(tmp16, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 24
+        print("\n24. 转正一步：查重 + 自动分配 ISS（ISS-031）")
+        tmp17 = tempfile.mkdtemp(prefix="ddd-selftest17-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp17)
+            run("devlog.py", "new", "--title", "转正", "--scope", "自测", cwd=tmp17)
+            run("devlog.py", "ask", "契约层能不能只写增量改动？",
+                "--if", "主文件仍要整篇改写", cwd=tmp17)
+
+            c, out = run("devlog.py", "pending", "--clear", "Q1", "--as", "iss", cwd=tmp17)
+            check("缺 --relation 先摆候选并拒绝（exit 2）",
+                  c == 2 and "候选" in out and "--relation" in out, out[-400:])
+
+            c, out = run("devlog.py", "pending", "--clear", "Q1", "--as", "iss",
+                         "--relation", "new", "--type", "文档债", cwd=tmp17)
+            check("--relation new 缺三格字段 → 拒绝", c == 2 and "--impact" in out, out[-300:])
+
+            c, out = run("devlog.py", "pending", "--clear", "Q1", "--as", "iss",
+                         "--relation", "new", "--type", "文档债",
+                         "--impact", "改一节契约要重读全篇", "--to", "未排期", cwd=tmp17)
+            inbox17 = read(os.path.join(tmp17, "docs", "70-过程", "问题收件箱.md"))
+            check("--relation new 自动分配 ISS-002 并追加收件箱行",
+                  c == 0 and "ISS-002" in out and "**ISS-002**" in inbox17, out[-300:])
+            pend17 = os.path.join(tmp17, ".dd", "pending")
+            ptext = "".join(read(os.path.join(pend17, f)) for f in os.listdir(pend17))
+            check("待分诊行标成 →ISS-002", "→ISS-002" in ptext, ptext[-300:])
+
+            run("devlog.py", "ask", "契约增量怎么合并？", "--if", "还没定合并流程", cwd=tmp17)
+            c, out = run("devlog.py", "pending", "--clear", "Q2", "--as", "iss",
+                         "--relation", "merge:ISS-001", cwd=tmp17)
+            inbox17 = read(os.path.join(tmp17, "docs", "70-过程", "问题收件箱.md"))
+            check("--relation merge 不新增收件箱行，只标合并",
+                  c == 0 and "合并入 ISS-001" in out and inbox17.count("**ISS-") == 2, out[-300:])
+
+            c, out = run("devlog.py", "inbox", "--similar", "层枚举硬编码在多处", cwd=tmp17)
+            check("inbox --similar 能找到相关条目", c == 0 and "ISS-001" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp17, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
