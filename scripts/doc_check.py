@@ -92,8 +92,8 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
-         "E19", "E20", "E21", "E22", "E23", "E24",
-         "W1", "W2", "W3", "W4", "W5", "W6", "W7"]
+         "E19", "E20", "E21", "E22", "E23", "E24", "E26",
+         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]
 
 
 # ---------------------------------------------------------------- 基础工具
@@ -478,12 +478,27 @@ def main():
 
     # 功能台账要判「引用的需求是否存在」，所以先把契约层出现过的 REQ 编号收一遍
     req_ids = set()
+    req_defs = {}
+    feat_cover = set()
     if contract_dir:
         req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
         for path in files:
             rel0 = os.path.relpath(path, docs).replace(os.sep, "/")
-            if rel0.startswith(contract_dir + "/"):
-                req_ids.update(req_pat.findall(read(path)))
+            # 只认「真正定义需求」的文件：README 与 _delta/ 里的编号是示例，
+            # 算进来会造出「REQ-004 没有功能覆盖」这种假账（W8 首跑就撞上）。
+            if not rel0.startswith(contract_dir + "/"):
+                continue
+            if rel0.endswith("README.md") or rel0.startswith(delta_prefix or "\0"):
+                continue
+            for rid in req_pat.findall(read(path)):
+                req_ids.add(rid)
+                req_defs.setdefault(rid, rel0)
+
+    # 证据里引用的「第 N 组」要对得上 self_test 里真实存在的组
+    test_groups = set()
+    st_path = os.path.join(repo_root, "scripts", "self_test.py")
+    if os.path.exists(st_path):
+        test_groups = {int(x) for x in re.findall(r'print\("\\n(\d+)\. ', read(st_path))}
 
     def add(bucket, rel, code, msg):
         bucket.append({"file": rel, "code": code, "message": msg})
@@ -694,6 +709,8 @@ def main():
                                 f"{fid} 的「满足的需求」里有非法编号：{rid!r}")
                         elif rid not in req_ids:
                             add(errors, rel, "E24", f"{fid} 引用了不存在的需求 {rid}")
+                        else:
+                            feat_cover.add(rid)
                 # 评审门（T5.1.2）：已评审及以后必须留下三问的结论；
                 # 「—（历史）」只给未挂需求的存量行背书，不能给新功能背书。
                 if st in ("已评审", "实施中", "已对照", "已验收"):
@@ -718,9 +735,16 @@ def main():
                 if st == "已验收":
                     if i_vf is None or verify_missing(row[i_vf]):
                         add(errors, rel, "E24", f"{fid} 已验收但缺 verify 命令")
-                    ev = strip_md(row[i_ev]) if i_ev is not None else ""
-                    if ev in REF_PLACEHOLDERS:
-                        add(errors, rel, "E24", f"{fid} 已验收但没有证据（写命令/测试组号与日期）")
+                ev = strip_md(row[i_ev]) if i_ev is not None else ""
+                if st == "已验收" and ev in REF_PLACEHOLDERS:
+                    add(errors, rel, "E24", f"{fid} 已验收但没有证据（写命令/测试组号与日期）")
+                # 证据里写「第 N 组」时，N 必须真的存在于 scripts/self_test.py
+                if test_groups and ev:
+                    for grp in re.findall(r"第\s*([\d、,，\s]+?)\s*组", ev):
+                        for n in re.findall(r"\d+", grp):
+                            if int(n) not in test_groups:
+                                add(errors, rel, "E26",
+                                    f"{fid} 的证据引用了不存在的自测组：第 {n} 组")
 
         # ---- 契约增量（E19 / E20 / E21，T1.1.2）
         # 机器判据只覆盖 _delta/README.md 里能机械判的部分：目录与 status、
@@ -861,6 +885,12 @@ def main():
         if not items:
             d = layer_dir(schema, lay) or "?"
             add(errors, f"{d}/", "E9", f"层为空（{lay}）：加一篇，或从 _schema.json 删掉这层")
+
+    # ---- W8 需求 ↔ 功能对账：每条需求至少要有一个功能覆盖它（提醒不阻断：需求可以先写、功能后补）
+    for rid in sorted(req_defs):
+        if rid not in feat_cover:
+            add(warns, req_defs[rid], "W8",
+                f"{rid} 没有任何功能覆盖它：功能台账里没有引用这条需求")
 
     # ---- E17 棘轮基线
     baseline_path = os.path.join(docs, schema.get("baseline") or ".docs-baseline.json")

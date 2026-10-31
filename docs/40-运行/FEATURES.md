@@ -19,7 +19,7 @@ tags: [功能, 台账, 追溯]
 
 | ID | 功能 | 满足的需求 | 验收口径（人读） | `verify:`（机器跑） | 代价 | 状态 | 评审 | 代码入口 | 证据 |
 |---|---|---|---|---|---|---|---|---|
-| **F-001** | 铺骨架与全库校验 | REQ-002 | `doc_init --target . --full` 幂等；front-matter/链接/层/段/码全判（E1–E24、W1–W7） | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T4.2.1 / T5.1.1｜2026-10-31 | scripts/doc_init.py、scripts/doc_check.py | `self_test` 第 1、3、6、23、25、26 组（2026-10-31） |
+| **F-001** | 铺骨架与全库校验 | REQ-002 | `doc_init --target . --full` 幂等；front-matter/链接/层/段/码全判（E1–E24、W1–W7） | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T4.2.1 / T5.1.1｜2026-10-31 | scripts/doc_init.py、scripts/doc_check.py | `self_test` 第 3、6、23、25、26 组（2026-10-31） |
 | **F-002** | 契约 `verify:` 回检 | REQ-003 | 缺 `verify:` 即报 E18；`verify.py` 按命令真跑，失败/超时 exit 1 | `python scripts/verify.py` | M | 已验收 | 满足✓ 可做✓ 代价M｜T1.2.2｜2026-10-29 | scripts/verify.py、scripts/doc_check.py | `verify` 3 条契约 3/3 通过（2026-10-31） |
 | **F-003** | 契约增量（delta） | REQ-003 | 根目录只放 `proposed`；已合并进 `_archive/` 且 `after` 仍在目标（E19–E21） | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T1.1.2｜2026-10-30 | scripts/doc_check.py、docs/20-契约/_delta/README.md | `self_test` 第 15 组 |
 | **F-004** | 过程档案与七段校验 | REQ-001 | `new` 编号与文件名正确；七段顺序与引用可判（S1–S7） | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T2.2.1｜2026-10-30 | scripts/devlog.py | `self_test` 第 2、9 组 |
@@ -32,6 +32,7 @@ tags: [功能, 台账, 追溯]
 | **F-011** | 清单化安装 | —（历史） | `install.py` 按清单探查并安装；装完写 `MANIFEST.txt` + `.install.json`，可逐文件核对 | `python install.py --from dist` | M | 已验收 | —（历史） | install.py、install-targets.json | 五宿主 `v2.2.2 source=dist`、各 29 文件、0 失败（2026-10-31） |
 | **F-012** | 打包与验包 | —（历史） | `build.py` 体检 → 自测 → 打包 → 验包；产物与 HEAD 包内逐字节一致（`--check-dist`） | `python build.py --check-dist` | M | 已验收 | —（历史） | build.py | 2.2.2 包 27 文件哈希吻合、sha256 `cbf1a4fb…`（2026-10-31） |
 | **F-013** | 缺配置不猜层表 | —（历史） | `_schema.json` 与 `_layers.json` 都缺 → exit 2 并给出补齐命令 | `python scripts/self_test.py -v` | S | 已验收 | —（历史） | scripts/doc_check.py | `self_test` 第 23 组 |
+| **F-015** | 需求 × 功能 × 证据对账 | REQ-004 | 每条需求至少一个功能覆盖（W8 提醒）；证据里的自测组号必须真实存在（E26） | `python scripts/self_test.py -v` | S | 已验收 | 满足✓ 可做✓ 代价S｜T5.4.1｜2026-10-31 | scripts/doc_check.py | `self_test` 第 30 组（2026-10-31） |
 | **F-014** | 存量债棘轮 | —（历史） | `--update-baseline` 写入基线；`--baseline` 只许降不许升 | `python scripts/self_test.py -v` | S | 已验收 | —（历史） | scripts/doc_check.py | `self_test` 第 8 组 |
 
 ## 变更记录

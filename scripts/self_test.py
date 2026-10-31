@@ -1033,6 +1033,41 @@ def main():
         check("写明对照在测试之前的理由",
               "对照在测试之前" in skill_text and "假通过" in skill_text, "")
 
+        # ---------------------------------------------------------------- 30
+        print("\n30. 需求 × 功能 × 证据对账（W8 / E26）")
+        tmp22 = tempfile.mkdtemp(prefix="ddd-selftest22-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp22)
+            req22 = os.path.join(tmp22, "docs", "20-契约", "requirements.md")
+            feat22 = os.path.join(tmp22, "docs", "40-运行", "FEATURES.md")
+            base_req = read(req22)
+            base_feat = read(feat22)
+
+            c, out = run("doc_check.py", cwd=tmp22)
+            check("骨架里需求都有功能覆盖、证据组号合法",
+                  c == 0 and "W8" not in codes(out) and "E26" not in codes(out), out[-300:])
+
+            write(req22, base_req.replace(
+                "| **REQ-001** |",
+                "| **REQ-009** | WHEN 触发 THE SYSTEM SHALL 行为 | 看命令"
+                " | `python -c pass` | 待实现 | — |\n| **REQ-001** |", 1))
+            c, out = run("doc_check.py", cwd=tmp22)
+            check("需求没有任何功能覆盖 → W8", c == 0 and "W8" in codes(out), out[-300:])
+            write(req22, base_req)
+
+            os.makedirs(os.path.join(tmp22, "scripts"), exist_ok=True)
+            write(os.path.join(tmp22, "scripts", "self_test.py"), 'print("\\n2. x")\n')
+            write(feat22, base_feat.replace("| 待评审 | — | — | — |", "| 待评审 | — | — | 第 99 组 |", 1))
+            c, out = run("doc_check.py", cwd=tmp22)
+            check("证据引用了不存在的自测组 → E26", c == 1 and "E26" in codes(out), out[-300:])
+
+            write(feat22, base_feat.replace("| 待评审 | — | — | — |", "| 待评审 | — | — | 第 2 组 |", 1))
+            c, out = run("doc_check.py", cwd=tmp22)
+            check("证据组号真实存在 → 不报 E26", c == 0 and "E26" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp22, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

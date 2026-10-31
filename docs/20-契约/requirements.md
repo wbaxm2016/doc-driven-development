@@ -30,6 +30,7 @@ tags: [契约, 需求, EARS]
 |---|---|---|---|---|---|
 | **REQ-001** | WHEN 一场会话按「收尾五连跑」结束时 THE SYSTEM SHALL 三份校验脚本全部以 0 退出 | 三份脚本各自以 0 退出；`doc_check --quiet` 输出 `errors=0` | `python scripts/doc_check.py --quiet && python scripts/devlog.py check && python scripts/plan.py check` | 已实现 | `SKILL.md` 日常三动作 |
 | **REQ-002** | WHEN 契约层写入一条 `REQ-nnn` 条款 THE SYSTEM SHALL 该条款使用 EARS 句式并同时给出可执行的验收命令 | 删掉某条的「必须/不得」→ 报 `[E13]`；条款行无规范措辞 → 报 `[W7]` | `python scripts/self_test.py -v`（第 6 组判 E13，第 23 组判 W7） | 已实现 | `references/check-rules.md` |
+| **REQ-004** | WHEN 契约层新增或修改一条 `REQ-nnn` 需求 THE SYSTEM SHALL 功能台账里至少有一行引用它，且被引用的功能指得出代码入口 | 删掉唯一引用某条需求的功能行 → 报 `[W8]` 提醒；证据里的自测组号不存在 → `[E26]` | `python scripts/self_test.py -v`（第 30 组） | 已实现 | `references/check-rules.md`、T5.4.1 |
 | **REQ-003** | WHEN 一条 EARS 契约被新增或修改 THE SYSTEM SHALL 其正文保留 `verify:` 字段指向可执行的测试或命令，且缺失时被 `doc_check` 报出 | 删掉某条的 `verify:` 单元格 → 退出码 1 并报出 `[E18]` | `python scripts/self_test.py -v`（第 13 组判 E18） | 已实现 | [ADR-001](../30-决策/adr/ADR-001-与SDD的分工.md)、ISS-002 |
 
 ## 2. 不得做的事
