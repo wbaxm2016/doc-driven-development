@@ -347,9 +347,14 @@ def inbox_entries(ctx):
     id_re = re.compile(rf"{prefix}-\d+")
     for header, rows in read_tables(read(ctx.inbox)):
         heads = [strip_md(h) for h in header]
-        if "ID" not in heads or "问题" not in heads:
+        if "ID" not in heads:
             continue
-        i_id, i_q = heads.index("ID"), heads.index("问题")
+        # 主表（有「问题」列）与闭环表（只有「结论 / 闭环日」）都要认：
+        # 只读主表会让「已闭环」永远显示 0（ISS-033）。
+        i_id = heads.index("ID")
+        i_q = heads.index("问题") if "问题" in heads else heads.index("结论") if "结论" in heads else None
+        if i_q is None:
+            continue
         i_st, i_imp, i_to = _col(heads, "状态"), _col(heads, "影响"), _col(heads, "落点")
         for r in rows:
             if len(r) != len(heads):

@@ -890,6 +890,11 @@ def main():
 
             c, out = run("devlog.py", "inbox", "--similar", "层枚举硬编码在多处", cwd=tmp17)
             check("inbox --similar 能找到相关条目", c == 0 and "ISS-001" in out, out[-300:])
+
+            inbox17 = os.path.join(tmp17, "docs", "70-过程", "问题收件箱.md")
+            write(inbox17, read(inbox17).rstrip("\n") + "\n| ISS-090 | 闭环示例 | 2026-10-31 |\n")
+            c, out = run("devlog.py", "inbox", cwd=tmp17)
+            check("闭环表也计入统计（ISS-033）", c == 0 and "已闭环 1" in out, out[-200:])
         finally:
             shutil.rmtree(tmp17, ignore_errors=True)
 
