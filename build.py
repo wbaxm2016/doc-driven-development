@@ -105,6 +105,53 @@ def parse_frontmatter(text: str) -> dict:
     return fm
 
 
+def frontmatter_block(text: str) -> str:
+    m = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
+    return m.group(1) if m else ""
+
+
+def frontmatter_problems(block: str) -> list[str]:
+    """front-matter 必须能被严格 YAML 解析的最小检查（只用标准库）。
+
+    为什么需要：SKILL.md 由 5 个宿主的加载器解析，DSH 走严格 YAML——解析失败会
+    **静默丢弃整个技能**（2.2.8 的 `description_en: … development: dual-sided …`
+    就是这么消失的：文件装上了，技能列表里却没有）。这里只接受我们实际使用的子集：
+    顶层 `key: value`，值要么是引号字符串，要么是不含 `: ` / ` #` / 制表符的 plain
+    标量；缩进块与重复键一律报。规则比通用 YAML 窄，但对我们写的 front-matter 足够，
+    且不需要引入 PyYAML。
+    """
+    problems = []
+    seen = set()
+    for no, raw in enumerate(block.splitlines(), 1):
+        line = raw.rstrip()
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[0].isspace():
+            problems.append(f"第 {no} 行有缩进：front-matter 只允许顶层键值")
+            continue
+        m = re.match(r"^([A-Za-z_][\w-]*):[ \t]*(.*)$", line)
+        if not m:
+            problems.append(f"第 {no} 行不是 `key: value`：{line[:50]}")
+            continue
+        key, val = m.group(1), m.group(2).rstrip()
+        if key in seen:
+            problems.append(f"第 {no} 行键重复：{key}")
+        seen.add(key)
+        if not val:
+            problems.append(f"第 {no} 行 {key} 的值为空")
+        elif val[0] in ("'", '"'):
+            if len(val) < 2 or not val.endswith(val[0]):
+                problems.append(f"第 {no} 行 {key} 的引号未闭合")
+        else:
+            if ": " in val or val.endswith(":"):
+                problems.append(f"第 {no} 行 {key} 的 plain 值含 `: `，YAML 会当成嵌套映射并失败（给值加引号）")
+            if " #" in val:
+                problems.append(f"第 {no} 行 {key} 的 plain 值含 ` #`，YAML 会把后半截当注释丢掉")
+            if "\t" in val:
+                problems.append(f"第 {no} 行 {key} 的 plain 值含制表符，严格 YAML 会解析失败")
+    return problems
+
+
 def walk_package_files() -> list[str]:
     files = []
     for f in ROOT_FILES:
@@ -141,6 +188,23 @@ def preflight() -> str:
     with open(skill_md, encoding="utf-8") as fh:
         text = fh.read()
     fm = parse_frontmatter(text)
+
+    # front-matter 先过严格解析，再谈字段齐不齐：坏 YAML 会让宿主静默丢掉整个技能。
+    block = frontmatter_block(text)
+    if not block:
+        err("SKILL.md 缺 front-matter（文件必须以 --- 开头、以 --- 收尾）")
+    else:
+        problems = frontmatter_problems(block)
+        if problems:
+            for p in problems:
+                err(f"SKILL.md front-matter 不是合法 YAML：{p}")
+        else:
+            ok("SKILL.md front-matter 通过严格 YAML 子集检查")
+
+    # 校验器自己也吃反例：只验证"好样本通过"，没人会发现自己哪天把它改松了。
+    probe = frontmatter_block("---\ndescription_en: for development: dual-sided\n---\n")
+    if not frontmatter_problems(probe):
+        err("front-matter 校验器失效：没有拒绝已知坏样本（plain 值里的「: 」）")
 
     name = fm.get("name", "")
     if not name:

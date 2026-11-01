@@ -77,6 +77,15 @@ def git_commit() -> str:
         return "unknown"
 
 
+def check_skill_md(entries: list[tuple[str, bytes]]) -> None:
+    """装之前再拦一道坏 front-matter：DSH 解析失败会静默丢技能，装了等于没装。"""
+    text = dict(entries).get("SKILL.md", b"").decode("utf-8", "replace")
+    problems = build.frontmatter_problems(build.frontmatter_block(text))
+    if problems:
+        raise SystemExit("ERROR SKILL.md front-matter 不是合法 YAML，宿主会静默丢弃该技能：\n  "
+                         + "\n  ".join(problems))
+
+
 def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, bytes]], dict]:
     """把要装的东西读成 (相对路径, 字节) 列表。
 
@@ -96,6 +105,7 @@ def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, byte
                 data, _ = build.normalize(rel, data)   # 与打包同一条行尾规则（ISS-008）
             entries.append((rel, data))
         entries.append(("MANIFEST.txt", build.make_manifest(version, entries)))
+        check_skill_md(entries)
         return entries, {"source": "worktree", "version": version, "commit": git_commit()}
 
     path = artifact or os.path.join(ROOT, "dist", "%s-%s.skill" % (SKILL_NAME, version))
@@ -107,6 +117,7 @@ def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, byte
     man = dict(entries).get("MANIFEST.txt", b"").decode("utf-8", "replace")
     m = re.search(r"(?m)^version:\s*(\S+)", man)
     meta_version = m.group(1) if m else version
+    check_skill_md(entries)
     return entries, {"source": "dist", "version": meta_version,
                      "artifact": os.path.relpath(path, ROOT).replace("\\", "/"),
                      "commit": git_commit()}
