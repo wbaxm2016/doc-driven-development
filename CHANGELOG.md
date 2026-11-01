@@ -1,9 +1,17 @@
 # 变更记录
 
-## Unreleased
+## 2.2.9
 
-> 待发版内容写在这里；发版时把它改名成 `## <版本>` 并 bump `VERSION`。
-> 只改 `docs/` / `CHANGELOG` / `README` 这类**包外**文件不需要发版——判据与顺序见 README「发版」。
+修一个「装上了但没生效」的包缺陷：DSH 里本技能**静默消失**。
+
+### 修复
+
+- `SKILL.md` 的 `description_en` 含未加引号的「冒号 + 空格」（`for development: dual-sided …`），严格 YAML 解析直接失败；DSH 的技能解析器在抛错后**丢弃整个技能**（不报错、不提示），于是装了等于没装。改成单引号标量。
+- 同批核查其余字段无同类风险：`description` / `description_zh` / `whenToUse` 里没有「: 」，也没有「 #」。
+
+### 已知不做
+
+- 没给 `build.py` 加「frontmatter 必须能被严格 YAML 解析」的检查——那是脚本改动，另开一步，不混进这次发版。
 
 ## 2.2.8
 
