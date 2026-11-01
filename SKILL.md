@@ -59,7 +59,7 @@ python scripts/devlog.py new --title "本次主题" --scope "范围"
 
 **新增 ISS 前先查一次**：`python scripts/devlog.py inbox --similar "这条问题的表述"` 摆出字面候选，把「是包含 / 扩展 / 还是独立」讲给用户定；转正时 `pending --clear <Q> --as iss --relation new|merge:ISS-nnn|extends:ISS-nnn|updates:ISS-nnn|duplicate:ISS-nnn`——`new` 由脚本自动分配 `ISS-nnn`，但 `--type/--impact/--to` 三格必须由你给（那是它值得进台账的理由）。
 
-**收尾**：
+**收尾**：先做一次**决策回顾**——只对**用户拍板的**决策，逐条回答「背景 / 影响 / 依据（用户原话照抄）/ 撤销条件」；答不出的标「断链」并用 `python scripts/devlog.py ask` 进待分诊。agent 的实现选择不进回顾；窗口与现查四路见 `references/process-recording.md` 的「决策回顾」一节。然后跑：
 
 ```bash
 python scripts/devlog.py check      # 七段顺序、front-matter、ISS 引用、文件名
@@ -189,7 +189,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | 文件 | 何时读 |
 |---|---|
 | `references/layer-model.md` | 判断某份文档该放哪层、`status`/`authority` 填什么、要不要加层、怎么改 `_schema.json` |
-| `references/process-recording.md` | 写会话档案、分类用户消息、做八维对比、设计收件箱字段 |
+| `references/process-recording.md` | 写会话档案、分类用户消息、做八维对比、收尾的决策回顾、设计收件箱字段 |
 | `references/plan-model.md` | 建/改开发计划、状态词表、加维度或视角、判断某物该是方向还是任务 |
 | `references/requirements-ears.md` | 写契约层、把含糊需求改成可判真假的一句话、理解 E13/W7 的边界 |
 | `references/check-rules.md` | 校验报错看不懂、要解释"为什么这条必须机器判"、接 CI |
@@ -200,7 +200,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | 资源 | 用途 |
 |---|---|
 | `assets/templates/docs-README.md` | 总入口：§1「想知道 → 读哪份 → 唯一」表 |
-| `assets/templates/session-record.md` | 七段会话档案（占位 `{{TITLE}} {{DATE}} {{NO}} {{SCOPE}} {{SLUG}}`） |
+| `assets/templates/session-record.md` | 七段会话档案（占位 `{{TITLE}} {{DATE}} {{NO}} {{SCOPE}} {{SLUG}}`；§4 决策块带「拍板 / 依据 / 撤销条件」） |
 | `assets/templates/inbox.md` | 问题收件箱（含示例 ISS 与已闭环表） |
 | `assets/templates/timeline.md` | 时间线（含 `devlog-index` 生成区） |
 | `assets/templates/dev-plan.md` | 开发计划（三层 + 六维 + 三视角 + `plan-rank` 生成区） |
@@ -217,7 +217,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–17 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–25 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -225,7 +225,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 覆盖：过程留档与追溯、决策的选项开放性、问题不丢、待分诊与开工门禁、下一步的唯一排序、形式校验自动化、存量债棘轮、门禁落地。
 
-不覆盖，需另建机制并靠人守：**语义重复**（只有 W2 的 `summary` 相同这一条弱信号）；**ADR 撤销条件是否已成立**（需定期人工复核）；**条款写得对不对**（E13/W7 只判形式）；**改动分级判得对不对**（判据是「是否改变事实」，脚本只能证明「分级不改变校验结果」，判不了这句改动是措辞还是口径变更）；**术语唯一性**只在被登记进别名表之后才生效；**与外部看板 / Issues 的同步**；**「问了没答」的跨会话提醒节奏**（本技能只到「本场记进待分诊、下一次开场分诊」为止，持续提醒与过期判定交给 `open-decisions` 技能，别两边都维护）；**会话该不该收尾 / 归档单**（交给 `session-handoff` 技能，本技能只提供判据与档案形状）；**ADR 门禁与不可变架构**（交给 `project-engineering` 技能，本技能只要求「决策回写契约或 ADR」）；**外链失效**（交给 lychee，见 `ecosystem.md`）。
+不覆盖，需另建机制并靠人守：**语义重复**（只有 W2 的 `summary` 相同这一条弱信号）；**ADR 撤销条件是否已成立**（需定期人工复核）；**条款写得对不对**（E13/W7 只判形式）；**改动分级判得对不对**（判据是「是否改变事实」，脚本只能证明「分级不改变校验结果」，判不了这句改动是措辞还是口径变更）；**术语唯一性**只在被登记进别名表之后才生效；**与外部看板 / Issues 的同步**；**「问了没答」的跨会话提醒节奏**（本技能只到「本场记进待分诊、下一次开场分诊」为止，持续提醒与过期判定交给 `open-decisions` 技能，别两边都维护）；**会话该不该收尾 / 归档单**（流程交给 `session-handoff` 技能；决策回顾的形状与 §4 / ADR 模板归本技能，两边不各写一份）；**ADR 门禁与不可变架构**（交给 `project-engineering` 技能，本技能只要求「决策回写契约或 ADR」）；**外链失效**（交给 lychee，见 `ecosystem.md`）。
 
 ## 验收
 
