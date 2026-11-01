@@ -4,7 +4,7 @@ layer: architecture
 domain: 全局
 status: active
 authority: 2
-updated: 2026-10-29
+updated: 2026-11-01
 summary: "仓库结构与校验链路：结构只在 _schema.json 定义，规则必须带码，脚本只用标准库。"
 tags: [架构, 校验, 打包]
 ---
@@ -31,11 +31,11 @@ tags: [架构, 校验, 打包]
 ```
 doc_init.py  ──> docs/_schema.json （层/枚举/段结构/编号规则/路径的唯一来源）
                  │
-doc_check.py ───> E1–E23 阻断 / W1–W7 提醒（front-matter、链接、ADR 六段与取代链、术语旧称、契约 verify、delta、需求状态与出处、棘轮基线）
-devlog.py    ───> D1–D2 收件箱 / S1–S11 会话档案与七段顺序、交接锚点、落点、时间线陈旧
-plan.py      ───> P1–P12 编号、分值、状态词、所属与前置、方向引用
+doc_check.py ───> E / W 码：front-matter、链接、ADR 六段与取代链、术语旧称、契约 verify、delta、需求状态与出处、功能台账与需求覆盖、棘轮基线（码表见 references/check-rules.md）
+devlog.py    ───> D / S 码：收件箱、会话档案与七段顺序、交接锚点、落点、时间线陈旧
+plan.py      ───> P 码：编号、分值、状态词、所属与前置、方向引用、表格截断
 verify.py    ───> 按契约 `verify:` 真跑（退出码即结论；CI 在 build 前跑它）
-self_test.py ───> 把 SKILL.md 的验收 1–19 跑成断言（临时目录，不碰真实项目）
+self_test.py ───> 把 SKILL.md 的验收跑成断言（当前 34 组；临时目录，不碰真实项目）
 build.py     ───> 体检 front-matter/引用路径/语法 → 自测 → 打包 → 解包再自测 → 安装后自测
 ```
 
