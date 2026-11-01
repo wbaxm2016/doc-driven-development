@@ -1120,6 +1120,60 @@ def main():
         finally:
             shutil.rmtree(tmp23, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 32
+        print("\n32. 决策回顾的机器判（S12，只判最新一篇）")
+        tmp24 = tempfile.mkdtemp(prefix="ddd-selftest24-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp24)
+            sess24 = os.path.join(tmp24, "docs", "70-过程", "会话")
+
+            def set_decision(path, body):
+                text = read(path)
+                text = re.sub(r"(?ms)^## 4\.[^\n]*\n.*?(?=^## 5\.)",
+                              "## 4. 决策与选项对比\n\n" + body + "\n\n", text, count=1)
+                write(path, text)
+
+            head = ("### D1 · 选 X 还是 Y\n\n"
+                    "| 选项 | 语义正确性 | 实现成本 | 改动半径 | 可逆性 | 长期维护 | 用户可感知 | 可验证性 | 风险 |\n"
+                    "|---|---|---|---|---|---|---|---|---|\n"
+                    "| A | 5 | 5 | 1 | 5 | 4 | 3 | 5 | 1 |\n\n"
+                    "**结论**：选 A。\n**是否暂定**：否。\n")
+            good = head + "**拍板**：用户。\n**依据**：「就选 A」（用户原话）。\n" \
+                          "**撤销条件**：出现 X 时改选 B。\n"
+            bad = head + "**拍板**：用户。\n**依据**：「就选 A」（用户原话）。\n"
+            agent = head + "**拍板**：agent 自选。\n"
+
+            run("devlog.py", "new", "--title", "决策回顾甲", "--scope", "自测", cwd=tmp24)
+            f_a = os.path.join(sess24, sorted(os.listdir(sess24))[0])
+            c, out = run("devlog.py", "check", cwd=tmp24)
+            check("模板占位决策块不报 S12", c == 0 and "S12" not in out, out[-300:])
+
+            set_decision(f_a, bad)
+            c, out = run("devlog.py", "check", cwd=tmp24)
+            check("用户决策缺「撤销条件」→ S12、exit 1", c == 1 and "S12" in out, out[-300:])
+
+            set_decision(f_a, good)
+            c, out = run("devlog.py", "check", cwd=tmp24)
+            check("补上「依据 + 撤销条件」→ 0 error", c == 0 and "S12" not in out, out[-300:])
+
+            run("devlog.py", "new", "--title", "决策回顾乙", "--scope", "自测", cwd=tmp24)
+            f_b = os.path.join(sess24, sorted(os.listdir(sess24))[1])
+            set_decision(f_a, bad)          # 旧档改坏：不应被追溯
+            c, out = run("devlog.py", "check", cwd=tmp24)
+            check("只判最新一篇：旧档缺字段不追溯", c == 0 and "S12" not in out, out[-300:])
+
+            set_decision(f_b, agent)
+            c, out = run("devlog.py", "check", cwd=tmp24)
+            check("拍板 agent 自选的块可豁免", c == 0 and "S12" not in out, out[-300:])
+
+            set_decision(f_b, bad)
+            c, out = run("devlog.py", "check", cwd=tmp24)
+            check("最新一篇的用户决策缺撤销条件 → S12、exit 1",
+                  c == 1 and "S12" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp24, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

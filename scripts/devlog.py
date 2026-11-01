@@ -748,6 +748,66 @@ def check_user_side(rel, text):
     return errs
 
 
+DECISION_FIELD_PLACEHOLDERS = {"", "—", "-", "–", "待补", "待填", "待定", "tbd", "n/a"}
+
+
+def decision_blocks(text):
+    """§4 决策块：[(标题, 正文)]。只认 `### D<n> · …` 开头。"""
+    body = section_body(text, "决策与选项对比")
+    blocks, title, buf = [], None, []
+    for line in body.splitlines():
+        m = re.match(r"^###\s+(D\d+)\s*·\s*(.*)$", line)
+        if m:
+            if title:
+                blocks.append((title, "\n".join(buf)))
+            title, buf = f"{m.group(1)} · {m.group(2)}".strip(" ·"), []
+        elif title is not None:
+            buf.append(line)
+    if title:
+        blocks.append((title, "\n".join(buf)))
+    return blocks
+
+
+def decision_field(block, name):
+    """取决策块里的 `**字段**：值` 行；没有这一行返回 None。"""
+    m = re.search(rf"(?m)^\s*\*\*{re.escape(name)}\*\*\s*[：:]\s*(.*)$", block)
+    return None if m is None else m.group(1).strip()
+
+
+def is_placeholder_value(val):
+    v = (val or "").strip()
+    if v.lower() in DECISION_FIELD_PLACEHOLDERS:
+        return True
+    return bool(re.fullmatch(r"（[^）]*）", v))   # 模板里的（…）占位
+
+
+def check_decision_review(rel, text):
+    """S12：最新一篇的 §4 用户决策块必须写「依据」与「撤销条件」。
+
+    只判**有没有写**：依据是不是真用户原话、撤销条件是否可观察，仍需人读。
+    只判最新一篇（与 S9 同法，ISS-032）：存量档案没有这两行，追溯会让历史集体变红。
+    拍板写「agent 自选」的块豁免——实现选择不是决策，不该被抬成四问。
+    """
+    errs = []
+    for title, block in decision_blocks(text):
+        if "（在决定什么）" in title:          # 新建档案的模板占位块
+            continue
+        who = decision_field(block, "拍板") or ""
+        if re.search(r"agent|自选", who, re.I):
+            continue
+        for field in ("依据", "撤销条件"):
+            val = decision_field(block, field)
+            if val is None:
+                errs.append({"file": rel, "code": "S12",
+                             "message": f"决策「{title}」缺「{field}」行——"
+                                        f"用户拍板的决策要答四问；实现选择写「拍板：agent 自选」可豁免"})
+            elif is_placeholder_value(val):
+                errs.append({"file": rel, "code": "S12",
+                             "message": f"决策「{title}」的「{field}」是占位（{val or '空'}）——"
+                                        f"答不出的标「断链」并用 devlog.py ask 进待分诊"})
+    return errs
+
+
 def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg, is_latest=True):
     """S8/S9：交接段首行必须是「下一步：<任务编号>」，并与计划任务表互校。
 
@@ -863,6 +923,8 @@ def cmd_check(ctx, as_json=False):
             errors.append({"file": rel, "code": "S5", "message": f"引用了收件箱不存在的 {r}"})
 
         errors.extend(check_user_side(rel, text))
+        if i == len(sessions) - 1:      # S12 只判最新一篇：存量不追溯（ISS-032）
+            errors.extend(check_decision_review(rel, text))
 
         m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
         if m and len(re.sub(r"[>\-*#\s]", "", m.group(1))) < 40:
