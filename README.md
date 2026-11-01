@@ -114,6 +114,8 @@ python scripts/doc_check.py --baseline          # 之后只报新增，不许比
 
 ## 维护这个仓库
 
+第一次参与先读 [CONTRIBUTING.md](./CONTRIBUTING.md)：怎么跑、改哪里、怎么验。
+
 ### 改完先跑一条命令
 
 ```bash
@@ -177,5 +179,9 @@ dist/               构建产物（.skill = zip），只允许由 build.py 生�
 ```
 
 ---
+
+## 许可证
+
+MIT，见 [LICENSE](./LICENSE)。可商用、修改、再分发，保留版权声明即可。
 
 这个仓库自己的文档地图见 [docs/README.md](./docs/README.md)；产品定位的权威版本见 [docs/00-门面/vision.md](./docs/00-门面/vision.md)。本文件是入口摘要，定义以那两份与 `SKILL.md` 为准。
