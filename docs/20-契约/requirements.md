@@ -4,7 +4,7 @@ layer: contract
 domain: 全局
 status: active
 authority: 1
-updated: 2026-10-29
+updated: 2026-11-01
 summary: "必须成立的需求与验收口径；每条一个 REQ 编号，用 EARS 句式写成可判真假的句子。"
 tags: [契约, 需求, EARS]
 ---
@@ -32,6 +32,7 @@ tags: [契约, 需求, EARS]
 | **REQ-002** | WHEN 契约层写入一条 `REQ-nnn` 条款 THE SYSTEM SHALL 该条款使用 EARS 句式并同时给出可执行的验收命令 | 删掉某条的「必须/不得」→ 报 `[E13]`；条款行无规范措辞 → 报 `[W7]` | `python scripts/self_test.py -v`（第 6 组判 E13，第 23 组判 W7） | 已实现 | `references/check-rules.md` | —（历史） |
 | **REQ-004** | WHEN 契约层新增或修改一条 `REQ-nnn` 需求 THE SYSTEM SHALL 功能台账里至少有一行引用它，且被引用的功能指得出代码入口 | 删掉唯一引用某条需求的功能行 → 报 `[W8]` 提醒；证据里的自测组号不存在 → `[E26]` | `python scripts/self_test.py -v`（第 30 组） | 已实现 | `references/check-rules.md`、T5.4.1 | —（历史） |
 | **REQ-003** | WHEN 一条 EARS 契约被新增或修改 THE SYSTEM SHALL 其正文保留 `verify:` 字段指向可执行的测试或命令，且缺失时被 `doc_check` 报出 | 删掉某条的 `verify:` 单元格 → 退出码 1 并报出 `[E18]` | `python scripts/self_test.py -v`（第 13 组判 E18） | 已实现 | [ADR-001](../30-决策/adr/ADR-001-与SDD的分工.md)、ISS-002 | —（历史） |
+| **REQ-005** | WHEN 一场会话收尾时 THE SYSTEM SHALL 对本会话产生的每条决策逐条给出**背景 / 影响 / 依据 / 撤销条件**，并把答不出的条目标为「断链」、挂进待分诊 | 造一篇只写结论、没有背景与影响的决策行 → 收尾时该条被判断链并出现在 `pending`；台账里没有的决策先补档再回顾 | `python scripts/self_test.py -v`（待实现：验收后补组号） | 待实现 | [FEATURES.md](../40-运行/FEATURES.md) F-016 | —（提案态：过评审门后补） |
 
 ## 2. 不得做的事
 
@@ -50,3 +51,4 @@ tags: [契约, 需求, EARS]
 | 2026-10-29 | 落 REQ-001/002（已实现）、REQ-003（待实现）；补四条「不得」 | [ADR-001](../30-决策/adr/ADR-001-与SDD的分工.md) |
 | 2026-10-29 | 需求表加 `verify:` 列（T1.2.1）；判缺检查仍待 T1.2.2，状态不变 | [ADR-001](../30-决策/adr/ADR-001-与SDD的分工.md)、W1.2 |
 | 2026-10-29 | `verify:` 缺失必须报 E18（T1.2.2 完成），REQ-003 转已实现 | [ADR-001](../30-决策/adr/ADR-001-与SDD的分工.md)、W1.2 |
+| 2026-11-01 | 加 REQ-005（会话收尾的决策回顾，**待实现**）：原 DSH 侧 `decision-review` 的能力改由本技能承载，提案见 F-016 | [FEATURES.md](../40-运行/FEATURES.md) F-016 |
