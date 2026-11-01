@@ -1174,6 +1174,82 @@ def main():
         finally:
             shutil.rmtree(tmp24, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 33
+        print("\n33. 计划表被空行/断行截断 → P13（ISS-035）")
+        tmp25 = tempfile.mkdtemp(prefix="ddd-selftest25-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp25)
+            plan25 = os.path.join(tmp25, "docs", "00-门面", "开发计划.md")
+
+            c, out = run("plan.py", "check", cwd=tmp25)
+            check("正常计划不报 P13（不误伤）", c == 0 and "P13" not in out, out[-300:])
+
+            row = ("| **T1.1.2** | 第二个任务 | W1.1 | 待开工 | - | 1 | 1 | 1 | 1 | 1 | 1 "
+                   "| `python scripts/doc_check.py` | — |")
+            text = read(plan25)
+            broken = text.replace("| **T1.1.1** |", row + "\n\n| **T1.1.1** |", 1)
+            write(plan25, broken)
+            c, out = run("plan.py", "check", cwd=tmp25)
+            check("§5 表内空行 → [P13]、exit 1", c == 1 and "[P13]" in out, out[-400:])
+            check("P13 指名被截断的那一行（T1.1.1）", c == 1 and "T1.1.1" in out, out[-400:])
+
+            fixed = broken.replace(row + "\n\n| **T1.1.1** |", row + "\n| **T1.1.1** |", 1)
+            write(plan25, fixed)
+            c, out = run("plan.py", "check", cwd=tmp25)
+            check("接回同一张表 → 0 error", c == 0 and "P13" not in out, out[-300:])
+
+            # §8 的断行：一行没写完（不是表行），下一行表格行被当成表头。
+            text = read(plan25).rstrip("\n") + (
+                "\n| 2026-11-02 | 变更甲 |\n续行（这一行忘了写 | 收尾）\n"
+                "| 2026-11-03 | 变更乙 |\n")
+            write(plan25, text)
+            c, out = run("plan.py", "check", cwd=tmp25)
+            check("§8 行内断行 → [P13]、exit 1", c == 1 and "[P13]" in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp25, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 34
+        print("\n34. YAML 校验器随包走（frontmatter + metadata，正反例）")
+        sys.path.insert(0, os.path.join(SKILL, "scripts"))
+        try:
+            import yaml_rules
+            have_rules = True
+        except ImportError:
+            have_rules = False
+        check("scripts/yaml_rules.py 随包存在且可导入", have_rules)
+        if have_rules:
+            skill_text = read(os.path.join(SKILL, "SKILL.md"))
+            block = yaml_rules.frontmatter_block(skill_text)
+            fm_problems = yaml_rules.frontmatter_problems(block) if block else ["缺 front-matter"]
+            check("真实 SKILL.md front-matter 通过（不含真问题）", not fm_problems,
+                  "；".join(fm_problems)[:300])
+            bad_fm = [
+                ("plain 值含「: 」", "description_en: for development: dual-sided"),
+                ("引号未闭合", 'description_en: "dual-sided'),
+                ("缩进块", "  nested: x"),
+                ("空值", "name:"),
+                ("重复键", "name: x\nname: y"),
+            ]
+            for label, body in bad_fm:
+                check(f"front-matter 反例被拒：{label}", bool(yaml_rules.frontmatter_problems(body)))
+
+            meta = read(os.path.join(SKILL, ".skill-metadata.yaml"))
+            meta_problems = yaml_rules.metadata_problems(meta)
+            check("真实 .skill-metadata.yaml 通过（不含真问题）", not meta_problems,
+                  "；".join(meta_problems)[:300])
+            bad_meta = [
+                ("序列项里的空值键", "examples:\n  - id:\n"),
+                ("缩进跳级", "examples:\n  - id: x\n   title: y\n"),
+                ("制表符缩进", "examples:\n\t- id: x\n"),
+                ("plain 值含「: 」", "examples:\n  - id: x\n    title: a: b\n"),
+                ("引号未闭合", 'examples:\n  - id: x\n    title: "abc\n'),
+                ("同级重复键", "examples:\n  - id: x\n    title: a\n    title: b\n"),
+            ]
+            for label, body in bad_meta:
+                check(f"metadata 反例被拒：{label}",
+                      bool(yaml_rules.metadata_problems(body)))
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

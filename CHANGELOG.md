@@ -1,5 +1,25 @@
 # 变更记录
 
+## 2.3.2
+
+三条防回归缺口收口：表格被截断不再静默、YAML 规则随包走、平台元数据文件真正能被解析。
+
+### 新增
+
+- **`P13`**（`plan.py check`）：表格被空行/断行截断时，后半段的数据行会被当成表头**静默丢掉**——现在报 `[P13]` 且 exit 1（ISS-035）。§5 任务表与 §8 变更记录都覆盖。
+- **`scripts/yaml_rules.py` 进包**：front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验只有这一份；`build.py` 体检、`install.py` 装机前、随包 `self_test.py` 都引用它（`frontmatter_problems` 从 `build.py` 迁入）。
+- `self_test` 第 33 组（`P13` 正反例）与第 34 组（YAML 校验器正反例）：150 → **169** 条断言。
+- `references/check-rules.md` 补 `P13`；`SKILL.md` 验收加第 27/28 条，脚本表补 `yaml_rules.py`。
+
+### 修复
+
+- `.skill-metadata.yaml` 第 2 条示例的英文描述里有未加引号的「: 」（`both sides: 8 …`），严格 YAML 解析失败（PyYAML `ScannerError` 26:53）——平台「使用」预填对这条示例一直静默退回通用问句（ISS-037）。已改单引号，并由 build / install / self_test 三处机器判守着。
+
+### 已知不做
+
+- YAML 校验是**子集**，不是解析器：flow 集合、多行 plain 标量、`- key:` 空值项等写法会被拒；规则宁窄不宽。
+- `P13` 靠「表头是 T/W/D/ISS/REQ/F/日期 形态」识别被截断的表格；任意文本表被截断仍可能漏判。
+
 ## 2.3.1
 
 决策回顾有了机器判据：最新一篇 §4 的用户决策块缺「依据 / 撤销条件」会被拦下。

@@ -139,6 +139,7 @@ def read_tables(lines):
         if header is None:
             i += 1
             continue
+        start = i
         rows, i = [], i + 1
         while i < n:
             c = cells(lines[i])
@@ -147,8 +148,14 @@ def read_tables(lines):
             if not is_sep(c):
                 rows.append([strip_md(x) for x in c])
             i += 1
-        tables.append(([strip_md(h) for h in header], rows))
+        tables.append(([strip_md(h) for h in header], rows, start + 1))
     return tables
+
+
+# 表格被空行/断行截断后，后半段的「表头」其实是数据行。用编号形态认出它：
+# 真正的表头是「ID / 编号 / 视角 / 日期 / 选项」这类词，不会是 T1.1.1 或 2026-11-01。
+FRAGMENT_ID = re.compile(
+    r"^(T\d+\.\d+\.\d+|W\d+\.\d+|D\d+|ISS-\d+|REQ-\d+|F-\d+|\d{4}-\d{2}-\d{2})$")
 
 
 def dim_codes(header):
@@ -159,7 +166,8 @@ def dim_codes(header):
 def load(path):
     lines = read(path).splitlines()
     weights = tasks = works = dirs = None
-    for header, rows in read_tables(lines):
+    fragments = []
+    for header, rows, no in read_tables(lines):
         if not header:
             continue
         if header[0] == "视角" and len(dim_codes(header)) >= 2:
@@ -170,20 +178,28 @@ def load(path):
             works = (header, rows)
         elif header[0] == "编号" and "方向" in header:
             dirs = (header, rows)
+        elif FRAGMENT_ID.fullmatch(header[0]):
+            fragments.append((header[0], no))
     if weights is None:
         raise SystemExit("找不到权重表（首列应为「视角」且含维度列）")
     if tasks is None:
         raise SystemExit("找不到任务表（首列应为「ID」且含维度列）")
-    return lines, weights, tasks, works, dirs
+    return lines, weights, tasks, works, dirs, fragments
 
 
 # ---------------------------------------------------------------- 校验
-def validate(weights, tasks, works, dirs, cfg):
+def validate(weights, tasks, works, dirs, cfg, fragments=()):
     """返回 (errs, items, codes, done, work_ids)。errs 里每条都带码，与 check-rules.md 的 P 段一一对应。"""
     errs = []
 
     def E(code, msg):
         errs.append({"code": code, "message": msg})
+
+    # P13：表格被空行/断行截断后，后半段的行会被当成「表头」静默丢掉——
+    # 那正是「errors=0 却只校验了 26 个任务」的来源（ISS-035）。
+    for label, no in fragments:
+        E("P13", f"第 {no} 行起的表格被空行/断行截断：表头其实是数据行「{label}」；"
+                 f"这一段不在任何表里，接回上一张表（或删掉多余空行）")
 
     w_header, w_rows = weights
     t_header, t_rows = tasks
@@ -356,12 +372,12 @@ def main():
         return die(f"找不到计划文档：{path}", as_json)
 
     try:
-        lines, weights, tasks, works, dirs = load(path)
+        lines, weights, tasks, works, dirs, fragments = load(path)
     except SystemExit as exc:
         return die(str(exc), as_json, 1)
 
     cfg = schema["plan"]
-    errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg)
+    errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg, fragments)
 
     if cmd == "check":
         views = compute(weights, items, codes, done, work_ids, cfg)

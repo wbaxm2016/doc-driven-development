@@ -37,7 +37,9 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
+sys.path.insert(0, os.path.join(ROOT, "scripts"))
 import build  # 复用「哪些文件进包」的唯一清单：walk_package_files()
+import yaml_rules  # front-matter / metadata 的 YAML 规则（与 build.py 同一份）
 
 MANIFEST = os.path.join(ROOT, "install-targets.json")
 
@@ -77,13 +79,19 @@ def git_commit() -> str:
         return "unknown"
 
 
-def check_skill_md(entries: list[tuple[str, bytes]]) -> None:
-    """装之前再拦一道坏 front-matter：DSH 解析失败会静默丢技能，装了等于没装。"""
+def check_yaml(entries: list[tuple[str, bytes]]) -> None:
+    """装之前再拦一道坏 YAML：宿主解析失败会静默丢技能 / 平台卡片退回通用问句。"""
     text = dict(entries).get("SKILL.md", b"").decode("utf-8", "replace")
-    problems = build.frontmatter_problems(build.frontmatter_block(text))
+    problems = yaml_rules.frontmatter_problems(yaml_rules.frontmatter_block(text))
     if problems:
         raise SystemExit("ERROR SKILL.md front-matter 不是合法 YAML，宿主会静默丢弃该技能：\n  "
                          + "\n  ".join(problems))
+    meta = dict(entries).get(".skill-metadata.yaml", b"")
+    if meta:
+        meta_problems = yaml_rules.metadata_problems(meta.decode("utf-8", "replace"))
+        if meta_problems:
+            raise SystemExit("ERROR .skill-metadata.yaml 不是合法 YAML，平台卡片会退回通用问句：\n  "
+                             + "\n  ".join(meta_problems))
 
 
 def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, bytes]], dict]:
@@ -105,7 +113,7 @@ def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, byte
                 data, _ = build.normalize(rel, data)   # 与打包同一条行尾规则（ISS-008）
             entries.append((rel, data))
         entries.append(("MANIFEST.txt", build.make_manifest(version, entries)))
-        check_skill_md(entries)
+        check_yaml(entries)
         return entries, {"source": "worktree", "version": version, "commit": git_commit()}
 
     path = artifact or os.path.join(ROOT, "dist", "%s-%s.skill" % (SKILL_NAME, version))
@@ -117,7 +125,7 @@ def materialize(source: str, artifact: str | None) -> tuple[list[tuple[str, byte
     man = dict(entries).get("MANIFEST.txt", b"").decode("utf-8", "replace")
     m = re.search(r"(?m)^version:\s*(\S+)", man)
     meta_version = m.group(1) if m else version
-    check_skill_md(entries)
+    check_yaml(entries)
     return entries, {"source": "dist", "version": meta_version,
                      "artifact": os.path.relpath(path, ROOT).replace("\\", "/"),
                      "commit": git_commit()}

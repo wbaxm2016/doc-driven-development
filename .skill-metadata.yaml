@@ -23,7 +23,7 @@ examples:
       en: Start a Session Record
     description:
       zh: 本场开发会话按双侧档案留档：用户侧 8 类、AI 侧 6 项、决策八维对比、开放项与交接
-      en: Record this development session both sides: 8 user-side categories, 6 AI-side items, 8-dimension decision comparison, open items and handoff
+      en: 'Record this development session both sides: 8 user-side categories, 6 AI-side items, 8-dimension option comparison, open items and handoff'
     prompt:
       zh: |-
         从现在开始给这次会话建档，主题：{{本次主题}}；范围：{{范围，含明确不做什么}}。

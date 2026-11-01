@@ -217,7 +217,8 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
 | `scripts/plan.py` | `index [--check]` / `check [--json]` |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–26 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–28 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
@@ -257,5 +258,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 24. **对齐门**：需求「已实现」但「确认」是 `—` → `[E23]`；写成 `复述✓ 2026-11-01｜档案 012 §2` → 0 error；存量行 `—（历史）` 放行。
 25. **考核门与回滚锚点**：`已验收` 的考核写「看着还行」→ `[E27]`；四格齐但缺「完成于」→ `[E27]`；四格 + commit 短号 → 0 error；`撤回` 是合法状态、入口可为空但要写考核。
 26. **决策回顾的机器判**：最新一篇 §4 的用户决策块缺「依据」或「撤销条件」→ `devlog.py check` 报 `S12` 且 exit 1；补上是 0 error；写「拍板：agent 自选」可豁免；更早的档案不追溯。
+27. **计划表被截断**：在 §5 任务表中间插一个空行 → `plan.py check` 报 `[P13]` 且 exit 1；接回同一张表 → 0 error；一行写成两行（断行）同样报。
+28. **YAML 校验器随包走**：`SKILL.md` 的 plain 值含「: 」、引号未闭合，或 `.skill-metadata.yaml` 缩进坏掉 → `build.py` 体检与随包 `self_test.py` 都报；真实的两份文件通过。
 
-`scripts/self_test.py` 把上面 1–26 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+`scripts/self_test.py` 把上面 1–28 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
