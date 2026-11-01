@@ -920,7 +920,7 @@ def main():
             c, out = run("doc_check.py", cwd=tmp18)
             check("「已实现」但依据是占位 → E23", c == 1 and "E23" in codes(out), out[-300:])
 
-            write(req18, base18.replace(row, "| 已实现 | ADR-001 |", 1))
+            write(req18, base18.replace(row, "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1))
             c, out = run("doc_check.py", cwd=tmp18)
             check("「已实现」且依据指得出出处 → 不报",
                   c == 0 and "E22" not in codes(out) and "E23" not in codes(out), out[-300:])
@@ -949,13 +949,13 @@ def main():
 
             write(feat19, base19.rstrip("\n")
                   + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | 满足✓ | — | 自测跑过 |\n")
+                  " | 满足✓ | — | 自测跑过 | 做法：示例｜一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
             c, out = run("doc_check.py", cwd=tmp19)
             check("已验收却没有代码入口 → E24", c == 1 and "E24" in codes(out), out[-300:])
 
             write(feat19, base19.rstrip("\n")
                   + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-10-31 |\n")
+                  " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-10-31 | 做法：示例｜一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
             c, out = run("doc_check.py", cwd=tmp19)
             check("已验收：入口存在 + verify + 证据 → 不报",
                   c == 0 and "E24" not in codes(out), out[-300:])
@@ -973,26 +973,26 @@ def main():
 
             write(feat20, base20.rstrip("\n")
                   + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
-                  " | — | — | — |\n")
+                  " | — | — | — | — | — |\n")
             c, out = run("doc_check.py", cwd=tmp20)
             check("推到「已评审」却没写评审结论 → E24",
                   c == 1 and "E24" in codes(out), out[-300:])
 
             write(feat20, base20.rstrip("\n")
                   + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
-                  " | 满足✓ 可做✓ 代价S | — | — |\n")
+                  " | 满足✓ 可做✓ 代价S | — | — | — | — |\n")
             c, out = run("doc_check.py", cwd=tmp20)
             check("三问结论写进「评审」列 → 不报", c == 0 and "E24" not in codes(out), out[-300:])
 
             write(feat20, base20.rstrip("\n")
                   + "\n| **F-003** | 旧功能 | —（历史） | 口径 | `python -c pass` | S | 已验收"
-                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 |\n")
+                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 | —（历史） | —（历史） |\n")
             c, out = run("doc_check.py", cwd=tmp20)
             check("历史行带「—（历史）」评审 → 不报", c == 0 and "E24" not in codes(out), out[-300:])
 
             write(feat20, base20.rstrip("\n")
                   + "\n| **F-004** | 新功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 |\n")
+                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 | —（历史） | —（历史） |\n")
             c, out = run("doc_check.py", cwd=tmp20)
             check("挂需求的行拿「—（历史）」背书 → E24",
                   c == 1 and "E24" in codes(out), out[-300:])
@@ -1067,6 +1067,58 @@ def main():
             check("证据组号真实存在 → 不报 E26", c == 0 and "E26" not in codes(out), out[-300:])
         finally:
             shutil.rmtree(tmp22, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 31
+        print("\n31. 对齐门 / 考核门 / 回滚锚点（E23 扩展 / E27）")
+        tmp23 = tempfile.mkdtemp(prefix="ddd-selftest23-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp23)
+            req23 = os.path.join(tmp23, "docs", "20-契约", "requirements.md")
+            feat23 = os.path.join(tmp23, "docs", "40-运行", "FEATURES.md")
+            base_req23 = read(req23)
+            base_feat23 = read(feat23)
+
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("骨架里「待实现」不需要确认、不报 E23/E27",
+                  c == 0 and "E23" not in codes(out) and "E27" not in codes(out), out[-300:])
+
+            write(req23, base_req23.replace("| 待实现 | — | — |", "| 已实现 | ADR-001 | — |", 1))
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("「已实现」但没用户确认 → E23", c == 1 and "E23" in codes(out), out[-300:])
+
+            write(req23, base_req23.replace("| 待实现 | — | — |",
+                                            "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1))
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("「已实现」+ 确认（含日期与落点）→ 不报", c == 0 and "E23" not in codes(out), out[-300:])
+            write(req23, base_req23)
+
+            ok_row = ("| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                      " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-11-01"
+                      " | 做法：一行命令校验｜一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
+            write(feat23, base_feat23.rstrip("\n") + "\n" + ok_row)
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("已验收：考核四格 + 完成于 → 不报 E27", c == 0 and "E27" not in codes(out), out[-300:])
+
+            write(feat23, base_feat23.rstrip("\n") + "\n"
+                  + ok_row.replace("做法：一行命令校验｜一致：全｜代价：S（同估）｜结论：保留", "看着还行"))
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("考核缺槽位 → E27", c == 1 and "E27" in codes(out), out[-300:])
+
+            write(feat23, base_feat23.rstrip("\n") + "\n"
+                  + ok_row.replace("| abc1234 |", "| — |"))
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("已验收没记完成于 → E27（回滚无锚点）", c == 1 and "E27" in codes(out), out[-300:])
+
+            write(feat23, base_feat23.rstrip("\n") + "\n"
+                  + "| **F-003** | 旧功能 | REQ-001 | 口径 | `python -c pass` | S | 撤回"
+                    " | 满足✓ | — | — | 做法：上线后发现方向不对｜一致：偏差｜代价：M"
+                    "（返工）｜结论：撤回 | abc1234 |\n")
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("「撤回」是合法状态，入口可为空但要写考核",
+                  c == 0 and "E24" not in codes(out) and "E27" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp23, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -72,6 +72,12 @@ python scripts/verify.py         # 按契约 verify: 真跑；失败/超时非 0
 
 `dist/doc-driven-development.skill` 是"最新版"的稳定别名，`dist/doc-driven-development-<版本>.skill` 供锁定版本安装。
 
+### 回滚
+
+- **回到某个功能之前**：功能行的「完成于」记着验收时的 commit 短号——`git revert <commit>`（保留历史）或 `git checkout <commit>^ -- <文件>`（只回退文件）。
+- **回到某个需求之前**：先在契约里用 `_delta` 的 `REMOVED` 作废它（编号作废不复用，`_archive/` 留档），再按功能的「完成于」回滚实现。**先改文档、再回滚代码**，否则会出现"代码回退了但需求还写着已实现"。
+- **回到某个版本**：发版 tag（`v…`）比功能级 tag 少得多、也更稳定，整仓回退用它。
+
 ## 安装（其他 Agent / 其他机器）
 
 **先确认对方读哪个技能目录**——这是最容易翻车的一步：千问办公（QoderWork CN）读 `~/.qwenworkcn/skills/`，别的 Agent 可能是 `~/.workbuddy/skills/` 或自己的路径。装错目录时脚本会打印"安装成功"，而技能列表里根本没有它：**这是一次假通过，正是这套实践要消灭的东西。**

@@ -26,9 +26,9 @@ tags: [契约, 需求, EARS]
 
 ## 1. 需求
 
-| 编号 | 需求（EARS 句式） | 验收（一条命令 / 一次实测） | `verify:`（可执行入口） | 状态 | 依据 |
+| 编号 | 需求（EARS 句式） | 验收（一条命令 / 一次实测） | `verify:`（可执行入口） | 状态 | 依据 | 确认 |
 |---|---|---|---|---|---|
-| **REQ-001** | WHEN （触发条件） THE SYSTEM SHALL （可观察的行为） | （怎么判真假） | `python tests/test_xxx.py` | 待实现 | — |
+| **REQ-001** | WHEN （触发条件） THE SYSTEM SHALL （可观察的行为） | （怎么判真假） | `python tests/test_xxx.py` | 待实现 | — | — |
 
 ## 2. 不得做的事
 

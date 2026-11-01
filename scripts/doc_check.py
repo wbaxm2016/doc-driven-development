@@ -79,20 +79,20 @@ VERIFY_PLACEHOLDERS = {"", "-", "—", "–", "待补", "待填", "待定", "无
 
 # 需求行的状态词白名单（E22）：与 verify.py 的跳过集合对齐——
 # 只有「待实现 / 阻塞 / 搁置」会被跳过，其余状态意味着 verify 必须真跑。
-REQ_STATES = {"待实现", "已实现", "阻塞", "搁置"}
+REQ_STATES = {"待实现", "已实现", "阻塞", "搁置", "作废"}
 # 标了「已实现」就必须指得出出处（E23）：「依据」里要有可核对的锚
 TRACE_REF_RE = re.compile(r"(ADR-\d+|ISS-\d+|T\d+\.\d+\.\d+|W\d+\.\d+|D\d+\b|[\w\-./]+\.md)")
 REF_PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "tbd"}
 
 # 功能台账的状态链（E24）：设计视图（待评审/已评审/实施中）与已实现（已对照/已验收）同表
-FEATURE_STATES = {"待评审", "已评审", "实施中", "已对照", "已验收", "搁置"}
+FEATURE_STATES = {"待评审", "已评审", "实施中", "已对照", "已验收", "搁置", "撤回"}
 # 「—（历史）」只给先于契约存在的老功能，且只能停在已验收
 LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
-         "E19", "E20", "E21", "E22", "E23", "E24", "E26",
+         "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]
 
 
@@ -651,6 +651,7 @@ def main():
                     continue
                 i_st = heads.index("状态")
                 i_ref = heads.index("依据") if "依据" in heads else None
+                i_cf = heads.index("确认") if "确认" in heads else None
                 for row in rows:
                     if len(row) != len(heads) or not req_id_re.fullmatch(strip_md(row[0])):
                         continue
@@ -666,6 +667,18 @@ def main():
                             add(errors, rel, "E23",
                                 f"{rid} 标了「已实现」，但「依据」指不出设计出处："
                                 f"{ref or '(空)'}（写 ADR- / ISS- / 任务号或文件路径）")
+                        # 对齐门：这条需求"是不是用户要的那句话"，只有确认能证明。
+                        if i_cf is None:
+                            add(errors, rel, "E23",
+                                f"需求表缺「确认」列：{rid} 标了「已实现」，"
+                                f"却查不到用户确认过这句话")
+                        else:
+                            cf = strip_md(row[i_cf]) if i_cf < len(row) else ""
+                            if cf in REF_PLACEHOLDERS:
+                                add(errors, rel, "E23",
+                                    f"{rid} 标了「已实现」，但没有用户确认："
+                                    f"写 `复述✓ YYYY-MM-DD｜档案 §` 或 `采纳✓ …`；"
+                                    f"先于确认门的存量行写 `—（历史）`")
 
         # ---- E24 功能台账（需求 → 功能 → 入口 → 证据）
         # 一张表两种读法：待评审/已评审/实施中＝设计视图，已对照/已验收＝已实现清单。
@@ -680,6 +693,8 @@ def main():
                          if h.lower().startswith("verify")), None)
             i_ev = heads.index("证据") if "证据" in heads else None
             i_rv = heads.index("评审") if "评审" in heads else None
+            i_ac = heads.index("考核") if "考核" in heads else None
+            i_dn = heads.index("完成于") if "完成于" in heads else None
             req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
             for row in rows:
                 if len(row) != len(heads):
@@ -745,6 +760,22 @@ def main():
                             if int(n) not in test_groups:
                                 add(errors, rel, "E26",
                                     f"{fid} 的证据引用了不存在的自测组：第 {n} 组")
+                # 考核门（E27）：已验收必须有「考核」（给用户看的做法 + 自检）与「完成于」；
+                # 撤回必须有考核理由。存量行（—（历史））整行豁免。
+                if st in ("已验收", "撤回") and reqcell not in LEGACY_REQ:
+                    ac = strip_md(row[i_ac]) if i_ac is not None and i_ac < len(row) else ""
+                    if ac in REF_PLACEHOLDERS:
+                        add(errors, rel, "E27",
+                            f"{fid} 是「{st}」却没有考核：写 `做法：…｜一致：全/部分/偏差"
+                            f"｜代价：S→M（原因）｜结论：保留/改造/撤回`")
+                    elif not all(k in ac for k in ("做法", "一致", "代价", "结论")):
+                        add(errors, rel, "E27",
+                            f"{fid} 的考核缺槽位：要同时写「做法 / 一致 / 代价 / 结论」四格")
+                    dn = strip_md(row[i_dn]) if i_dn is not None and i_dn < len(row) else ""
+                    if st == "已验收" and dn in REF_PLACEHOLDERS:
+                        add(errors, rel, "E27",
+                            f"{fid} 已验收但没记「完成于」：写该功能验收时的 commit 短号"
+                            f"（回滚到它之前就靠这个锚点）")
 
         # ---- 契约增量（E19 / E20 / E21，T1.1.2）
         # 机器判据只覆盖 _delta/README.md 里能机械判的部分：目录与 status、
