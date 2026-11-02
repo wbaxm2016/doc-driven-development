@@ -115,13 +115,16 @@ def main():
         write(feat, re.sub(r'summary: "[^"]*"', 'summary: "' + "超" * 90 + '"', read(feat)))
         inbox = os.path.join(tmp, "docs", "70-过程", "问题收件箱.md")
         s = read(inbox).splitlines()
-        row = "| **ISS-002** | 2026-10-29 | 自测 | 风险 | 甲 | 乙 | `done` | — | — |"
+        row = ("| **ISS-002** | 2026-10-29 | 自测 | 风险 | 可关闭 | 甲 | 乙 | 实现关闭 "
+               "| 关闭：已修 | — | — | 2026-10-29 |")
         s = [ln for ln in s]
         for i, ln in enumerate(s):
             if ln.startswith("| **ISS-001**"):
                 s.insert(i + 1, row)
                 break
-        write(inbox, "\n".join(s).replace("| — | — | — |", "| **ISS-002** | 已修 | 2026-10-29 |"))
+        write(inbox, "\n".join(s).replace(
+            "| — | — | — | — |",
+            "| **ISS-002** | 已修 | commit abc1234 | 2026-10-29 |"))
         plan = os.path.join(tmp, "docs", "00-门面", "开发计划.md")
         write(plan, read(plan).replace(
             "| **T1.1.1** | （示例）跑通并记录 | W1.1 | 待开工 | - | 5 | 5 | 4 | 3 | 4 | 3 |",
@@ -671,12 +674,13 @@ def main():
             check("brief 只读：跑前跑后文档字节不变", c == 0 and before == after, "brief 改动了文件")
 
             inbox11 = os.path.join(docs11, "70-过程", "问题收件箱.md")
-            row11 = "| **ISS-002** | 2026-10-30 | 自测 | 风险 | 甲 | 乙 | `deferred` | 未排期 | 需要时 |"
+            row11 = ("| **ISS-002** | 2026-10-30 | 自测 | 风险 | 开放 | 甲 | 乙 | 确立 "
+                     "| 确立：自测 | 未排期 | 需要时 | 2026-10-30 |")
             write(inbox11, read(inbox11).replace(
                 "| **ISS-001**", row11 + "\n| **ISS-001**", 1))
             c, out = run("devlog.py", "brief", cwd=tmp11)
-            check("brief 给出收件箱 open / deferred 计数",
-                  c == 0 and "open 1" in out and "deferred 1" in out, out[-300:])
+            check("brief 给出收件箱 确立 / 实施中 计数",
+                  c == 0 and "确立 2" in out and "实施中 0" in out, out[-300:])
 
             plan11 = os.path.join(docs11, "00-门面", "开发计划.md")
             write(plan11, read(plan11).replace("| 待开工 |", "| 已完成 |"))
@@ -892,9 +896,11 @@ def main():
             check("inbox --similar 能找到相关条目", c == 0 and "ISS-001" in out, out[-300:])
 
             inbox17 = os.path.join(tmp17, "docs", "70-过程", "问题收件箱.md")
-            write(inbox17, read(inbox17).rstrip("\n") + "\n| ISS-090 | 闭环示例 | 2026-10-31 |\n")
+            write(inbox17, read(inbox17).replace(
+                "| — | — | — | — |",
+                "| ISS-090 | 闭环示例 | commit abc1234 | 2026-10-31 |"))
             c, out = run("devlog.py", "inbox", cwd=tmp17)
-            check("闭环表也计入统计（ISS-033）", c == 0 and "已闭环 1" in out, out[-200:])
+            check("闭环表也计入统计（ISS-033）", c == 0 and "实现关闭 1" in out, out[-200:])
         finally:
             shutil.rmtree(tmp17, ignore_errors=True)
 
@@ -1249,6 +1255,63 @@ def main():
             for label, body in bad_meta:
                 check(f"metadata 反例被拒：{label}",
                       bool(yaml_rules.metadata_problems(body)))
+
+        # ---------------------------------------------------------------- 35
+        print("\n35. 问题状态机：类型/性质/状态/依据（D3–D9）")
+        tmp26 = tempfile.mkdtemp(prefix="ddd-selftest26-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp26)
+            inbox26 = os.path.join(tmp26, "docs", "70-过程", "问题收件箱.md")
+            base26 = read(inbox26)
+
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("模板收件箱首跑 0 error", c == 0, out[-300:])
+
+            def row26(nature="可关闭", state="确立", ev="确立：自测", typ="债"):
+                return ("| **ISS-001** | 2026-11-02 | 自测 | %s | %s | 甲 | 乙 | %s "
+                        "| %s | — | %s | 2026-11-02 |"
+                        % (typ, nature, state, ev,
+                           "需要时" if nature == "开放" else "—"))
+
+            def set_row(text, row):
+                lines = text.splitlines()
+                for i, ln in enumerate(lines):
+                    if ln.startswith("| **ISS-001** |"):
+                        lines[i] = row
+                        break
+                return "\n".join(lines) + "\n"
+
+            write(inbox26, set_row(base26, row26(nature="待定")))
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("性质不在白名单 → D3", c == 1 and "[D3]" in out, out[-300:])
+
+            write(inbox26, set_row(base26, row26(nature="开放", state="实现关闭",
+                                                ev="关闭：已修")))
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("开放问题不得实现关闭 → D5", c == 1 and "[D5]" in out, out[-300:])
+
+            write(inbox26, set_row(base26, row26(state="实施中", ev="实施中：改了解析")))
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("实施中缺关联任务 → D6", c == 1 and "[D6]" in out, out[-300:])
+
+            write(inbox26, set_row(base26, row26(ev="已修")))
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("依据没有状态前缀 → D4", c == 1 and "[D4]" in out, out[-300:])
+
+            write(inbox26, base26.replace(
+                "| — | — | — | — | — |",
+                "| ISS-091 | — | 用户 | 2026-11-02 | — |"))
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("拒绝缺理由/重新考虑条件 → D7", c == 1 and "[D7]" in out, out[-300:])
+
+            write(inbox26, base26.replace(
+                "| — | — | — | — |",
+                "| ISS-092 | 已修 | commit abc1234 | — |"))
+            c, out = run("devlog.py", "check", cwd=tmp26)
+            check("闭环缺闭环日 → D8", c == 1 and "[D8]" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp26, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

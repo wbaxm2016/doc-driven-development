@@ -131,12 +131,21 @@ def h1_of(text):
     return ""
 
 
+def split_row(s):
+    """按未转义的 `|` 切单元格，并把 `\\|` 还原成 `|`。
+
+    收件箱里真的有「标题含竖线」这类条目（ISS-011）：写的时候 `cell()` 转义了，
+    读的时候再按裸 `|` 切，整行会多出一列并被静默跳过——S5 就会误报「ISS 不存在」。
+    """
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", s)]
+
+
 def read_tables(text):
     tables, block = [], []
     for line in text.splitlines() + [""]:
         s = line.strip()
         if s.startswith("|") and s.endswith("|") and len(s) > 2:
-            block.append([c.strip() for c in s[1:-1].split("|")])
+            block.append(split_row(s[1:-1]))
         else:
             if len(block) >= 2:
                 header, rows = block[0], block[1:]
@@ -338,8 +347,27 @@ def set_pending_state(path, qid, state, note):
 
 
 # ---------------------------------------------------------------- 收件箱（查重 / 转正）
+ISSUE_ACTIVE = ("确立", "实施中")
+ISSUE_TERMINAL = ("实现关闭", "拒绝")
+ISSUE_ALIASES = {"open": "确立", "deferred": "确立", "done": "实现关闭"}
+
+
+def issue_cfg(ctx):
+    return ctx.schema.get("issue", {})
+
+
+def normalize_issue_state(ctx, raw):
+    """旧值一次归一：open/deferred → 确立，done → 实现关闭。"""
+    s = strip_md(raw or "")
+    return issue_cfg(ctx).get("state_aliases", ISSUE_ALIASES).get(s, s)
+
+
 def inbox_entries(ctx):
-    """收件箱主表 + 已闭环表的条目（id/state/question/impact/to）。"""
+    """收件箱三张表的条目：主表 / 已闭环 / 已拒绝。
+
+    统一成 {id,state,nature,type,question,impact,to,back,evidence,updated,table}。
+    旧值在这一层归一，后面的命令只认新状态。
+    """
     out = []
     if not os.path.exists(ctx.inbox):
         return out
@@ -349,25 +377,52 @@ def inbox_entries(ctx):
         heads = [strip_md(h) for h in header]
         if "ID" not in heads:
             continue
-        # 主表（有「问题」列）与闭环表（只有「结论 / 闭环日」）都要认：
-        # 只读主表会让「已闭环」永远显示 0（ISS-033）。
         i_id = heads.index("ID")
-        i_q = heads.index("问题") if "问题" in heads else heads.index("结论") if "结论" in heads else None
-        if i_q is None:
+        i_q, i_conc, i_reason = _col(heads, "问题"), _col(heads, "结论"), _col(heads, "理由")
+        if i_q is None and i_conc is None and i_reason is None:
             continue
-        i_st, i_imp, i_to = _col(heads, "状态"), _col(heads, "影响"), _col(heads, "落点")
+        i_st, i_type = _col(heads, "状态"), _col(heads, "类型")
+        i_nat, i_imp, i_to = _col(heads, "性质"), _col(heads, "影响"), _col(heads, "落点")
+        i_back, i_ev = _col(heads, "回到条件"), _col(heads, "依据", "证据")
+        i_up = _col(heads, "更新")
+        i_dec = _col(heads, "决策人")
+        i_date = _col(heads, "闭环日", "拒绝日", "发现日")
+        i_reopen = _col(heads, "重新考虑条件")
+        # 表类型：有状态=主表；有结论=已闭环；有理由=已拒绝。
+        if i_st is not None:
+            table = "main"
+        elif i_conc is not None:
+            table = "closed"
+        else:
+            table = "rejected"
         for r in rows:
             if len(r) != len(heads):
                 continue
             iid = strip_md(r[i_id])
             if not id_re.fullmatch(iid):
                 continue
+            if table == "main":
+                state = normalize_issue_state(ctx, r[i_st]) or "确立"
+                question = r[i_q] if i_q is not None else ""
+            elif table == "closed":
+                state, question = "实现关闭", r[i_conc]
+            else:
+                state, question = "拒绝", r[i_reason]
             out.append({
                 "id": iid,
-                "state": strip_md(r[i_st]) if i_st is not None else "done",
-                "question": strip_md(r[i_q]),
+                "state": state,
+                "nature": strip_md(r[i_nat]) if i_nat is not None else "",
+                "type": strip_md(r[i_type]) if i_type is not None else "",
+                "question": strip_md(question),
                 "impact": strip_md(r[i_imp]) if i_imp is not None else "",
                 "to": strip_md(r[i_to]) if i_to is not None else "",
+                "back": strip_md(r[i_back]) if i_back is not None else "",
+                "evidence": strip_md(r[i_ev]) if i_ev is not None else "",
+                "updated": strip_md(r[i_up]) if i_up is not None else "",
+                "decider": strip_md(r[i_dec]) if i_dec is not None else "",
+                "date": strip_md(r[i_date]) if i_date is not None else "",
+                "reopen": strip_md(r[i_reopen]) if i_reopen is not None else "",
+                "table": table,
             })
     return out
 
@@ -383,7 +438,7 @@ def similar_issues(ctx, text, top=3, floor=0.10):
     """按字符二元组重合度找近似条目——只给**候选**，是不是包含/扩展仍要人判。"""
     scored = []
     for e in inbox_entries(ctx):
-        if e["state"] not in ("open", "deferred"):
+        if e["state"] not in ISSUE_ACTIVE:
             continue
         a, b = _shingles(text), _shingles(e["question"] + " " + e["impact"])
         score = len(a & b) / max(1, len(a | b))
@@ -403,26 +458,32 @@ def next_issue_id(ctx):
     return "%s-%03d" % (ctx.schema["ids"]["issue"], (max(nums) + 1) if nums else 1)
 
 
-def append_inbox_row(ctx, iid, kind, question, impact, to):
-    """只**追加**一行到收件箱主表末尾：不动别人的行、不重排、不改历史。"""
+def append_inbox_row(ctx, iid, kind, question, impact, to, nature="可关闭",
+                     evidence=None, back="—"):
+    """只**追加**一行到收件箱主表末尾：按表头写，不假设列顺序。"""
     text = read(ctx.inbox)
     lines = text.splitlines(True)
-    head = None
+    head, heads = None, None
     for i, ln in enumerate(lines):
         if not ln.strip().startswith("|"):
             continue
         cells = [c.strip() for c in ln.strip().strip("|").split("|")]
         if cells and cells[0] == "ID" and "状态" in cells and "问题" in cells:
-            head = i
+            head, heads = i, cells
             break
     if head is None:
         raise ValueError("收件箱里找不到「ID | … | 状态 | … | 问题 |」的主表")
     end = head + 1
     while end < len(lines) and lines[end].strip().startswith("|"):
         end += 1
-    row = "| **%s** | %s | 分诊转正 | %s | %s | %s | `open` | %s | — |\n" % (
-        iid, datetime.date.today().isoformat(), cell(kind), cell(question),
-        cell(impact), cell(to))
+    today = datetime.date.today().isoformat()
+    values = {
+        "ID": f"**{iid}**", "发现日": today, "来源": "分诊转正",
+        "类型": kind, "性质": nature, "问题": question, "影响": impact,
+        "状态": "确立", "依据": evidence or "确立：分诊转正",
+        "落点": to, "回到条件": back, "更新": today,
+    }
+    row = "| " + " | ".join(cell(values.get(h, "—")) for h in heads) + " |\n"
     lines.insert(end, row)
     write(ctx.inbox, "".join(lines))
 
@@ -430,12 +491,16 @@ def append_inbox_row(ctx, iid, kind, question, impact, to):
 def cmd_inbox(ctx, args):
     if not args.similar:
         entries = inbox_entries(ctx)
-        opened = [e for e in entries if e["state"] == "open"]
-        deferred = [e for e in entries if e["state"] == "deferred"]
-        print("收件箱：open %d · deferred %d · 已闭环 %d"
-              % (len(opened), len(deferred), len(entries) - len(opened) - len(deferred)))
-        for e in opened + deferred:
-            print("  %s  [%s]  %s" % (e["id"], e["state"], e["question"]))
+        counts = {}
+        for e in entries:
+            counts[e["state"]] = counts.get(e["state"], 0) + 1
+        print("收件箱：确立 %d · 实施中 %d · 实现关闭 %d · 拒绝 %d"
+              % (counts.get("确立", 0), counts.get("实施中", 0),
+                 counts.get("实现关闭", 0), counts.get("拒绝", 0)))
+        for e in entries:
+            if e["state"] in ISSUE_ACTIVE:
+                print("  %s  [%s/%s]  %s"
+                      % (e["id"], e["state"], e["nature"] or "?", e["question"]))
         return 0
     hits = similar_issues(ctx, args.similar, top=args.top)
     if not hits:
@@ -582,10 +647,13 @@ def cmd_pending(ctx, args):
                     return die("--relation new 需要收件箱行的三格人判字段：缺 "
                                + "、".join("--" + k for k in missing))
                 iid = next_issue_id(ctx)
+                nature = args.nature or ("开放" if args.type in ("机会", "待决") else "可关闭")
                 append_inbox_row(ctx, iid, args.type, target["question"],
-                                 args.impact, args.to)
+                                 args.impact, args.to, nature=nature,
+                                 back=(target["premise"] or "—"))
+                print("新增 %s（独立，性质 %s%s）"
+                      % (iid, nature, "" if args.nature else "，按类型推断"))
                 state, note = "→" + iid, note or ("新登记 " + iid)
-                print("新增 %s（独立）" % iid)
             else:
                 if not ref:
                     return die("--relation %s 需要写成 %s:ISS-nnn" % (how, how))
@@ -668,32 +736,10 @@ def cmd_new(ctx, args):
 
 # ---------------------------------------------------------------- check
 def parse_inbox(ctx):
-    """返回 (ids, rows, dups)。
-
-    主表与「已闭环」表都统计：done 条目留在主表 = 编号重复（D1），这是刻意的。
-    """
-    ids, rows, dups = [], [], []
-    if not os.path.exists(ctx.inbox):
-        return ids, rows, dups
-    prefix = re.escape(ctx.schema["ids"]["issue"])
-    id_re = re.compile(rf"^{prefix}-\d+$")
-    for header, trows in read_tables(read(ctx.inbox)):
-        if not header or header[0] != "ID":
-            continue
-        has_state = "状态" in header
-        i_state = header.index("状态") if has_state else None
-        i_back = header.index("回到条件") if "回到条件" in header else None
-        for r in trows:
-            raw = strip_md(r[0])
-            if not id_re.fullmatch(raw):
-                continue
-            ids.append(raw)
-            rows.append({
-                "id": raw,
-                "state": strip_md(r[i_state]) if i_state is not None and i_state < len(r) else "done",
-                "back": strip_md(r[i_back]) if i_back is not None and i_back < len(r) else "",
-            })
-    seen = set()
+    """返回 (ids, rows, dups)。三张表统一走 inbox_entries，旧值已归一。"""
+    rows = inbox_entries(ctx)
+    ids = [r["id"] for r in rows]
+    seen, dups = set(), []
     for i in ids:
         if i in seen and i not in dups:
             dups.append(i)
@@ -877,6 +923,90 @@ def timeline_row_count(ctx):
                if re.match(r"^\|\s*20\d{2}-\d{2}-\d{2}\s*\|", ln))
 
 
+INBOX_PLACEHOLDERS = {"", "—", "-", "–", "待补", "待填", "tbd", "n/a"}
+
+
+def check_inbox_rows(ctx, rows, errors, warns):
+    """D1–D10：问题状态机的机器判。
+
+    只判形式：枚举、必填、前缀、开放不得关闭、实施中有无关联任务。
+    判不了「这条该不该关」「理由成不成立」——那仍要人读。
+    """
+    f = os.path.basename(ctx.inbox)
+    cfg = issue_cfg(ctx)
+    types = set(cfg.get("types", []))
+    natures = set(cfg.get("natures", []))
+    today = datetime.date.today()
+    for r in rows:
+        iid, state, table = r["id"], r["state"], r["table"]
+        if table == "main":
+            if not r["type"] or (types and r["type"] not in types):
+                errors.append({"file": f, "code": "D3",
+                               "message": f"{iid} 的类型缺失或不在白名单：{r['type'] or '(空)'}"
+                                          f"（允许：{'、'.join(sorted(types))}）"})
+            if not r["nature"] or (natures and r["nature"] not in natures):
+                errors.append({"file": f, "code": "D3",
+                               "message": f"{iid} 的性质缺失或不在白名单：{r['nature'] or '(空)'}"
+                                          f"（允许：{'、'.join(sorted(natures))}）"})
+            if state not in ISSUE_ACTIVE:
+                if state in ISSUE_TERMINAL:
+                    errors.append({"file": f, "code": "D9",
+                                   "message": f"{iid} 已是终态（{state}），应移入归档表并从主表删除"})
+                else:
+                    errors.append({"file": f, "code": "D3",
+                                   "message": f"{iid} 的状态不在主表白名单：{state!r}"
+                                              f"（主表只允许 确立 / 实施中；候选在待分诊，不占 ISS 号）"})
+            if r["nature"] == "开放" and state in ISSUE_ACTIVE and not r["back"]:
+                errors.append({"file": f, "code": "D2",
+                               "message": f"{iid} 是开放问题，缺「回到条件」"})
+            if r["nature"] == "开放" and state == "实现关闭":
+                errors.append({"file": f, "code": "D5",
+                               "message": f"{iid} 是开放问题，不得「实现关闭」；"
+                                          f"本轮收口改回「确立」并更新回到条件"})
+            if state in ("确立", "实施中"):
+                ev = r["evidence"]
+                if ev in INBOX_PLACEHOLDERS or not ev.startswith(state):
+                    errors.append({"file": f, "code": "D4",
+                                   "message": f"{iid} 的「依据」缺失或没有以「{state}：」开头"
+                                              f"（当前：{ev or '(空)'}）"})
+            if state == "实施中":
+                if not re.search(r"(?<![A-Za-z0-9])[TW]\d+(?:\.\d+)*", r["evidence"]):
+                    errors.append({"file": f, "code": "D6",
+                                   "message": f"{iid} 为实施中，但「依据」里没有关联任务（T/W）"})
+                if not r["updated"]:
+                    errors.append({"file": f, "code": "D4",
+                                   "message": f"{iid} 为实施中，但缺「更新」日期"})
+                else:
+                    try:
+                        d = datetime.date.fromisoformat(r["updated"])
+                        if (today - d).days > 14:
+                            warns.append({"file": f, "code": "D10",
+                                          "message": f"{iid} 为实施中，已 {(today - d).days} 天未更新"})
+                    except ValueError:
+                        errors.append({"file": f, "code": "D4",
+                                       "message": f"{iid} 的「更新」不是合法日期：{r['updated']}"})
+        elif table == "closed":
+            if not r["question"] or r["question"] in INBOX_PLACEHOLDERS:
+                errors.append({"file": f, "code": "D8",
+                               "message": f"{iid} 在已闭环表里但没有结论"})
+            if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", r["date"] or ""):
+                errors.append({"file": f, "code": "D8",
+                               "message": f"{iid} 在已闭环表里但「闭环日」缺失或非法"})
+        elif table == "rejected":
+            if not r["question"] or r["question"] in INBOX_PLACEHOLDERS:
+                errors.append({"file": f, "code": "D7",
+                               "message": f"{iid} 在已拒绝表里但没有理由"})
+            if not r["decider"] or r["decider"] in INBOX_PLACEHOLDERS:
+                errors.append({"file": f, "code": "D7",
+                               "message": f"{iid} 在已拒绝表里但没有「决策人」"})
+            if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", r["date"] or ""):
+                errors.append({"file": f, "code": "D7",
+                               "message": f"{iid} 在已拒绝表里但「拒绝日」缺失或非法"})
+            if not r["reopen"] or r["reopen"] in INBOX_PLACEHOLDERS:
+                errors.append({"file": f, "code": "D7",
+                               "message": f"{iid} 在已拒绝表里但没有「重新考虑条件」"})
+
+
 def cmd_check(ctx, as_json=False):
     errors, warns = [], []
     sections = ctx.schema["session_sections"]
@@ -885,11 +1015,8 @@ def cmd_check(ctx, as_json=False):
 
     for d in dups:
         errors.append({"file": os.path.basename(ctx.inbox), "code": "D1",
-                       "message": f"{d} 编号重复（done 条目应移入「已闭环」并从主表删除）"})
-    for r in rows:
-        if r["state"] == "deferred" and not r["back"]:
-            errors.append({"file": os.path.basename(ctx.inbox), "code": "D2",
-                           "message": f"{r['id']} 为 deferred 但缺「回到条件」"})
+                       "message": f"{d} 编号重复（终态条目应移入归档表并从主表删除）"})
+    check_inbox_rows(ctx, rows, errors, warns)
 
     sessions = ctx.sessions()
     for i, path in enumerate(sessions):
@@ -988,7 +1115,7 @@ def cmd_brief(ctx, as_json=False):
     wait = pending_rows(ctx)
     p_open = [r for r in wait if r["state"] == "open"]
     p_def = [r for r in wait if r["state"] == "deferred"]
-    counts = {"open": 0, "deferred": 0, "done": 0}
+    counts = {"确立": 0, "实施中": 0, "实现关闭": 0, "拒绝": 0}
     for r in rows:
         counts[r["state"]] = counts.get(r["state"], 0) + 1
 
@@ -1034,8 +1161,8 @@ def cmd_brief(ctx, as_json=False):
               % (len(p_open), len(p_def)))
     else:
         print("待分诊：open 0 · deferred %d" % len(p_def))
-    print(f"收件箱：open {counts.get('open', 0)} · deferred {counts.get('deferred', 0)}"
-          f" · 已闭环 {counts.get('done', 0)}")
+    print(f"收件箱：确立 {counts.get('确立', 0)} · 实施中 {counts.get('实施中', 0)}"
+          f" · 实现关闭 {counts.get('实现关闭', 0)} · 拒绝 {counts.get('拒绝', 0)}")
     print("最近 3 场：" + (" / ".join(recent) if recent else "无"))
     return 0
 
@@ -1116,7 +1243,10 @@ def main():
     p_pend.add_argument("--note", default="")
     p_pend.add_argument("--relation", default=None,
                         help="转正关系：new | merge:ISS-nnn | extends:ISS-nnn | updates:ISS-nnn | duplicate:ISS-nnn")
-    p_pend.add_argument("--type", default=None, help="--relation new 时必填：缺陷/风险/文档债/口径冲突/待决/机会")
+    p_pend.add_argument("--type", default=None,
+                        help="--relation new 时必填：缺陷/缺口/债/冲突/风险/机会/待决")
+    p_pend.add_argument("--nature", default=None, choices=["可关闭", "开放"],
+                        help="--relation new 时可选：可关闭/开放；缺省按类型推断（机会/待决=开放）")
     p_pend.add_argument("--impact", default=None, help="--relation new 时必填：不处理会怎样")
     p_pend.add_argument("--to", default=None, help="--relation new 时必填：落点（计划任务/文件/ADR）")
     p_inbox = sub.add_parser("inbox")

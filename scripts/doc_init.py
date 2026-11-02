@@ -59,6 +59,14 @@ SCHEMA_TEMPLATE = {
         "alias_table": "别名表.md",
     },
     "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "digits": 3},
+    "issue": {
+        "states": ["候选", "确立", "实施中", "实现关闭", "拒绝"],
+        "active_states": ["确立", "实施中"],
+        "terminal_states": ["实现关闭", "拒绝"],
+        "natures": ["可关闭", "开放"],
+        "types": ["缺陷", "缺口", "债", "冲突", "风险", "机会", "待决"],
+        "state_aliases": {"open": "确立", "deferred": "确立", "done": "实现关闭"},
+    },
     "plan": {
         "done_states": ["已完成"],
         "states": ["待开工", "进行中", "已实现（未验收）", "已完成", "阻塞", "搁置"],
