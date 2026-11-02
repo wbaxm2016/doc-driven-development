@@ -5,10 +5,13 @@
 用法：
     python scripts/plan.py index            # 重算各视角排序视图，写回文档生成区
     python scripts/plan.py index --check    # 只比对，不写（CI / 收尾用）
-    python scripts/plan.py check [--json]   # 结构校验
+    python scripts/plan.py check [--json]   # 结构校验（含任务与功能的双亲、考核）
 
 维度与视角全部从表头读取，脚本不认识具体维度名 —— 加维度/加视角不改代码。
 编号规则、状态词、文件位置来自 <docs>/_schema.json。
+
+P14–P16 要读功能台账（`40-运行/FEATURES.md`）：任务挂的功能必须存在、已完成的任务
+必须有任务考核、已验收的功能必须由任务支撑。判定靠表头，不靠列序。
 """
 from __future__ import annotations
 
@@ -36,6 +39,21 @@ DEFAULT_SCHEMA = {
 
 BEGIN = "<!-- BEGIN:plan-rank -->"
 END = "<!-- END:plan-rank -->"
+
+# 任务挂的功能必须是这个形态；「—（历史）」只留给先于双亲模型的存量任务。
+FEATURE_ID_RE = re.compile(r"^F-\d+$")
+TASK_ID_RE = re.compile(r"^T\d+\.\d+\.\d+$")
+LEGACY = "—（历史）"
+# 考核一行里这些写法等于没写（与 doc_check 的 REF_PLACEHOLDERS 同口径）。
+# 注意「待提交」不在集合里：编码与校验必须发生在提交之前，commit 短号是提交后回写的。
+PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "待定", "tbd", "todo"}
+ASSESS_CELLS = ("做法", "一致", "代价", "结论")
+
+
+def blank(v):
+    """单元格是不是「没写」：占位词，或整格被（）包住的模板提示。"""
+    v = (v or "").strip()
+    return v in PLACEHOLDERS or (v.startswith("（") and v.endswith("）"))
 
 
 def die(msg, as_json=False, code=2):
@@ -187,8 +205,66 @@ def load(path):
     return lines, weights, tasks, works, dirs, fragments
 
 
+# ---------------------------------------------------------------- 功能台账（P14–P16）
+def features_path(docs, schema):
+    """功能台账的位置：操作层目录 + `names.features`（缺省 FEATURES.md）。"""
+    d = layer_dir(schema, "operation")
+    name = (schema.get("names") or {}).get("features", "FEATURES.md")
+    if not d:
+        return None
+    p = os.path.join(docs, d, name)
+    return p if os.path.exists(p) else None
+
+
+def load_features(path):
+    """读功能台账：功能行的状态 / 是否历史 / 考核汇总，以及「任务考核」表的行。
+
+    只按表头取列；合规判定不在这里（E24 / E27 在 doc_check）。这里只提供 P14–P16
+    需要的三个事实：有哪些功能、每个功能的状态与汇总、每个任务有没有考核行。
+    台账缺失时返回 None —— 调用方必须把它变成一条报错，不能当成「没有功能」跳过去。
+    """
+    if not path or not os.path.exists(path):
+        return None
+    feats, assess = {}, {}
+    has_feature_table = has_assess_table = False
+    for header, rows, _ in read_tables(read(path).splitlines()):
+        heads = [strip_md(h) for h in header]
+        if {"ID", "功能", "满足的需求", "状态"} <= set(heads):
+            has_feature_table = True
+            i_id = heads.index("ID")
+            i_req = heads.index("满足的需求")
+            i_st = heads.index("状态")
+            i_sum = next((i for i, h in enumerate(heads) if h.startswith("考核")), None)
+            for r in rows:
+                if len(r) != len(heads):
+                    continue
+                fid = strip_md(r[i_id])
+                if not FEATURE_ID_RE.fullmatch(fid):
+                    continue
+                feats[fid] = {
+                    "legacy": strip_md(r[i_req]) in LEGACY,
+                    "state": strip_md(r[i_st]),
+                    "summary": strip_md(r[i_sum]) if i_sum is not None else "",
+                }
+        elif {"任务", "做法", "一致", "代价", "结论"} <= set(heads):
+            has_assess_table = True
+            i_t = heads.index("任务")
+            for r in rows:
+                if len(r) != len(heads):
+                    continue
+                tid = strip_md(r[i_t])
+                if not TASK_ID_RE.fullmatch(tid):
+                    continue
+                assess[tid] = {h: strip_md(r[heads.index(h)])
+                               for h in ASSESS_CELLS + ("完成于",) if h in heads}
+    if not has_feature_table:
+        return None
+    return {"feats": feats, "assess": assess,
+            "has_assess": has_assess_table}
+
+
 # ---------------------------------------------------------------- 校验
-def validate(weights, tasks, works, dirs, cfg, fragments=()):
+def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None):
     """返回 (errs, items, codes, done, work_ids)。errs 里每条都带码，与 check-rules.md 的 P 段一一对应。"""
     errs = []
 
@@ -234,6 +310,15 @@ def validate(weights, tasks, works, dirs, cfg, fragments=()):
                 E("P12", f"{wid} 所属方向不存在：{dref}")
 
     all_task_ids = {r[idx["ID"]] for r in t_rows if len(r) == len(t_header)}
+    # P14 的前半：没有这一列，双亲就只剩一半（任务只挂工作）。台账缺失也不能当成
+    # 「没有功能」静默跳过——那会让三个码同时沉默，变成 errors=0 的假通过。
+    i_fe = idx.get("功能")
+    i_acc = next((i for i, h in enumerate(t_header) if h.startswith("验收")), None)
+    if i_fe is None:
+        E("P14", "任务表缺「功能」列：每个任务要同时挂一个功能（F-nnn）与一个工作")
+    elif feats is None:
+        E("P14", "找不到功能台账（40-运行/FEATURES.md）：任务挂的功能无从核对；"
+                 "先按模板建功能行，再拆任务")
     items, seen = [], {}
     for r in t_rows:
         if len(r) != len(t_header):
@@ -248,6 +333,18 @@ def validate(weights, tasks, works, dirs, cfg, fragments=()):
         status = r[idx["状态"]] if "状态" in idx else ""
         if states and status not in states:
             E("P3", f"{tid} 的状态词不在白名单：{status!r}（允许：{'、'.join(sorted(states))}）")
+        # P14 双亲：功能必须是存在的 F-nnn；「—（历史）」只对已完成任务开放
+        fcell = r[i_fe] if i_fe is not None else ""
+        if i_fe is not None:
+            if fcell in LEGACY:
+                if status not in done:
+                    E("P14", f"{tid} 还没完成却把「功能」写成 —（历史）："
+                             f"新任务必须挂真实的 F-nnn，历史豁免只对存量已完成任务")
+            elif not FEATURE_ID_RE.fullmatch(fcell):
+                E("P14", f"{tid} 的「功能」不是 F-nnn：{fcell!r}"
+                         f"（每条任务同时挂一个功能与一个工作）")
+            elif feats is not None and fcell not in feats["feats"]:
+                E("P14", f"{tid} 挂的功能不存在：{fcell}（先在 FEATURES 立功能行，再拆任务）")
         scores = {}
         for c in codes:
             v = r[idx[c]]
@@ -270,7 +367,59 @@ def validate(weights, tasks, works, dirs, cfg, fragments=()):
                 E("P11", f"{tid} 的前置编号不存在：{p}（表里没有这条任务；"
                          f"写错一个编号就会把它永久卡在 ⛔）")
         items.append({"id": tid, "name": r[idx["任务"]], "work": work,
+                      "feature": fcell, "accept": r[i_acc] if i_acc is not None else "",
                       "status": status, "pre": pre, "scores": scores})
+
+    # ---- P15 考核下沉：已完成的任务要有验收与任务考核（四格 + 完成于）。
+    # 判在任务级、不判在功能级，是因为「一场会话做完了」只有任务说得清；功能一大会
+    # 变成整块总结，写不出代价估错没有（ADR-003 §2）。
+    if feats is not None and i_fe is not None:
+        if not feats["has_assess"]:
+            E("P15", "找不到「任务考核」表：已完成的任务要各占一行（做法 / 一致 / 代价 / 结论 / 完成于）")
+        else:
+            for it in items:
+                if it["status"] not in done:
+                    continue
+                if blank(it["accept"]):
+                    E("P15", f"{it['id']} 已完成却缺「验收」：写一条命令或一次实测，"
+                             f"否则没人能判断它是不是真做完了")
+                row = feats["assess"].get(it["id"])
+                if row is None:
+                    E("P15", f"{it['id']} 已完成但「任务考核」表里没有它："
+                             f"补一行 做法 / 一致 / 代价 / 结论 + 完成于")
+                    continue
+                miss = [c for c in ASSESS_CELLS if blank(row.get(c))]
+                if miss:
+                    E("P15", f"{it['id']} 的任务考核缺槽位：{'、'.join(miss)}"
+                             f"（四格要同时写满，否则考核退化成一句话总结）")
+                if blank(row.get("完成于")):
+                    E("P15", f"{it['id']} 的考核没记「完成于」：写该任务的 commit 短号，"
+                             f"回滚到它之前就靠这个锚点")
+            for tid in sorted(feats["assess"]):
+                if tid not in all_task_ids:
+                    E("P15", f"「任务考核」表里的 {tid} 不在计划 §5："
+                             f"要么编号写错，要么任务被删了而考核行留着")
+
+    # ---- P16 汇总可回溯：功能「已验收」必须由任务支撑，且汇总点名的任务要真挂在它下面。
+    # 这一条专治「汇总写得很漂亮，但没人做过」——E27 只判格子填没填。
+    if feats is not None:
+        by_feature = {}
+        for it in items:
+            if FEATURE_ID_RE.fullmatch(it["feature"] or ""):
+                by_feature.setdefault(it["feature"], []).append(it["id"])
+        for fid, meta in sorted(feats["feats"].items()):
+            if meta["state"] != "已验收" or meta["legacy"]:
+                continue
+            linked = by_feature.get(fid, [])
+            if not linked:
+                E("P16", f"{fid} 已验收但没有任何任务挂它：功能要先拆出任务（考核才有来源）；"
+                         f"先于任务模型的存量功能请在「满足的需求」标 —（历史）")
+            for t in re.findall(r"T\d+\.\d+\.\d+", meta["summary"]):
+                if t not in all_task_ids:
+                    E("P16", f"{fid} 的考核汇总点名了不存在的任务 {t}")
+                elif t not in linked:
+                    E("P16", f"{fid} 的考核汇总点名了 {t}，但那条任务的「功能」不是 {fid}"
+                             f"（汇总不能拿别人家的任务给自己背书）")
 
     for row in w_rows:
         if len(row) != len(w_header):
@@ -377,7 +526,9 @@ def main():
         return die(str(exc), as_json, 1)
 
     cfg = schema["plan"]
-    errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg, fragments)
+    feats = load_features(features_path(docs, schema))
+    errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg,
+                                                  fragments, feats)
 
     if cmd == "check":
         views = compute(weights, items, codes, done, work_ids, cfg)

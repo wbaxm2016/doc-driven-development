@@ -63,6 +63,24 @@ def write(p, s):
         fh.write(s)
 
 
+FEATURE_ANCHOR = "| **F-001** |"
+TASK_ANCHOR = "| **T1.1.1** |"
+
+
+def insert_after(text, anchor, row):
+    """把一行插到表里 anchor 之后。
+
+    追加到文件末尾会落进**最后一张表**——FEATURES 现在有两张表，功能行会静默变成
+    任务考核行，校验看不见它（这个坑就是这样暴露出来的）。
+    """
+    lines = text.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.startswith(anchor):
+            lines.insert(i + 1, row)
+            return "\n".join(lines) + "\n"
+    raise AssertionError("找不到锚点：" + anchor)
+
+
 def codes(out):
     return set(re.findall(r"\[([EWDSP]\d+)\]", out)) | set(re.findall(r"\[([EWDSP]\d+)\]", out))
 
@@ -127,8 +145,8 @@ def main():
             "| **ISS-002** | 已修 | commit abc1234 | 2026-10-29 |"))
         plan = os.path.join(tmp, "docs", "00-门面", "开发计划.md")
         write(plan, read(plan).replace(
-            "| **T1.1.1** | （示例）跑通并记录 | W1.1 | 待开工 | - | 5 | 5 | 4 | 3 | 4 | 3 |",
-            "| **T1.1.1** | （示例）跑通并记录 | W1.1 | 待开工 | - | 6 | 5 | 4 | 3 | 4 | 3 |"))
+            "| **T1.1.1** | （示例）跑通并记录 | F-001 | W1.1 | 待开工 | - | 5 | 5 | 4 | 3 | 4 | 3 |",
+            "| **T1.1.1** | （示例）跑通并记录 | F-001 | W1.1 | 待开工 | - | 6 | 5 | 4 | 3 | 4 | 3 |"))
 
         _, out = run("doc_check.py", cwd=tmp)
         got = codes(out)
@@ -144,8 +162,8 @@ def main():
         print("\n4. 生成区幂等")
         # 上一步故意留了非法分值，先修回来——plan index 在分值非法时拒绝写盘是正确行为
         write(plan, read(plan).replace(
-            "| **T1.1.1** | （示例）跑通并记录 | W1.1 | 待开工 | - | 6 | 5 | 4 | 3 | 4 | 3 |",
-            "| **T1.1.1** | （示例）跑通并记录 | W1.1 | 待开工 | - | 5 | 5 | 4 | 3 | 4 | 3 |"))
+            "| **T1.1.1** | （示例）跑通并记录 | F-001 | W1.1 | 待开工 | - | 6 | 5 | 4 | 3 | 4 | 3 |",
+            "| **T1.1.1** | （示例）跑通并记录 | F-001 | W1.1 | 待开工 | - | 5 | 5 | 4 | 3 | 4 | 3 |"))
         c0, _ = run("plan.py", "index", "--check", cwd=tmp)
         run("plan.py", "index", cwd=tmp)
         c1, out1 = run("plan.py", "index", "--check", cwd=tmp)
@@ -953,15 +971,16 @@ def main():
             c, out = run("doc_check.py", cwd=tmp19)
             check("状态词不在白名单 → E24", c == 1 and "E24" in codes(out), out[-300:])
 
-            write(feat19, base19.rstrip("\n")
-                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | 满足✓ | — | 自测跑过 | 做法：示例｜一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
+            write(feat19, insert_after(base19, FEATURE_ANCHOR,
+                  "| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                  " | 满足✓ | — | 自测跑过 | 各任务考核见 T1.1.1｜整体一致：全｜代价：S（同估）｜结论：保留 | abc1234 |"))
             c, out = run("doc_check.py", cwd=tmp19)
             check("已验收却没有代码入口 → E24", c == 1 and "E24" in codes(out), out[-300:])
 
-            write(feat19, base19.rstrip("\n")
-                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-10-31 | 做法：示例｜一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
+            write(feat19, insert_after(base19, FEATURE_ANCHOR,
+                  "| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                  " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-10-31"
+                  " | 各任务考核见 T1.1.1｜整体一致：全｜代价：S（同估）｜结论：保留 | abc1234 |"))
             c, out = run("doc_check.py", cwd=tmp19)
             check("已验收：入口存在 + verify + 证据 → 不报",
                   c == 0 and "E24" not in codes(out), out[-300:])
@@ -977,28 +996,28 @@ def main():
             feat20 = os.path.join(tmp20, "docs", "40-运行", "FEATURES.md")
             base20 = read(feat20)
 
-            write(feat20, base20.rstrip("\n")
-                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
-                  " | — | — | — | — | — |\n")
+            write(feat20, insert_after(base20, FEATURE_ANCHOR,
+                  "| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
+                  " | — | — | — | — | — |"))
             c, out = run("doc_check.py", cwd=tmp20)
             check("推到「已评审」却没写评审结论 → E24",
                   c == 1 and "E24" in codes(out), out[-300:])
 
-            write(feat20, base20.rstrip("\n")
-                  + "\n| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
-                  " | 满足✓ 可做✓ 代价S | — | — | — | — |\n")
+            write(feat20, insert_after(base20, FEATURE_ANCHOR,
+                  "| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已评审"
+                  " | 满足✓ 可做✓ 代价S | — | — | — | — |"))
             c, out = run("doc_check.py", cwd=tmp20)
             check("三问结论写进「评审」列 → 不报", c == 0 and "E24" not in codes(out), out[-300:])
 
-            write(feat20, base20.rstrip("\n")
-                  + "\n| **F-003** | 旧功能 | —（历史） | 口径 | `python -c pass` | S | 已验收"
-                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 | —（历史） | —（历史） |\n")
+            write(feat20, insert_after(base20, FEATURE_ANCHOR,
+                  "| **F-003** | 旧功能 | —（历史） | 口径 | `python -c pass` | S | 已验收"
+                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 | —（历史） | —（历史） |"))
             c, out = run("doc_check.py", cwd=tmp20)
             check("历史行带「—（历史）」评审 → 不报", c == 0 and "E24" not in codes(out), out[-300:])
 
-            write(feat20, base20.rstrip("\n")
-                  + "\n| **F-004** | 新功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
-                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 | —（历史） | —（历史） |\n")
+            write(feat20, insert_after(base20, FEATURE_ANCHOR,
+                  "| **F-004** | 新功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                  " | —（历史） | docs/20-契约/requirements.md | 2026-10-31 跑过 | —（历史） | —（历史） |"))
             c, out = run("doc_check.py", cwd=tmp20)
             check("挂需求的行拿「—（历史）」背书 → E24",
                   c == 1 and "E24" in codes(out), out[-300:])
@@ -1101,25 +1120,24 @@ def main():
 
             ok_row = ("| **F-002** | 示例 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
                       " | 满足✓ | docs/20-契约/requirements.md | self_test 2026-11-01"
-                      " | 做法：一行命令校验｜一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
-            write(feat23, base_feat23.rstrip("\n") + "\n" + ok_row)
+                      " | 各任务考核见 T1.1.1｜整体一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
+            write(feat23, insert_after(base_feat23, FEATURE_ANCHOR, ok_row.rstrip("\n")))
             c, out = run("doc_check.py", cwd=tmp23)
             check("已验收：考核四格 + 完成于 → 不报 E27", c == 0 and "E27" not in codes(out), out[-300:])
 
-            write(feat23, base_feat23.rstrip("\n") + "\n"
-                  + ok_row.replace("做法：一行命令校验｜一致：全｜代价：S（同估）｜结论：保留", "看着还行"))
+            write(feat23, insert_after(base_feat23, FEATURE_ANCHOR,
+                  ok_row.replace("各任务考核见 T1.1.1｜整体一致：全", "看着还行").rstrip("\n")))
             c, out = run("doc_check.py", cwd=tmp23)
             check("考核缺槽位 → E27", c == 1 and "E27" in codes(out), out[-300:])
 
-            write(feat23, base_feat23.rstrip("\n") + "\n"
-                  + ok_row.replace("| abc1234 |", "| — |"))
+            write(feat23, insert_after(base_feat23, FEATURE_ANCHOR,
+                  ok_row.replace("| abc1234 |", "| — |").rstrip("\n")))
             c, out = run("doc_check.py", cwd=tmp23)
             check("已验收没记完成于 → E27（回滚无锚点）", c == 1 and "E27" in codes(out), out[-300:])
 
-            write(feat23, base_feat23.rstrip("\n") + "\n"
-                  + "| **F-003** | 旧功能 | REQ-001 | 口径 | `python -c pass` | S | 撤回"
-                    " | 满足✓ | — | — | 做法：上线后发现方向不对｜一致：偏差｜代价：M"
-                    "（返工）｜结论：撤回 | abc1234 |\n")
+            write(feat23, insert_after(base_feat23, FEATURE_ANCHOR,
+                  "| **F-003** | 旧功能 | REQ-001 | 口径 | `python -c pass` | S | 撤回"
+                  " | 满足✓ | — | — | 整体一致：偏差｜代价：M（返工）｜结论：撤回 | abc1234 |"))
             c, out = run("doc_check.py", cwd=tmp23)
             check("「撤回」是合法状态，入口可为空但要写考核",
                   c == 0 and "E24" not in codes(out) and "E27" not in codes(out), out[-300:])
@@ -1191,7 +1209,7 @@ def main():
             c, out = run("plan.py", "check", cwd=tmp25)
             check("正常计划不报 P13（不误伤）", c == 0 and "P13" not in out, out[-300:])
 
-            row = ("| **T1.1.2** | 第二个任务 | W1.1 | 待开工 | - | 1 | 1 | 1 | 1 | 1 | 1 "
+            row = ("| **T1.1.2** | 第二个任务 | F-001 | W1.1 | 待开工 | - | 1 | 1 | 1 | 1 | 1 | 1 "
                    "| `python scripts/doc_check.py` | — |")
             text = read(plan25)
             broken = text.replace("| **T1.1.1** |", row + "\n\n| **T1.1.1** |", 1)
@@ -1312,6 +1330,92 @@ def main():
             check("闭环缺闭环日 → D8", c == 1 and "[D8]" in out, out[-300:])
         finally:
             shutil.rmtree(tmp26, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 36
+        print("\n36. 任务双亲与考核下沉（P14–P16；E27 改判考核汇总）")
+        tmp27 = tempfile.mkdtemp(prefix="ddd-selftest27-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp27)
+            plan27 = os.path.join(tmp27, "docs", "00-门面", "开发计划.md")
+            feat27 = os.path.join(tmp27, "docs", "40-运行", "FEATURES.md")
+            base_plan27, base_feat27 = read(plan27), read(feat27)
+
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("骨架：任务挂 F-001、未完成不需要考核 → 0 error",
+                  c == 0 and "[P14]" not in out and "[P15]" not in out, out[-400:])
+
+            tpl_task = ("| **T1.1.1** | （示例）跑通并记录 | F-001 | W1.1 | 待开工 | - "
+                        "| 5 | 5 | 4 | 3 | 4 | 3 | 有落库行 + 可复现命令 | — |")
+            done_task = tpl_task.replace("| 待开工 |", "| 已完成 |")
+            tpl_assess = "| **T1.1.1** | （这场改了什么、怎么改的） | 全 | S（同估） | 保留 | `abc1234` |"
+            ok_assess = "| **T1.1.1** | 跑通并记录并贴了命令输出 | 全 | S（同估） | 保留 | abc1234 |"
+            assert tpl_task in base_plan27 and tpl_assess in base_feat27
+
+            write(plan27, base_plan27.replace(tpl_task, done_task))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("已完成任务只留着模板占位的考核行 → P15",
+                  c == 1 and "[P15]" in out and "T1.1.1" in out, out[-400:])
+
+            write(feat27, base_feat27.replace(tpl_assess, ok_assess))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("验收 + 四格 + 完成于齐 → 0 error", c == 0 and "[P15]" not in out, out[-400:])
+
+            write(feat27, base_feat27.replace(tpl_assess, ""))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("删掉考核行 → P15 指名缺行（不是静默通过）",
+                  c == 1 and "[P15]" in out and "没有它" in out, out[-400:])
+            write(feat27, base_feat27.replace(tpl_assess, ok_assess))
+
+            write(plan27, base_plan27.replace(tpl_task, done_task.replace("| F-001 |", "| F-999 |")))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("任务挂不存在的功能 → P14", c == 1 and "[P14]" in out, out[-400:])
+
+            write(plan27, base_plan27.replace(tpl_task, tpl_task.replace("| F-001 |", "| —（历史） |")))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("未完成的任务写「—（历史）」→ P14", c == 1 and "[P14]" in out, out[-400:])
+
+            write(plan27, base_plan27)
+            os.rename(feat27, feat27 + ".bak")
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("功能台账缺失 → P14（不能当成没有功能跳过）",
+                  c == 1 and "[P14]" in out and "找不到功能台账" in out, out[-400:])
+            os.rename(feat27 + ".bak", feat27)
+
+            no_task_feat = ("| **F-002** | 第二个功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+                            " | 满足✓ 可做✓ 代价S | docs/20-契约/requirements.md | self_test 2026-11-02"
+                            " | 各任务考核见 T1.1.1｜整体一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
+            write(feat27, insert_after(base_feat27.replace(tpl_assess, ok_assess),
+                                       FEATURE_ANCHOR, no_task_feat.rstrip("\n")))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("已验收功能没有任何任务挂它 → P16", c == 1 and "[P16]" in out, out[-400:])
+
+            write(plan27, base_plan27.replace(tpl_task, done_task.replace("| F-001 |", "| F-002 |")))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("汇总点名的任务真挂在这个功能下 → 0 error",
+                  c == 0 and "[P16]" not in out, out[-400:])
+
+            ghost = no_task_feat.replace("T1.1.1", "T9.9.9")
+            write(feat27, insert_after(base_feat27.replace(tpl_assess, ok_assess),
+                                       FEATURE_ANCHOR, ghost.rstrip("\n")))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("汇总点名不存在的任务 → P16",
+                  c == 1 and "[P16]" in out and "T9.9.9" in out, out[-400:])
+
+            orphan = "| **T9.9.9** | 幽灵任务 | 全 | S（同估） | 保留 | abc1234 |"
+            write(feat27, insert_after(base_feat27.replace(tpl_assess, ok_assess),
+                                       TASK_ANCHOR, orphan))
+            c, out = run("plan.py", "check", cwd=tmp27)
+            check("任务考核表里的任务不在计划 §5 → P15",
+                  c == 1 and "[P15]" in out and "T9.9.9" in out, out[-400:])
+
+            # E27 改判「考核汇总」：四格留在任务级，功能只写一行
+            write(feat27, insert_after(base_feat27.replace(tpl_assess, ok_assess), FEATURE_ANCHOR,
+                                       no_task_feat.replace("各任务考核见 T1.1.1", "见任务").rstrip("\n")))
+            c, out = run("doc_check.py", cwd=tmp27)
+            check("功能的考核汇总没指出考核在哪 → E27", c == 1 and "E27" in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp27, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

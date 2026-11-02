@@ -693,7 +693,7 @@ def main():
                          if h.lower().startswith("verify")), None)
             i_ev = heads.index("证据") if "证据" in heads else None
             i_rv = heads.index("评审") if "评审" in heads else None
-            i_ac = heads.index("考核") if "考核" in heads else None
+            i_ac = next((i for i, h in enumerate(heads) if h.startswith("考核")), None)
             i_dn = heads.index("完成于") if "完成于" in heads else None
             req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
             for row in rows:
@@ -760,17 +760,23 @@ def main():
                             if int(n) not in test_groups:
                                 add(errors, rel, "E26",
                                     f"{fid} 的证据引用了不存在的自测组：第 {n} 组")
-                # 考核门（E27）：已验收必须有「考核」（给用户看的做法 + 自检）与「完成于」；
-                # 撤回必须有考核理由。存量行（—（历史））整行豁免。
+                # 考核门（E27）：考核下沉到任务后，功能行只留一行「考核汇总」——
+                # 点名「各任务考核见 T…」加上整体一致 / 代价 / 结论；「完成于」仍是回滚锚点。
+                # 存量行（—（历史））整行豁免：它们早于任务模型，不追溯。
                 if st in ("已验收", "撤回") and reqcell not in LEGACY_REQ:
                     ac = strip_md(row[i_ac]) if i_ac is not None and i_ac < len(row) else ""
                     if ac in REF_PLACEHOLDERS:
                         add(errors, rel, "E27",
-                            f"{fid} 是「{st}」却没有考核：写 `做法：…｜一致：全/部分/偏差"
-                            f"｜代价：S→M（原因）｜结论：保留/改造/撤回`")
-                    elif not all(k in ac for k in ("做法", "一致", "代价", "结论")):
+                            f"{fid} 是「{st}」却没有考核汇总：写一行 "
+                            f"`各任务考核见 T1.1.1；整体一致：全｜代价：M（同估）｜结论：保留`")
+                    elif not all(k in ac for k in ("一致", "代价", "结论")):
                         add(errors, rel, "E27",
-                            f"{fid} 的考核缺槽位：要同时写「做法 / 一致 / 代价 / 结论」四格")
+                            f"{fid} 的考核汇总缺槽位：要同时写「整体一致 / 代价 / 结论」"
+                            f"（四格在任务级，见 FEATURES 的「任务考核」表）")
+                    elif st == "已验收" and "各任务考核见" not in ac:
+                        add(errors, rel, "E27",
+                            f"{fid} 的考核汇总没指出考核在哪：写「各任务考核见 T…」，"
+                            f"让汇总可以逐条回溯到任务")
                     dn = strip_md(row[i_dn]) if i_dn is not None and i_dn < len(row) else ""
                     if st == "已验收" and dn in REF_PLACEHOLDERS:
                         add(errors, rel, "E27",

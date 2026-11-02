@@ -47,6 +47,7 @@
     "plan": "开发计划.md",
     "inbox": "问题收件箱.md",
     "timeline": "时间线.md",
+    "features": "FEATURES.md",
     "session_template": "会话档案模板.md",
     "sessions_dir": "会话",
     "adr_dir": "adr",
