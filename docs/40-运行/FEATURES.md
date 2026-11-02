@@ -42,7 +42,7 @@ tags: [功能, 台账, 追溯]
 | **F-014** | 存量债棘轮 | —（历史） | `--update-baseline` 写入基线；`--baseline` 只许降不许升 | `python scripts/self_test.py -v` | S | 已验收 | —（历史） | scripts/doc_check.py | `self_test` 第 8 组 | —（历史） | —（历史） |
 | **F-016** | 会话收尾的决策回顾（并入 `decision-review` 的能力） | REQ-005 | 收尾时逐条给背景 / 影响 / 依据（用户原话）/ 撤销条件；缺项标「断链」并进待分诊；台账里没有的决策先补档再回顾；`待定` 不升格成 `已定` | `python scripts/self_test.py -v`（实现后补组号） | M | 已验收 | 满足✓ 可做✓ 代价M｜T6.1.1、T6.1.2｜2026-11-01 | scripts/devlog.py、SKILL.md | `self_test` 第 32 组（2026-11-01） | 各任务考核见 T6.1.1、T6.1.2｜整体一致：全｜代价：M（同估）｜结论：保留 | 05b5b5b |
 | **F-017** | 问题状态机（四维） | REQ-006 | 性质 / 类型 / 状态白名单；开放不得实现关闭；每个状态有依据；拒绝 / 闭环分表 | `python scripts/self_test.py -v` | M | 已对照 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/devlog.py、docs/_schema.json、assets/templates/inbox.md | `self_test` 第 35 组 176/176；`devlog check` 0 error（2026-11-02） | 各任务考核见 T4.4.1｜整体一致：全｜代价：M（同估）｜结论：保留（待验收） | 待提交 |
-| **F-018** | 任务双亲与考核下沉 | REQ-007 | 任务同时挂功能与工作；任务是最小可实施 / 可验证 / 可考核单元；考核四格下沉到任务，功能只留汇总 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/plan.py、scripts/doc_check.py、docs/40-运行/FEATURES.md | `self_test` 第 36 组；`plan.py check` / `doc_check` 0 error（2026-11-02） | 各任务考核见 T5.6.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 待提交 |
+| **F-018** | 任务双亲与考核下沉 | REQ-007 | 任务同时挂功能与工作；任务是最小可实施 / 可验证 / 可考核单元；考核四格下沉到任务，功能只留汇总 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/plan.py、scripts/doc_check.py、docs/40-运行/FEATURES.md | `self_test` 第 36 组；`plan.py check` / `doc_check` 0 error（2026-11-02） | 各任务考核见 T5.6.1｜整体一致：全｜代价：M（同估）｜结论：保留 | f4b69ed |
 | **F-019** | 方向线的形成过程 | REQ-008 | 现状（含方向）→ 工作 → 任务 → 推进的模板与判据；方向卡含现状 / 成功状态 / 路径 / 接缝 / 不覆盖 / 走通验收 | `python scripts/self_test.py -v`（实现后补组号） | M | 已评审 | 满足✓ 可做✓ 代价M｜2026-11-02 用户描述方向线过程｜ADR-003 | — | — | — | — |
 | **F-020** | 设计步与可替换性 | REQ-009 | 设计卡含接口 / 可替换点 / 扩展点 / 失败边界 / 任务拆分；设计门在拆任务前；考核回顾可回到设计 | `python scripts/self_test.py -v`（实现后补组号） | M | 已评审 | 满足✓ 可做✓ 代价M｜2026-11-02 用户指出缺设计｜ADR-003 | — | — | — | — |
 
@@ -96,7 +96,7 @@ tags: [功能, 台账, 追溯]
 | **T7.1.3** | CONTRIBUTING + PR 模板 | 全 | S（同估） | 保留 | 215a69f |
 | **T7.1.4** | 3 条 good first issue，正文带验收清单 | 全 | S（同估） | 保留 | 215a69f |
 | **T7.1.5** | tag + release + 资产 sha256 核对 | 全 | S（同估） | 保留 | 215a69f |
-| **T5.6.1** | 计划加「功能」列 + 任务考核表 + P14–P16，E27 改判汇总 | 全 | M（同估） | 保留 | 待提交 |
+| **T5.6.1** | 计划加「功能」列 + 任务考核表 + P14–P16，E27 改判汇总 | 全 | M（同估） | 保留 | f4b69ed |
 
 ## 已评审提案
 
