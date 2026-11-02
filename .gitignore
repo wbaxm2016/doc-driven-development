@@ -8,3 +8,5 @@ Thumbs.db
 .dd/
 # 各 agent 会话的临时指引文件（direction.md 等），性质同 .dd/
 .dsh/
+# agent 本地记忆与项目数据：不进版本库（同 .dd / .dsh）
+.workbuddy/
