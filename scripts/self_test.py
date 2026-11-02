@@ -1465,6 +1465,74 @@ def main():
         finally:
             shutil.rmtree(tmp28, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 38
+        print("\n38. 设计卡：接口 / 可替换点 / 失败边界（P19）")
+        tmp29 = tempfile.mkdtemp(prefix="ddd-selftest29-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp29)
+            card29 = os.path.join(tmp29, "docs", "00-门面", "设计卡.md")
+            base29 = read(card29)
+
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("骨架：待开工的 W1.1 与示例设计卡对上 → 0 error",
+                  c == 0 and "[P19]" not in out, out[-400:])
+
+            write(card29, base29.replace(
+                "- **接口**：一次真实调用的入口、输入与输出落点（哪张表、哪个字段）。",
+                "- **接口**：—"))
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("接口为空 → P19 指名「接口」",
+                  c == 1 and "[P19]" in out and "接口" in out, out[-400:])
+
+            # 「无」是 PLACEHOLDER：没有可替换点必须写「无」+ 为什么，只写「无」等于没说
+            write(card29, base29.replace(
+                "- **可替换点**：数据源（现在直连数据库，以后换外部 API 只动取数函数一处）；"
+                "没有可替换点的写「无」并说为什么。",
+                "- **可替换点**：无"))
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("可替换点只写「无」→ P19（要写「无」+ 为什么）",
+                  c == 1 and "[P19]" in out and "可替换点" in out, out[-400:])
+
+            write(card29, base29.replace(
+                "- **失败边界**：取数超时直接报错不重试；落库失败整体回滚，不留半条记录。",
+                "- **失败边界**：（待补）"))
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("失败边界留模板占位 → P19",
+                  c == 1 and "[P19]" in out and "失败边界" in out, out[-400:])
+
+            orphan = ("\n## K9 · W9.9 · 幽灵卡\n\n- **接口**：x\n"
+                      "- **可替换点**：无（这张卡是造的）\n- **失败边界**：x\n")
+            write(card29, base29.rstrip("\n") + "\n" + orphan)
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("卡里的工作不在计划 §4 → P19 孤儿卡",
+                  c == 1 and "[P19]" in out and "W9.9" in out, out[-400:])
+
+            dup = ("\n## K2 · W1.1 · 第二张卡\n\n- **接口**：y\n"
+                   "- **可替换点**：无（第二张）\n- **失败边界**：y\n")
+            write(card29, base29.rstrip("\n") + "\n" + dup)
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("一个工作两张卡 → P19",
+                  c == 1 and "[P19]" in out and "2 张设计卡" in out, out[-400:])
+
+            write(card29, base29)
+            os.rename(card29, card29 + ".bak")
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("设计卡缺失 → 一条 P19（不逐行刷屏）",
+                  c == 1 and out.count("[P19]") == 1 and "找不到设计卡" in out, out[-400:])
+            os.rename(card29 + ".bak", card29)
+
+            # 已做完的工作不追溯：把 W1.1 标成已完成，卡删掉也不该报 P19
+            plan29 = os.path.join(tmp29, "docs", "00-门面", "开发计划.md")
+            write(plan29, read(plan29).replace("| D1 | 待开工 |", "| D1 | 已完成 |"))
+            os.rename(card29, card29 + ".bak")
+            c, out = run("plan.py", "check", cwd=tmp29)
+            check("已做完的工作不追溯（无卡也不报 P19）",
+                  c == 0 and "[P19]" not in out, out[-400:])
+            os.rename(card29 + ".bak", card29)
+        finally:
+            shutil.rmtree(tmp29, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

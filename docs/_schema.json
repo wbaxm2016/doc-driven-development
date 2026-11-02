@@ -49,6 +49,7 @@
     "timeline": "时间线.md",
     "features": "FEATURES.md",
     "direction_card": "方向卡.md",
+    "design_card": "设计卡.md",
     "session_template": "会话档案模板.md",
     "sessions_dir": "会话",
     "adr_dir": "adr",
@@ -110,7 +111,8 @@
     ],
     "task_pattern": "^T\\d+\\.\\d+\\.\\d+$",
     "work_pattern": "^W\\d+\\.\\d+$",
-    "direction_pattern": "^D\\d+$"
+    "direction_pattern": "^D\\d+$",
+    "design_before_states": ["待开工", "进行中"]
   },
   "ears": {
     "enabled": true

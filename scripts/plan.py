@@ -12,7 +12,8 @@
 
 P14–P16 要读功能台账（`40-运行/FEATURES.md`）：任务挂的功能必须存在、已完成的任务
 必须有任务考核、已验收的功能必须由任务支撑。P18 要读方向卡（`00-门面/方向卡.md`）：
-方向必须有现状、成功状态与走通验收。判定靠表头，不靠列序。
+方向必须有现状、成功状态与走通验收。P19 要读设计卡（`00-门面/设计卡.md`）：还没做完
+的工作要有卡，卡里接口、可替换点、失败边界不能空。判定靠表头，不靠列序。
 """
 from __future__ import annotations
 
@@ -35,6 +36,7 @@ DEFAULT_SCHEMA = {
         "task_pattern": r"^T\d+\.\d+\.\d+$",
         "work_pattern": r"^W\d+\.\d+$",
         "direction_pattern": r"^D\d+$",
+        "design_before_states": ["待开工", "进行中"],
     },
 }
 
@@ -51,6 +53,11 @@ PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "待定", "tbd
 ASSESS_CELLS = ("做法", "一致", "代价", "结论")
 # 方向卡的三格必填（P18）。路径与接缝不判：步数靠人读，接缝按 ADR-003 的已知缺口不做机器判。
 CARD_CELLS = ("现状", "成功状态", "走通验收")
+# 设计卡的三格必填（P19）。扩展点 / 任务拆分 / 取舍按改动大小可省：ADR-003 允许小改动只写
+# 三行，判满六格会把设计门变成填表仪式。
+DESIGN_CELLS = ("接口", "可替换点", "失败边界")
+CARD_HEAD_RE = re.compile(r"^#{2,3}\s*(K\d+)\s*·\s*(W\d+\.\d+)\s*·?\s*(.*)$")
+CARD_FIELD_RE = re.compile(r"^[-*]\s*\*\*(.+?)\*\*\s*[：:]\s*(.*)$")
 
 
 def blank(v):
@@ -302,8 +309,51 @@ def load_directions(path):
     return None
 
 
+# ---------------------------------------------------------------- 设计卡（P19）
+def designs_path(docs, schema):
+    """设计卡的位置：门面层目录 + `names.design_card`（缺省 设计卡.md）。
+
+    与方向卡同层：两者都是「计划怎么来的」——方向回答往哪走，设计回答这一块以后怎么换。
+    技术设计（10-架构）写系统为何这样搭，设计卡随工作产生、随工作归档，不混在一处。
+    """
+    d = layer_dir(schema, "facade")
+    name = (schema.get("names") or {}).get("design_card", "设计卡.md")
+    if not d:
+        return None
+    p = os.path.join(docs, d, name)
+    return p if os.path.exists(p) else None
+
+
+def load_designs(path):
+    """读设计卡：`{K1: {"work": W1.1, "cells": {接口: …}}}`，卡缺失返回 None。
+
+    卡按小节写（`## K1 · W1.1 · 标题` 下挂 `- **接口**：…`），不按表格：设计卡按改动
+    大小伸缩，小改动只写三行，表格会把接口压成一格。返回 None 必须变成一条 P19——
+    当成「还没有设计」跳过去，设计门就退化成一句口号。
+    """
+    if not path or not os.path.exists(path):
+        return None
+    cards, cur = {}, None
+    for ln in read(path).splitlines():
+        m = CARD_HEAD_RE.match(ln.strip())
+        if m:
+            cur = {"work": m.group(2), "title": m.group(3).strip(), "cells": {}}
+            cards[m.group(1)] = cur
+            continue
+        if ln.startswith("#"):
+            cur = None
+            continue
+        if cur is None:
+            continue
+        f = CARD_FIELD_RE.match(ln.strip())
+        if f:
+            cur["cells"][f.group(1).strip()] = strip_md(f.group(2))
+    return cards
+
+
 # ---------------------------------------------------------------- 校验
-def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=None):
+def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=None,
+             designs=None):
     """返回 (errs, items, codes, done, work_ids)。errs 里每条都带码，与 check-rules.md 的 P 段一一对应。"""
     errs = []
 
@@ -367,6 +417,43 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=N
                              f"缺了这一格就只剩一句口号")
             for did in sorted(set(cards) - dir_ids):
                 E("P18", f"方向卡里的 {did} 不在计划 §3：孤儿方向——要么补进计划，要么删掉卡")
+
+    # P19 设计卡：设计是工作与任务之间的一步。还没做完的工作必须有卡，卡里至少写满
+    # 接口 / 可替换点 / 失败边界；已经做完的工作不追溯（与 P18 的存量策略一致）。
+    # 卡缺失只报一条，不逐行刷屏——否则一个没建卡的项目会红一片，看不出真正的毛病。
+    need = []
+    ws_header, ws_rows = works if works else ([], [])
+    for row in ws_rows:
+        if len(row) != len(ws_header):
+            continue
+        wid = strip_md(row[0])
+        st = row[ws_header.index("状态")] if "状态" in ws_header else ""
+        if st in cfg.get("design_before_states", ["待开工", "进行中"]):
+            need.append(wid)
+    if need:
+        if designs is None:
+            E("P19", "找不到设计卡（00-门面/设计卡.md）：接口 / 可替换点 / 失败边界无处可查；"
+                     "先按模板建卡（一个工作一张），再拆任务")
+        else:
+            by_work = {}
+            for kid, card in designs.items():
+                by_work.setdefault(card["work"], []).append(kid)
+            for wid in need:
+                kids = by_work.get(wid)
+                if not kids:
+                    E("P19", f"{wid} 还没做完却没有设计卡：先写接口 / 可替换点 / 失败边界，"
+                             f"再拆任务（设计没定不拆任务）")
+                    continue
+                if len(kids) > 1:
+                    E("P19", f"{wid} 有 {len(kids)} 张设计卡（{'、'.join(sorted(kids))}）："
+                             f"一个工作只留一张，否则设计有两份真相")
+                for kid in sorted(kids):
+                    miss = [c for c in DESIGN_CELLS if blank(designs[kid]["cells"].get(c))]
+                    if miss:
+                        E("P19", f"设计卡 {kid}（{wid}）缺{'、'.join(miss)}：三格写满才算设计定稿"
+                                 f"（确实没有可替换点的，写「无」并说明为什么——只写「无」按空算）")
+            for wid in sorted(set(by_work) - work_ids):
+                E("P19", f"设计卡里的 {wid} 不在计划 §4：孤儿卡——要么补工作行，要么删掉卡")
 
     all_task_ids = {r[idx["ID"]] for r in t_rows if len(r) == len(t_header)}
     # P14 的前半：没有这一列，双亲就只剩一半（任务只挂工作）。台账缺失也不能当成
@@ -587,8 +674,9 @@ def main():
     cfg = schema["plan"]
     feats = load_features(features_path(docs, schema))
     cards = load_directions(directions_path(docs, schema))
+    designs = load_designs(designs_path(docs, schema))
     errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg,
-                                                  fragments, feats, cards)
+                                                  fragments, feats, cards, designs)
 
     if cmd == "check":
         views = compute(weights, items, codes, done, work_ids, cfg)
