@@ -1417,6 +1417,54 @@ def main():
         finally:
             shutil.rmtree(tmp27, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 37
+        print("\n37. 方向卡：现状 / 成功状态 / 走通验收（P18）")
+        tmp28 = tempfile.mkdtemp(prefix="ddd-selftest28-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp28)
+            card28 = os.path.join(tmp28, "docs", "00-门面", "方向卡.md")
+            base28 = read(card28)
+
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("骨架：计划 D1 与方向卡 D1 对上 → 0 error",
+                  c == 0 and "[P18]" not in out, out[-400:])
+
+            write(card28, base28.replace("（示例）只有落地页，注册后没有下一步", "—"))
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("现状为空 → P18 指名「现状」",
+                  c == 1 and "[P18]" in out and "现状" in out, out[-400:])
+
+            write(card28, base28.replace("（示例）「注册 → 建第一条记录 → 看到结果」全程走通", "—"))
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("成功状态为空 → P18", c == 1 and "[P18]" in out and "成功状态" in out, out[-400:])
+
+            write(card28, base28.replace("干净环境按三步走一遍，每步记观察", "—"))
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("走通验收为空 → P18", c == 1 and "[P18]" in out and "走通验收" in out, out[-400:])
+
+            orphan = ("| **D9** | 现状甲 | 现在不做就晚 | 用户 · 起点 | 成功状态甲 "
+                      "| ① 一 → ② 二 | 接缝甲 | 不覆盖甲 | 走通一遍 | — |")
+            write(card28, base28.rstrip("\n") + "\n" + orphan + "\n")
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("卡里有 D9 但计划没有 → P18 孤儿方向",
+                  c == 1 and "[P18]" in out and "D9" in out, out[-400:])
+
+            write(card28, base28)
+            os.rename(card28, card28 + ".bak")
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("方向卡缺失 → 一条 P18（不逐行刷屏）",
+                  c == 1 and out.count("[P18]") == 1 and "找不到方向卡" in out, out[-400:])
+            os.rename(card28 + ".bak", card28)
+
+            write(card28, base28.replace("| **D1** |", "| D2 |").replace("| D2 |", "| D2x |"))
+            # 计划有 D1、卡里只剩 D2x（非法编号，不会被识别）→ 卡里没有 D1
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("计划有 D1 而卡里没有 → P18 指名缺哪个方向",
+                  c == 1 and "[P18]" in out and "D1" in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp28, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -11,7 +11,8 @@
 编号规则、状态词、文件位置来自 <docs>/_schema.json。
 
 P14–P16 要读功能台账（`40-运行/FEATURES.md`）：任务挂的功能必须存在、已完成的任务
-必须有任务考核、已验收的功能必须由任务支撑。判定靠表头，不靠列序。
+必须有任务考核、已验收的功能必须由任务支撑。P18 要读方向卡（`00-门面/方向卡.md`）：
+方向必须有现状、成功状态与走通验收。判定靠表头，不靠列序。
 """
 from __future__ import annotations
 
@@ -48,6 +49,8 @@ LEGACY = "—（历史）"
 # 注意「待提交」不在集合里：编码与校验必须发生在提交之前，commit 短号是提交后回写的。
 PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "待定", "tbd", "todo"}
 ASSESS_CELLS = ("做法", "一致", "代价", "结论")
+# 方向卡的三格必填（P18）。路径与接缝不判：步数靠人读，接缝按 ADR-003 的已知缺口不做机器判。
+CARD_CELLS = ("现状", "成功状态", "走通验收")
 
 
 def blank(v):
@@ -263,8 +266,44 @@ def load_features(path):
             "has_assess": has_assess_table}
 
 
+# ---------------------------------------------------------------- 方向卡（P18）
+def directions_path(docs, schema):
+    """方向卡的位置：门面层目录 + `names.direction_card`（缺省 方向卡.md）。"""
+    d = layer_dir(schema, "facade")
+    name = (schema.get("names") or {}).get("direction_card", "方向卡.md")
+    if not d:
+        return None
+    p = os.path.join(docs, d, name)
+    return p if os.path.exists(p) else None
+
+
+def load_directions(path):
+    """读方向卡：`{D-n: {现状, 成功状态, 走通验收}}`，卡缺失或表头改坏返回 None。
+
+    卡是方向的唯一载体；计划 §3 只登记编号与依据。返回 None 必须变成一条 P18——
+    把它当成「没有方向」跳过去，方向就退化成一句口号而没人发现。
+    """
+    if not path or not os.path.exists(path):
+        return None
+    for header, rows, _ in read_tables(read(path).splitlines()):
+        heads = [strip_md(h) for h in header]
+        if not {"方向", "现状", "成功状态", "走通验收"} <= set(heads):
+            continue
+        out = {}
+        i_d = heads.index("方向")
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            did = strip_md(r[i_d])
+            if not re.fullmatch(r"D\d+", did):
+                continue
+            out[did] = {h: strip_md(r[heads.index(h)]) for h in CARD_CELLS if h in heads}
+        return out
+    return None
+
+
 # ---------------------------------------------------------------- 校验
-def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None):
+def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=None):
     """返回 (errs, items, codes, done, work_ids)。errs 里每条都带码，与 check-rules.md 的 P 段一一对应。"""
     errs = []
 
@@ -308,6 +347,26 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None):
         for wid, dref in sorted(work_dir.items()):
             if dref and dref not in dir_ids:
                 E("P12", f"{wid} 所属方向不存在：{dref}")
+
+    # P18 方向卡：方向不能只是一句「成功状态 + 依据」——它是现状的结论，还要说清怎么算走通。
+    # 卡缺失时不逐行刷屏，只报一条（否则一个没迁移的项目会红一片，看不出真正的毛病）。
+    if dir_ids:
+        if cards is None:
+            E("P18", "找不到方向卡（00-门面/方向卡.md）：方向的现状 / 成功状态 / "
+                     "走通验收无处可查；先按模板建卡，再往计划里加 D")
+        else:
+            for did in sorted(dir_ids):
+                card = cards.get(did)
+                if card is None:
+                    E("P18", f"{did} 在计划 §3 里，但方向卡里没有它：现状、路径、接缝、"
+                             f"走通验收都要写进卡")
+                    continue
+                miss = [c for c in CARD_CELLS if blank(card.get(c))]
+                if miss:
+                    E("P18", f"方向卡 {did} 缺{'、'.join(miss)}：方向是现状的结论，"
+                             f"缺了这一格就只剩一句口号")
+            for did in sorted(set(cards) - dir_ids):
+                E("P18", f"方向卡里的 {did} 不在计划 §3：孤儿方向——要么补进计划，要么删掉卡")
 
     all_task_ids = {r[idx["ID"]] for r in t_rows if len(r) == len(t_header)}
     # P14 的前半：没有这一列，双亲就只剩一半（任务只挂工作）。台账缺失也不能当成
@@ -527,8 +586,9 @@ def main():
 
     cfg = schema["plan"]
     feats = load_features(features_path(docs, schema))
+    cards = load_directions(directions_path(docs, schema))
     errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg,
-                                                  fragments, feats)
+                                                  fragments, feats, cards)
 
     if cmd == "check":
         views = compute(weights, items, codes, done, work_ids, cfg)

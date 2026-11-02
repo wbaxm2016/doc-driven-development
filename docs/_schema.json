@@ -48,6 +48,7 @@
     "inbox": "问题收件箱.md",
     "timeline": "时间线.md",
     "features": "FEATURES.md",
+    "direction_card": "方向卡.md",
     "session_template": "会话档案模板.md",
     "sessions_dir": "会话",
     "adr_dir": "adr",

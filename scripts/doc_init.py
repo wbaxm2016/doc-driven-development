@@ -53,6 +53,7 @@ SCHEMA_TEMPLATE = {
         "inbox": "问题收件箱.md",
         "timeline": "时间线.md",
         "features": "FEATURES.md",
+        "direction_card": "方向卡.md",
         "session_template": "会话档案模板.md",
         "sessions_dir": "会话",
         "adr_dir": "adr",
@@ -189,6 +190,7 @@ def main():
     write_if_absent(os.path.join(docs, "00-门面", "vision.md"),
                     fm("产品定位", "facade", "这个产品是什么、为什么做。", date, authority="1"))
     copy_tpl("features.md", os.path.join(docs, "40-运行", "FEATURES.md"), date)
+    copy_tpl("direction.md", os.path.join(docs, "00-门面", "方向卡.md"), date)
     write_if_absent(os.path.join(docs, "30-决策", "decisions.md"),
                     fm("决策索引", "decision",
                        "ADR 的唯一入口：一文件一决策，编号只增不复用。", date, authority="1")
