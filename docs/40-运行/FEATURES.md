@@ -41,7 +41,7 @@ tags: [功能, 台账, 追溯]
 | **F-015** | 需求 × 功能 × 证据对账 | REQ-004 | 每条需求至少一个功能覆盖（W8 提醒）；证据里的自测组号必须真实存在（E26） | `python scripts/self_test.py -v` | S | 已验收 | 满足✓ 可做✓ 代价S｜T5.4.1｜2026-10-31 | scripts/doc_check.py | `self_test` 第 30 组（2026-10-31） | 各任务考核见 T5.4.1｜整体一致：全｜代价：S（同估）｜结论：保留 | 276f235 |
 | **F-014** | 存量债棘轮 | —（历史） | `--update-baseline` 写入基线；`--baseline` 只许降不许升 | `python scripts/self_test.py -v` | S | 已验收 | —（历史） | scripts/doc_check.py | `self_test` 第 8 组 | —（历史） | —（历史） |
 | **F-016** | 会话收尾的决策回顾（并入 `decision-review` 的能力） | REQ-005 | 收尾时逐条给背景 / 影响 / 依据（用户原话）/ 撤销条件；缺项标「断链」并进待分诊；台账里没有的决策先补档再回顾；`待定` 不升格成 `已定` | `python scripts/self_test.py -v`（实现后补组号） | M | 已验收 | 满足✓ 可做✓ 代价M｜T6.1.1、T6.1.2｜2026-11-01 | scripts/devlog.py、SKILL.md | `self_test` 第 32 组（2026-11-01） | 各任务考核见 T6.1.1、T6.1.2｜整体一致：全｜代价：M（同估）｜结论：保留 | 05b5b5b |
-| **F-017** | 问题状态机（四维） | REQ-006 | 性质 / 类型 / 状态白名单；开放不得实现关闭；每个状态有依据；拒绝 / 闭环分表 | `python scripts/self_test.py -v` | M | 已对照 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/devlog.py、docs/_schema.json、assets/templates/inbox.md | `self_test` 第 35 组 176/176；`devlog check` 0 error（2026-11-02） | 各任务考核见 T4.4.1｜整体一致：全｜代价：M（同估）｜结论：保留（待验收） | 待提交 |
+| **F-017** | 问题状态机（四维） | REQ-006 | 性质 / 类型 / 状态白名单；开放不得实现关闭；每个状态有依据；拒绝 / 闭环分表 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/devlog.py、docs/_schema.json、assets/templates/inbox.md | `self_test` 216/216（含第 35 组）；`devlog check` 0 error（2026-11-03） | 各任务考核见 T4.4.1、T10.1.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 975b655 |
 | **F-018** | 任务双亲与考核下沉 | REQ-007 | 任务同时挂功能与工作；任务是最小可实施 / 可验证 / 可考核单元；考核四格下沉到任务，功能只留汇总 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/plan.py、scripts/doc_check.py、docs/40-运行/FEATURES.md | `self_test` 第 36 组；`plan.py check` / `doc_check` 0 error（2026-11-02） | 各任务考核见 T5.6.1｜整体一致：全｜代价：M（同估）｜结论：保留 | f4b69ed |
 | **F-019** | 方向线的形成过程 | REQ-008 | 现状（含方向）→ 工作 → 任务 → 推进的模板与判据；方向卡含现状 / 成功状态 / 路径 / 接缝 / 不覆盖 / 走通验收 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户描述方向线过程｜ADR-003 | docs/00-门面/方向卡.md、scripts/plan.py、assets/templates/direction.md | `self_test` 第 37 组；`plan.py check` 0 error（2026-11-02） | 各任务考核见 T5.7.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 56e629a |
 | **F-020** | 设计步与可替换性 | REQ-009 | 设计卡含接口 / 可替换点 / 扩展点 / 失败边界 / 任务拆分；设计门在拆任务前；考核回顾可回到设计 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户指出缺设计｜ADR-003 | docs/00-门面/设计卡.md、scripts/plan.py、assets/templates/design.md | `self_test` 第 38 组；`plan.py check` 0 error（2026-11-02） | 各任务考核见 T5.8.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 72d5947 |
@@ -111,6 +111,7 @@ tags: [功能, 台账, 追溯]
 | **T9.2.1** | SKILL 补「主干外两处决策」、§边界拆三段（判不了 / 交给别的技能 / 并发假设）、旧名 `session-handoff` 改 `session-lifecycle`；README 加「动作编号 ≠ 十一格」；第 29 组三条断言；发 2.4.2 装 5 端 | 全 | S（同估） | 保留 | 05ccd5e |
 | **T9.3.1** | `brief` 加「复核」行（`@日期` 扫三类载体）；`P15` / `E27` 把「待提交」按缺锚点报；第 39 组 4 条断言；发 2.4.3 装 5 端 | 全 | S（同估） | 保留 | 1d4323d |
 | **T9.4.1** | `install.py` 装完逐字节核对（缺 / 不等算失败），装前扫出不属于包的历史残留并报「清理多余 N」后重装；CONTRIBUTING 加「推送与网络」；第 40 组 2 条断言；2.4.4 装 5 端 | 全 | S（同估） | 保留 | 540d0c4 |
+| **T10.1.1** | 硬规则 5 / 模板 / `process-recording` 写清终态归表（实现关闭→已闭环，拒绝→已拒绝）；ISS-005/023 迁入已拒绝；2.4.5 装 5 端 | 全 | S（同估） | 保留 | 975b655 |
 
 ## 已评审提案
 
@@ -146,3 +147,4 @@ tags: [功能, 台账, 追溯]
 | 2026-11-03 | 加 F-022（README 与实现同口径，REQ-011 / W9.2 / T9.2.1）：SKILL 补两处决策、边界拆三段、并发假设、旧技能名；README 写两套编号不同源；`self_test` 208/208 |
 | 2026-11-03 | 加 F-023（反向判据的唤醒与完成锚点，REQ-012 / W9.3 / T9.3.1）：`brief` 新增「复核」行（`@YYYY-MM-DD`）；`P15`/`E27` 把「待提交」按缺锚点报；`self_test` 214/214；ISS-046/048/050 闭环 |
 | 2026-11-03 | F-011 补「装完逐字节核对 + 清历史残留」（T9.4.1 / ISS-039），CONTRIBUTING 写推送配方（ISS-040）；`self_test` 216/216；2.4.4 |
+| 2026-11-03 | F-017 已验收（T10.1.1 / ISS-049 / 2.4.5）：硬规则 5 与 references / 模板写明「实现关闭→已闭环、拒绝→已拒绝」，表名即状态；ISS-005/023 迁入已拒绝；`完成于` 975b655，5 端逐字节 缺 0 / 不等 0 |
