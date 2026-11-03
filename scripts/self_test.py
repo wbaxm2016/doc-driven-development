@@ -1069,6 +1069,16 @@ def main():
         check("写明对照在测试之前的理由",
               "对照在测试之前" in skill_text and "假通过" in skill_text, "")
 
+        # 2026-11-03 对齐 README：README 说「五道门 + 两处决策」，SKILL 必须给出同一套；
+        # 边界必须拆成「机器判不了的 / 交给别的技能的」，并写明并发假设（ISS-054 / 056）。
+        check("SKILL 写明主干之外的两处决策",
+              "两处决策" in skill_text and "开放问题收口" in skill_text
+              and "发版与回滚" in skill_text, "")
+        check("SKILL 的边界拆成两段（判不了 / 交给别的技能）",
+              "机器判不了的" in skill_text and "交给别的技能的" in skill_text, "")
+        check("SKILL 写明并发假设（同一工作区只留一个写者）",
+              "一个会话" in skill_text and "并发" in skill_text and "加锁" in skill_text, "")
+
         # ---------------------------------------------------------------- 30
         print("\n30. 需求 × 功能 × 证据对账（W8 / E26）")
         tmp22 = tempfile.mkdtemp(prefix="ddd-selftest22-")
