@@ -5,7 +5,7 @@ domain: 全局
 status: active
 authority: 1
 updated: 2026-11-02
-summary: "一个 Agent Skill：把 AI 协作开发的事实、决策与进度写成一处定义、可回溯、可调优先级、可审核的文档；三层一地基，问题分可关闭与开放。"
+summary: "一个 Agent Skill：把 AI 协作开发的事实、决策与进度写成一处定义、可回溯、可调优先级、不丢问题的文档；三层一地基，问题分可关闭与开放。"
 tags: [定位]
 ---
 
