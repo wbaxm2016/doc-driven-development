@@ -483,7 +483,17 @@ def append_inbox_row(ctx, iid, kind, question, impact, to, nature="可关闭",
         "状态": "确立", "依据": evidence or "确立：分诊转正",
         "落点": to, "回到条件": back, "更新": today,
     }
-    row = "| " + " | ".join(cell(values.get(h, "—")) for h in heads) + " |\n"
+    def value_for(head):
+        # 与 _col() 同一条匹配规则：精确优先，否则「表头 startswith 候选名」。
+        # ISS-060：表头是「影响（不处理会怎样）」，精确 key「影响」取不到，曾写成「—」。
+        if head in values:
+            return values[head]
+        for k, v in values.items():
+            if head.startswith(k):
+                return v
+        return "—"
+
+    row = "| " + " | ".join(cell(value_for(h)) for h in heads) + " |\n"
     lines.insert(end, row)
     write(ctx.inbox, "".join(lines))
 

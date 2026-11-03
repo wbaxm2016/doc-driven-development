@@ -1622,6 +1622,32 @@ def main():
         finally:
             shutil.rmtree(tmp31, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 41
+        print("\n41. 开发体验摩擦留痕 + 转正行 impact 落对列（REQ-013 / ISS-060）")
+        tpl32 = os.path.join(SKILL, "assets", "templates", "session-record.md")
+        check("档案模板含 §3.6 本轮摩擦（REQ-013）",
+              os.path.exists(tpl32) and "### 3.6 本轮摩擦" in read(tpl32))
+        tmp32 = tempfile.mkdtemp(prefix="ddd-selftest32-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp32)
+            run("devlog.py", "new", "--title", "摩擦", "--scope", "自测", cwd=tmp32)
+            run("devlog.py", "ask", "转正会不会丢影响列？",
+                "--if", "改完仍丢", cwd=tmp32)
+            c, out = run("devlog.py", "pending", "--clear", "Q1", "--as", "iss",
+                         "--relation", "new", "--type", "缺陷",
+                         "--impact", "转正丢影响列", "--to", "append_inbox_row", cwd=tmp32)
+            inbox32 = read(os.path.join(tmp32, "docs", "70-过程", "问题收件箱.md"))
+            rows32 = [ln for ln in inbox32.splitlines()
+                      if ln.startswith("| **ISS-") and "转正丢影响列" in ln]
+            check("转正 exit 0 且新行落在收件箱", c == 0 and len(rows32) == 1, out[-400:])
+            if rows32:
+                cells32 = [x.strip() for x in rows32[0].strip().strip("|").split("|")]
+                check("impact 落进「影响」列，不是「—」（ISS-060）",
+                      "转正丢影响列" in cells32, str(cells32))
+        finally:
+            shutil.rmtree(tmp32, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

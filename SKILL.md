@@ -65,7 +65,7 @@ python scripts/devlog.py new --title "本次主题" --scope "范围"
 
 **新增 ISS 前先查一次**：`python scripts/devlog.py inbox --similar "这条问题的表述"` 摆出字面候选，把「是包含 / 扩展 / 还是独立」讲给用户定；转正时 `pending --clear <Q> --as iss --relation new|merge:ISS-nnn|extends:ISS-nnn|updates:ISS-nnn|duplicate:ISS-nnn`——`new` 由脚本自动分配 `ISS-nnn`，`--type/--impact/--to` 三格必须由你给，`--nature` 缺省按类型推断（机会 / 待决 = 开放，其余 = 可关闭）。
 
-**收尾**：先做一次**决策回顾**——只对**用户拍板的**决策，逐条回答「背景 / 影响 / 依据（用户原话照抄）/ 撤销条件」；答不出的标「断链」并用 `python scripts/devlog.py ask` 进待分诊。agent 的实现选择不进回顾；窗口与现查四路见 `references/process-recording.md` 的「决策回顾」一节。然后跑：
+**收尾**：先做一次**决策回顾**——只对**用户拍板的**决策，逐条回答「背景 / 影响 / 依据（用户原话照抄）/ 撤销条件」；答不出的标「断链」并用 `python scripts/devlog.py ask` 进待分诊。agent 的实现选择不进回顾；窗口与现查四路见 `references/process-recording.md` 的「决策回顾」一节。**摩擦回顾**：顺手在档案 §3.6 记本轮摩擦——同一动作 ≥3 次 / 同一失败 ≥2 次 / 某一步明显超出预期；会再犯的转收件箱（机会 / 债），只影响本轮的不转。然后跑：
 
 ```bash
 python scripts/devlog.py check      # 七段顺序、front-matter、ISS 引用、文件名
@@ -309,4 +309,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 32. **设计卡**：工作停在「待开工」却没有卡 → `[P19]`；卡的「接口 / 可替换点 / 失败边界」任一为空或只写「无」→ `[P19]` 指名那一格；卡里写 `W9.9` 而计划 §4 没有 → `[P19]` 孤儿卡；一个工作两张卡 → `[P19]`；删掉设计卡 → 一条 `[P19]`（不逐行刷屏）；已做完的工作不追溯；骨架自带的示例卡 → 0 error。
 
-`scripts/self_test.py` 把上面 1–32 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+33. **摩擦留痕与转正列**：会话档案模板缺 `### 3.6 本轮摩擦` → 自测第 41 组失败；`pending --clear --as iss` 转正时 `--impact` 落进「影响（不处理会怎样）」列（不是「—」）→ 通过；落进别的列 → 失败。
+
+`scripts/self_test.py` 把上面 1–33 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

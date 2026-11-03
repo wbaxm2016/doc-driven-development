@@ -40,6 +40,7 @@ tags: [契约, 需求, EARS]
 | **REQ-010** | WHEN 用户在新项目里跑完 `doc_init` THE SYSTEM SHALL 主干道的每一格都指得到一个该项目里真实存在的文件、或一条可直接执行的命令 | 新项目里没有 `40-运行/功能对照.md` → 自测第 1 组失败；SKILL 第 7 格无冒烟命令、第 8 格指向包内模板 → 第 1 / 29 组失败；模板表头与 SKILL 措辞不一致（三栏 vs 四列）→ 第 1 组「四列表头」失败 | `python scripts/self_test.py -v`（第 1 组） | 已实现 | `scripts/doc_init.py`、T9.1.1–T9.1.3 | 采纳✓ 2026-11-03｜档案 2026-11-03-001 §2 |
 | **REQ-011** | WHEN `README.md` 描述工作流程、门或边界 THE SYSTEM SHALL `SKILL.md` 给出同一套门与人工卡点，且同一概念只有一处定义 | SKILL 缺「主干之外的两处决策」/ 边界未拆两段 / 未写并发假设 → `self_test` 第 29 组三条断言失败；两套编号未说明 → 人读（`ISS-051`） | `python scripts/self_test.py -v`（第 29 组） | 已实现 | `SKILL.md`、T9.2.1 | 采纳✓ 2026-11-03｜档案 2026-11-03-001 §2 |
 | **REQ-012** | WHEN 一条反向判据写下到期日 `@YYYY-MM-DD`、或一条已完成的任务记下 `完成于` THE SYSTEM SHALL 到期日在开场 `brief` 里被列出，且 `完成于` 不接受「待提交」这类空锚点 | 收件箱「回到条件」写 `@2020-01-01` → `brief` 输出含「已到期 1」；写 `@2099-01-01` → 不含「已到期」；任务考核的 `完成于` 写「待提交」→ `[P15]`；改成 commit 短号 → 0 error | `python scripts/self_test.py -v`（第 39 组） | 已实现 | `scripts/devlog.py`、`scripts/plan.py`、T9.3.1 | 采纳✓ 2026-11-03｜档案 2026-11-03-001 §2 |
+| **REQ-013** | WHEN 一场会话收尾 THE SYSTEM SHALL 在会话档案 §3.6 留下「本轮摩擦」，按固定判据记（同一动作 ≥3 次 / 同一失败 ≥2 次 / 某一步明显超出预期），会再犯的转收件箱 | 归档模板含 `### 3.6 本轮摩擦`；转正一条 ISS 后新行「影响」列不是「—」 | `python scripts/self_test.py -v`（第 41 组） | 已实现 | `assets/templates/session-record.md`、T11.1.1 | 采纳✓ 2026-11-03｜006 §2 |
 
 ## 2. 不得做的事
 
