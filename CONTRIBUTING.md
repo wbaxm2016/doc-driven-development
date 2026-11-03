@@ -64,6 +64,37 @@ python scripts/doc_check.py      # 全库字段与链接
 - CI 必须绿：Python 3.8 与 3.12 双版本、契约 verify、可重复构建（两次打包 sha256 相同）。
 - 大改（新层、新状态词、改公开契约）先开 issue 对齐，再动手。
 
+## 发版与回滚
+
+**发版不由 PR 作者做。** 包内文件（`scripts/`、`references/`、`assets/`、`SKILL.md`、`VERSION`、`.skill-metadata.yaml`）变了，合并后由维护者统一打包、装 5 端、提交 `dist/`；PR 里不要改 `VERSION` 或 `dist/`。
+
+### 什么时候要发版
+
+只有包内文件变了才要发版。只改 `docs/`、`README.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`build.py`、`install.py`、`install-targets.json` 不用发版，`dist/` 仍然有效。版本号规则：改规则 / 码表算 minor，破兼容算 major。
+
+### 顺序：先提交、后打包
+
+反过来会让产物来自脏工作区，说不清它对应哪个提交。
+
+1. 平时改包内文件，先在 `CHANGELOG.md` 的 `## Unreleased` 里攒一笔。
+2. 发版时把 `## Unreleased` 改名成 `## <新版本>`，改 `VERSION`。
+3. **先提交**源码 + `VERSION` + `CHANGELOG`。
+4. `python build.py`：体检 → 自测 → 打包 → 验包，写出 `dist/doc-driven-development-<版本>.skill` 与最新别名 `dist/doc-driven-development.skill`。
+5. `python build.py --check-dist`：产物与 HEAD 的包内文件逐字节一致；包内文件有未提交改动会直接拒绝。
+6. `python install.py --from dist`：按 `install-targets.json` 装各宿主，装完逐字节核对并打印「缺 0 / 不等 0」；各端 `.install.json` 记 `source=dist`、commit 与产物路径。
+7. 提交 `dist/`，推远端。
+
+### 发 GitHub Release（里程碑）
+
+tag 与 release 只在里程碑做——现状是 `v2.3.2`、`v2.4.0`；补丁版本（如 2.4.1–2.4.5）只打包并装 5 端、不打 tag。要发 release：tag 指向包含产物与回写的提交 → release 正文截 `CHANGELOG` 对应版本段（不另写摘要）→ 上传 `.skill` 资产 → 下载回核 sha256。
+
+### 回滚
+
+- **回到某个功能之前**：功能行「完成于」记着验收时的 commit 短号——`git revert <commit>`（保留历史）或 `git checkout <commit>^ -- <文件>`（只回退文件）。
+- **回到某个需求之前**：先在契约里用 `_delta` 的 `REMOVED` 作废它（编号作废不复用，`_archive/` 留档），再按功能的「完成于」回滚实现。**先改文档、再回滚代码**，否则会出现「代码回退了但需求还写着已实现」。
+- **回到某个版本**：整仓回退用发版 tag（`v…`）；没有 tag 的补丁版本（2.4.1–2.4.5）用对应 `release:` / `CHANGELOG` 段所指的提交。
+- **只回退某个宿主**：`python install.py --from dist --artifact dist/doc-driven-development-<版本>.skill --only <id>`。
+
 ## 推送与网络
 
 本机推送有三处隐性前提（ISS-040）：直连 `github.com:443` 可能不通（本机走 `127.0.0.1:7897`）；走代理时 schannel 后端会报 `SEC_E_NO_CREDENTIALS`，要 `http.sslBackend=openssl`；凭据由 Git Credential Manager 缓存（`credential.helper=manager` 就够——**别加 `GIT_TERMINAL_PROMPT=0`**，那会让它取不到凭据）。
@@ -84,10 +115,6 @@ git fetch origin && git merge --ff-only origin/main && git push   # 被 fetch fi
 ```
 
 `git pull` 报「Already up to date」**不等于**已经同步：拉完核对 `git rev-parse HEAD` 与 `git status --short --branch` 的 ahead/behind；对不上就退回 `git fetch && git merge --ff-only origin/main`。
-
-## 发版不由 PR 作者做
-
-包内文件（`scripts/`、`references/`、`assets/`、`SKILL.md`、`VERSION`、`.skill-metadata.yaml`）变了，合并后由维护者按 README「发版」一节统一打包、装 5 端、提交 `dist/`。PR 里不要改 `VERSION` 或 `dist/`。
 
 ## 不做什么
 
