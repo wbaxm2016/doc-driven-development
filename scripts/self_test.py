@@ -1135,7 +1135,7 @@ def main():
             write(req22, base_req.replace(
                 "| **REQ-001** |",
                 "| **REQ-009** | WHEN 触发 THE SYSTEM SHALL 行为 | 看命令"
-                " | `python -c pass` | 待实现 | — |\n| **REQ-001** |", 1))
+                " | `python -c pass` | 待实现 | — | — |\n| **REQ-001** |", 1))
             c, out = run("doc_check.py", cwd=tmp22)
             check("需求没有任何功能覆盖 → W8", c == 0 and "W8" in codes(out), out[-300:])
             write(req22, base_req)
