@@ -84,15 +84,27 @@ python scripts/doc_check.py      # 全库字段与链接
 6. `python install.py --from dist`：按 `install-targets.json` 装各宿主，装完逐字节核对并打印「缺 0 / 不等 0」；各端 `.install.json` 记 `source=dist`、commit 与产物路径。
 7. 提交 `dist/`，推远端。
 
-### 发 GitHub Release（里程碑）
+### 发 GitHub Release
 
-tag 与 release 只在里程碑做——现状是 `v2.3.2`、`v2.4.0`；补丁版本（如 2.4.1–2.4.5）只打包并装 5 端、不打 tag。要发 release：tag 指向包含产物与回写的提交 → release 正文截 `CHANGELOG` 对应版本段（不另写摘要）→ 上传 `.skill` 资产 → 下载回核 sha256。
+tag 不发满每个版本，只给「以后可能要回滚到这里」的打：现在是 `v2.3.2`、`v2.4.0`、`v2.4.8`、`v2.4.10`、`v2.5.3`；其余补丁只出产物、不打 tag。
+
+发一个 release 的顺序：tag 指向包含产物与回写的提交 → 正文截 `CHANGELOG` 对应版本段（不另写摘要）→ 上传 `.skill` 资产 → 下载回核 sha256。
+
+`gh` 没登录时不用交互登录，借 Git Credential Manager 里已有的凭据：
+
+```bash
+TOKEN=$(printf 'protocol=https\nhost=github.com\n\n' | git credential fill | awk -F= '/^password=/{print $2}')
+GH_TOKEN="$TOKEN" gh release create v<版本> "dist/doc-driven-development-<版本>.skill" \
+  --title "<版本>" --notes-file <从 CHANGELOG 截出来的正文>
+```
+
+release 还没发出去时改 tag 可以删了重打（`git tag -d v<版本>` → `git tag -a …` → `git push --force origin v<版本>`）；**发出去之后不要再动 tag**——资产和 digest 已经对外了。
 
 ### 回滚
 
 - **回到某个功能之前**：功能行「完成于」记着验收时的 commit 短号——`git revert <commit>`（保留历史）或 `git checkout <commit>^ -- <文件>`（只回退文件）。
 - **回到某个需求之前**：先在契约里用 `_delta` 的 `REMOVED` 作废它（编号作废不复用，`_archive/` 留档），再按功能的「完成于」回滚实现。**先改文档、再回滚代码**，否则会出现「代码回退了但需求还写着已实现」。
-- **回到某个版本**：整仓回退用发版 tag（`v…`）；没有 tag 的补丁版本（2.4.1–2.4.5）用对应 `release:` / `CHANGELOG` 段所指的提交。
+- **回到某个版本**：整仓回退用发版 tag（`v…`）；没有 tag 的版本（2.4.1–2.4.7、2.4.9、2.5.0–2.5.2）用对应 `release:` / `CHANGELOG` 段所指的提交。
 - **只回退某个宿主**：`python install.py --from dist --artifact dist/doc-driven-development-<版本>.skill --only <id>`。
 
 ## 推送与网络
