@@ -28,59 +28,27 @@ if hasattr(sys.stdout, "reconfigure"):
 SKILL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TPL = os.path.join(SKILL, "assets", "templates")
 CI = os.path.join(SKILL, "assets", "ci")
+DEFAULTS = os.path.join(SKILL, "assets", "default-schema.json")
 
-BASE_LAYERS = {
-    "00-门面": "facade",
-    "20-契约": "contract",
-    "30-决策": "decision",
-    "40-运行": "operation",
-    "70-过程": "process",
-}
-EXTRA_LAYERS = {"10-架构": "architecture", "50-术语": "glossary", "60-规范": "norm"}
 
-SCHEMA_TEMPLATE = {
-    "version": 1,
-    "layers": {},
-    "status": ["active", "proposed", "draft", "implemented",
-               "superseded", "snapshot", "reference"],
-    "authority": ["1", "2", "3", "4"],
-    "domain": None,
-    "session_sections": ["本次范围", "用户侧记录", "AI 侧记录",
-                         "决策与选项对比", "开放项", "本次产出", "交接"],
-    "adr_sections": ["状态", "背景", "决策", "备选方案", "影响", "撤销条件"],
-    "names": {
-        "plan": "开发计划.md",
-        "inbox": "问题收件箱.md",
-        "timeline": "时间线.md",
-        "features": "FEATURES.md",
-        "direction_card": "方向卡.md",
-        "design_card": "设计卡.md",
-        "session_template": "会话档案模板.md",
-        "sessions_dir": "会话",
-        "adr_dir": "adr",
-        "adr_index": "decisions.md",
-        "alias_table": "别名表.md",
-    },
-    "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "digits": 3},
-    "issue": {
-        "states": ["候选", "确立", "实施中", "实现关闭", "拒绝"],
-        "active_states": ["确立", "实施中"],
-        "terminal_states": ["实现关闭", "拒绝"],
-        "natures": ["可关闭", "开放"],
-        "types": ["缺陷", "缺口", "债", "冲突", "风险", "机会", "待决"],
-        "state_aliases": {"open": "确立", "deferred": "确立", "done": "实现关闭"},
-    },
-    "plan": {
-        "done_states": ["已完成"],
-        "states": ["待开工", "进行中", "已实现（未验收）", "已完成", "阻塞", "搁置"],
-        "task_pattern": r"^T\d+\.\d+\.\d+$",
-        "work_pattern": r"^W\d+\.\d+$",
-        "direction_pattern": r"^D\d+$",
-        "design_before_states": ["待开工", "进行中"],
-    },
-    "ears": {"enabled": True},
-    "baseline": ".docs-baseline.json",
-}
+def load_defaults():
+    """层表与枚举的默认值只来自 assets/default-schema.json，脚本里不留副本。
+
+    ISS-067 / ISS-068：结构在脚本里再存一份，等于「加层要改脚本」，与硬规则 11 打架。
+    """
+    if not os.path.exists(DEFAULTS):
+        sys.exit(f"缺 assets/default-schema.json：{DEFAULTS}\n"
+                 "它是层表与枚举的默认来源（doc_init 不再内置副本），从发布包里拷回来再跑。")
+    try:
+        with open(DEFAULTS, encoding="utf-8-sig") as fh:
+            data = json.load(fh)
+        base = dict(data["layer_sets"]["base"])
+        extra = dict(data["layer_sets"]["extra"])
+        body = dict(data["schema"])
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        sys.exit(f"assets/default-schema.json 读不出来（{exc}）：它是结构默认值的唯一来源，"
+                 f"先修它再跑 doc_init")
+    return base, extra, body
 
 BASE = os.getcwd()
 
@@ -121,14 +89,14 @@ def copy_tpl(name, dest, date, extra=None):
     write_if_absent(dest, text)
 
 
-def ensure_schema(path, layers):
+def ensure_schema(path, layers, body):
     """写层表；已存在时只**合并层**，不动其它键。
 
     「先默认 5 层、以后补 --full」是 SKILL.md 教的用法。若只在文件不存在时才写，
     补 --full 会变成"层目录建了、配置没更新"，三个新层的文档立刻报 E3 layer 非法。
     """
     if not os.path.exists(path):
-        schema = json.loads(json.dumps(SCHEMA_TEMPLATE))
+        schema = json.loads(json.dumps(body))
         schema["layers"] = layers
         write_if_absent(path, json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
         return
@@ -165,15 +133,16 @@ def main():
     BASE = root
     docs = os.path.join(root, args.docs)
     date = datetime.date.today().isoformat()
-    layers = dict(BASE_LAYERS)
+    base_layers, extra_layers, schema_body = load_defaults()
+    layers = dict(base_layers)
     if args.full:
-        layers.update(EXTRA_LAYERS)
+        layers.update(extra_layers)
 
     print(f"target: {root}")
     for d in layers:
         os.makedirs(os.path.join(docs, d), exist_ok=True)
 
-    ensure_schema(os.path.join(docs, "_schema.json"), layers)
+    ensure_schema(os.path.join(docs, "_schema.json"), layers, schema_body)
 
     copy_tpl("docs-README.md", os.path.join(docs, "README.md"), date)
     copy_tpl("dev-plan.md", os.path.join(docs, "00-门面", "开发计划.md"), date)

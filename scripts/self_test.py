@@ -107,6 +107,22 @@ def main():
                   "| 结论 |" in fc_body and "差异" in fc_body,
                   fc_body.splitlines()[-2][:120] if len(fc_body.splitlines()) > 1 else "")
 
+        # 结构默认值只在一处：assets/default-schema.json（ISS-067 / ISS-068）。
+        # 以前 doc_init 自带 BASE_LAYERS / EXTRA_LAYERS / SCHEMA_TEMPLATE 一份副本，
+        # 「加层只改 _schema.json」就成了假话——照规则改，新项目根本铺不出新层。
+        dflt = os.path.join(SKILL, "assets", "default-schema.json")
+        proj = os.path.join(tmp, "docs", "_schema.json")
+        check("assets/default-schema.json 存在", os.path.exists(dflt))
+        if os.path.exists(dflt) and os.path.exists(proj):
+            with open(dflt, encoding="utf-8") as fh:
+                d = json.load(fh)
+            with open(proj, encoding="utf-8") as fh:
+                p = json.load(fh)
+            check("_schema.json 的枚举 / 段结构 / 文件名来自 assets/default-schema.json（ISS-068）",
+                  all(p.get(k) == v for k, v in d["schema"].items()))
+            check("--full 的层 = base + extra，两者同出一份 asset（ISS-068）",
+                  p.get("layers") == {**d["layer_sets"]["base"], **d["layer_sets"]["extra"]})
+
         # 默认（不带 --full）只铺 5 层。这条路径曾因 layers 与内置 8 层合并而报 3 条假 E9，
         # 而本文件以前一律带 --full，所以 32 条断言全绿也没拦住它。
         tmp5 = tempfile.mkdtemp(prefix="ddd-selftest5-")

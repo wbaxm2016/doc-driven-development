@@ -1,5 +1,15 @@
 # 变更记录
 
+## 2.4.10
+
+`doc_init` 的层表与枚举从脚本里搬出来：结构默认值只剩一处。**不破安装**。
+
+### 变更
+
+- **`assets/default-schema.json` 成为结构默认值的唯一来源**（ISS-067 / ISS-068）：`doc_init` 删掉 `BASE_LAYERS` / `EXTRA_LAYERS` / `SCHEMA_TEMPLATE` 三份内置副本，改成读这个文件——`layer_sets.base` 铺 5 层，`--full` 再加 `layer_sets.extra`，其余枚举 / 段结构 / 文件名原样写进项目的 `docs/_schema.json`。加层从此只改这一个 JSON。
+- **硬规则 11 恢复成无例外**：2.4.9 曾把「`doc_init` 是例外，加层要同时改脚本」写进规则——那是把实现缺陷写成了规则。默认值搬走后例外不存在，规则只剩一句「只改 `assets/default-schema.json`」。
+- **自测第 1 组加 3 条**：asset 存在；`_schema.json` 的枚举 / 段结构 / 文件名与 asset 逐键相等；`--full` 的层 = base + extra（221 → 224）。
+
 ## 2.4.9
 
 补三处「说了但没说清」：空号有交代、跨仓锚点有形态、层表的例外写明。**不破安装**。
