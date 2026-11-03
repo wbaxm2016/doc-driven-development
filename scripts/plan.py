@@ -152,11 +152,34 @@ def load_schema(docs):
 
 
 # ---------------------------------------------------------------- 表格解析
+def split_row(s):
+    """按未转义的竖线切一行表格；`\\|` 还原成 `|`（ISS-070，与 doc_check 同口径）。"""
+    s = s.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|") and not s.endswith("\\|"):
+        s = s[:-1]
+    cells, cur, i = [], "", 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s) and s[i + 1] == "|":
+            cur += "|"
+            i += 2
+            continue
+        if s[i] == "|":
+            cells.append(cur.strip())
+            cur = ""
+            i += 1
+            continue
+        cur += s[i]
+        i += 1
+    cells.append(cur.strip())
+    return cells
+
 def cells(line):
     s = line.strip()
     if not s.startswith("|") or not s.endswith("|") or len(s) < 3:
         return None
-    return [p.strip() for p in s[1:-1].split("|")]
+    return split_row(s)
 
 
 def is_sep(row):

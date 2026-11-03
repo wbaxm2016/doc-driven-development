@@ -331,12 +331,36 @@ def pending_gate(ctx):
     return errs
 
 
+def split_row(s):
+    """按未转义的竖线切一行表格；`\\|` 还原成 `|`（ISS-070，与 doc_check 同口径）。"""
+    s = s.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|") and not s.endswith("\\|"):
+        s = s[:-1]
+    cells, cur, i = [], "", 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s) and s[i + 1] == "|":
+            cur += "|"
+            i += 2
+            continue
+        if s[i] == "|":
+            cells.append(cur.strip())
+            cur = ""
+            i += 1
+            continue
+        cur += s[i]
+        i += 1
+    cells.append(cur.strip())
+    return cells
+
+
 def set_pending_state(path, qid, state, note):
     out = []
     for ln in read(path).splitlines(True):
         s = ln.strip()
         if s.startswith("|") and s.endswith("|") and s.count("|") >= 5:
-            parts = s[1:-1].split("|")
+            parts = split_row(s)
             if parts[0].strip().strip("*` ") == qid:
                 parts[-2] = " %s " % state
                 parts[-1] = " %s " % cell(note)
@@ -467,7 +491,7 @@ def append_inbox_row(ctx, iid, kind, question, impact, to, nature="可关闭",
     for i, ln in enumerate(lines):
         if not ln.strip().startswith("|"):
             continue
-        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
+        cells = split_row(ln)
         if cells and cells[0] == "ID" and "状态" in cells and "问题" in cells:
             head, heads = i, cells
             break

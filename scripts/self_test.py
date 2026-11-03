@@ -185,6 +185,28 @@ def main():
         _, pout = run("plan.py", "check", cwd=tmp)
         check("P4 分值越界（必须带码打印，供 CI grep）", "[P4]" in pout, pout[-300:])
 
+        # E28：cell 里未转义的竖线会让整行错位（ISS-070）。这类错位以前只有 CI 的
+        # verify 撞得到——本仓 REQ-014 就是带着 12 格的行跑了半天绿。
+        tmp28 = tempfile.mkdtemp(prefix="ddd-selftest28-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp28)
+            req28 = os.path.join(tmp28, "docs", "20-契约", "requirements.md")
+            base28 = read(req28)
+            write(req28, insert_after(base28, "| **REQ-001** |",
+                  "| **REQ-098** | WHEN 甲 THE SYSTEM SHALL 乙 | 表头是 | ID | 状态 | | "
+                  "`echo 1` | 已实现 | 甲 | 采纳✓ 2026-11-03｜自测 |"))
+            _, out = run("doc_check.py", cwd=tmp28)
+            check("E28 未转义竖线让整行错位（ISS-070）", "E28" in codes(out), out[-300:])
+            write(req28, insert_after(base28, "| **REQ-001** |",
+                  "| **REQ-098** | WHEN 甲 THE SYSTEM SHALL 乙 | 表头是 \\| ID \\| 状态 \\| 三列 | "
+                  "`echo 1` | 已实现 | 甲 | 采纳✓ 2026-11-03｜自测 |"))
+            _, out = run("doc_check.py", cwd=tmp28)
+            check("转义后的竖线不再报 E28（切表与校验同口径）",
+                  "E28" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp28, ignore_errors=True)
+
         # ---------------------------------------------------------------- 4
         print("\n4. 生成区幂等")
         # 上一步故意留了非法分值，先修回来——plan index 在分值非法时拒绝写盘是正确行为
@@ -971,7 +993,7 @@ def main():
             c, out = run("doc_check.py", cwd=tmp18)
             check("「已实现」但依据是占位 → E23", c == 1 and "E23" in codes(out), out[-300:])
 
-            write(req18, base18.replace(row, "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1))
+            write(req18, base18.replace(row + " — |", "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1))
             c, out = run("doc_check.py", cwd=tmp18)
             check("「已实现」且依据指得出出处 → 不报",
                   c == 0 and "E22" not in codes(out) and "E23" not in codes(out), out[-300:])
@@ -1113,7 +1135,7 @@ def main():
             write(req22, base_req.replace(
                 "| **REQ-001** |",
                 "| **REQ-009** | WHEN 触发 THE SYSTEM SHALL 行为 | 看命令"
-                " | `python -c pass` | 待实现 | — |\n| **REQ-001** |", 1))
+                " | `python -c pass` | 待实现 | — | — |\n| **REQ-001** |", 1))
             c, out = run("doc_check.py", cwd=tmp22)
             check("需求没有任何功能覆盖 → W8", c == 0 and "W8" in codes(out), out[-300:])
             write(req22, base_req)
