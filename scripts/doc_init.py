@@ -192,6 +192,7 @@ def main():
     write_if_absent(os.path.join(docs, "00-门面", "vision.md"),
                     fm("产品定位", "facade", "这个产品是什么、为什么做。", date, authority="1"))
     copy_tpl("features.md", os.path.join(docs, "40-运行", "FEATURES.md"), date)
+    copy_tpl("feature-check.md", os.path.join(docs, "40-运行", "功能对照.md"), date)
     copy_tpl("direction.md", os.path.join(docs, "00-门面", "方向卡.md"), date)
     copy_tpl("design.md", os.path.join(docs, "00-门面", "设计卡.md"), date)
     write_if_absent(os.path.join(docs, "30-决策", "decisions.md"),

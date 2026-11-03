@@ -90,11 +90,22 @@ def main():
     print(f"临时项目: {tmp}\n")
     try:
         # ---------------------------------------------------------------- 1
-        print("1. 铺骨架后首跑全绿")
+        print("\n1. 铺骨架后首跑全绿")
         run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", "--full", cwd=tmp)
         c, out = run("doc_check.py", "--quiet", cwd=tmp)
         check("doc_init + doc_check 为 0 error", c == 0 and "errors=0" in out, out.strip()[-200:])
         check("_schema.json 已生成", os.path.exists(os.path.join(tmp, "docs", "_schema.json")))
+
+        # ISS-052 / ISS-053：主干道第 8 格「对照」原先指向技能包内的模板，
+        # 用户项目里根本不存在那个文件；现在随 doc_init 落地，且表头口径与 SKILL 一致。
+        fc = os.path.join(tmp, "docs", "40-运行", "功能对照.md")
+        check("功能对照清单随 doc_init 落地（ISS-052）", os.path.exists(fc))
+        if os.path.exists(fc):
+            with open(fc, encoding="utf-8") as fh:
+                fc_body = fh.read()
+            check("对照清单表头是四列、含「差异」（ISS-053）",
+                  "| 结论 |" in fc_body and "差异" in fc_body,
+                  fc_body.splitlines()[-2][:120] if len(fc_body.splitlines()) > 1 else "")
 
         # 默认（不带 --full）只铺 5 层。这条路径曾因 layers 与内置 8 层合并而报 3 条假 E9，
         # 而本文件以前一律带 --full，所以 32 条断言全绿也没拦住它。
@@ -1041,8 +1052,8 @@ def main():
 
             write(feat21, base21.replace("| 待评审 |", "| 实施中 |", 1))
             c, out = run("devlog.py", "features", "--state", "实施中", cwd=tmp21)
-            check("筛选命中实施中的功能并给出对照模板名",
-                  c == 0 and "F-001" in out and "feature-check" in out, out[-300:])
+            check("筛选命中实施中的功能并给出对照清单路径",
+                  c == 0 and "F-001" in out and "功能对照.md" in out, out[-300:])
         finally:
             shutil.rmtree(tmp21, ignore_errors=True)
 

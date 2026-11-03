@@ -572,7 +572,7 @@ def cmd_features(ctx, args):
         print("  %s  [%s]  %s%s" % (r["id"], r["state"], r["feature"],
                                     ("  ← " + r["req"]) if r["req"] else ""))
     if want in ("实施中", "已对照"):
-        print("对照清单：assets/templates/feature-check.md（三栏：功能 / 该验什么 / 结论与差异）")
+        print("对照清单：40-运行/功能对照.md（四列：功能 / 该验什么 / 结论 / 差异 · 证据）")
     return 0
 
 
