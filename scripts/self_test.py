@@ -993,7 +993,7 @@ def main():
             c, out = run("doc_check.py", cwd=tmp18)
             check("「已实现」但依据是占位 → E23", c == 1 and "E23" in codes(out), out[-300:])
 
-            write(req18, base18.replace(row, "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1))
+            write(req18, base18.replace(row + " — |", "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1))
             c, out = run("doc_check.py", cwd=tmp18)
             check("「已实现」且依据指得出出处 → 不报",
                   c == 0 and "E22" not in codes(out) and "E23" not in codes(out), out[-300:])
