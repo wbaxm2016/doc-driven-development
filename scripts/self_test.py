@@ -1648,6 +1648,21 @@ def main():
         finally:
             shutil.rmtree(tmp32, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 42
+        print("\n42. 已闭环表保留发现日（REQ-014）")
+        tpl33 = os.path.join(SKILL, "assets", "templates", "inbox.md")
+        check("归档模板的已闭环表含「发现日」列",
+              os.path.exists(tpl33) and "| ID | 发现日 | 结论 | 闭环日 |" in read(tpl33))
+        tmp34 = tempfile.mkdtemp(prefix="ddd-selftest34-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp34)
+            inbox34 = os.path.join(tmp34, "docs", "70-过程", "问题收件箱.md")
+            check("doc_init 铺出的实例也是同一表头",
+                  os.path.exists(inbox34) and "| ID | 发现日 | 结论 | 闭环日 |" in read(inbox34))
+        finally:
+            shutil.rmtree(tmp34, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
