@@ -64,6 +64,27 @@ python scripts/doc_check.py      # 全库字段与链接
 - CI 必须绿：Python 3.8 与 3.12 双版本、契约 verify、可重复构建（两次打包 sha256 相同）。
 - 大改（新层、新状态词、改公开契约）先开 issue 对齐，再动手。
 
+## 推送与网络
+
+本机推送有三处隐性前提（ISS-040）：直连 `github.com:443` 可能不通（本机走 `127.0.0.1:7897`）；走代理时 schannel 后端会报 `SEC_E_NO_CREDENTIALS`，要 `http.sslBackend=openssl`；凭据由 Git Credential Manager 缓存（`credential.helper=manager` 就够——**别加 `GIT_TERMINAL_PROMPT=0`**，那会让它取不到凭据）。
+
+判「本地领先几个提交」之前，先看远端真实 HEAD：
+
+```bash
+git ls-remote --heads origin              # 远端真实 HEAD
+git fetch origin --prune && git status --short --branch
+```
+
+推不动时按顺序试，成了就停：
+
+```bash
+git push                                                          # 先直连（GCM 有缓存）
+git -c http.proxy=http://127.0.0.1:7897 -c http.sslBackend=openssl push
+git fetch origin && git merge --ff-only origin/main && git push   # 被 fetch first 拒时
+```
+
+`git pull` 报「Already up to date」**不等于**已经同步：拉完核对 `git rev-parse HEAD` 与 `git status --short --branch` 的 ahead/behind；对不上就退回 `git fetch && git merge --ff-only origin/main`。
+
 ## 发版不由 PR 作者做
 
 包内文件（`scripts/`、`references/`、`assets/`、`SKILL.md`、`VERSION`、`.skill-metadata.yaml`）变了，合并后由维护者按 README「发版」一节统一打包、装 5 端、提交 `dist/`。PR 里不要改 `VERSION` 或 `dist/`。

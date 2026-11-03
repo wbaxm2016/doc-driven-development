@@ -1594,6 +1594,34 @@ def main():
         finally:
             shutil.rmtree(tmp30, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 40
+        print("\n40. 装机逐字节核对 + 历史残留清理（ISS-039）")
+        # install.py 是仓库级工具，不随包分发——在解包后的自测里这一组只能跳过。
+        installer31 = os.path.join(SKILL, "install.py")
+        tmp31 = tempfile.mkdtemp(prefix="ddd-selftest31-")
+        try:
+            if not os.path.exists(installer31):
+                print("  SKIP  包内不带 install.py（装机脚本不随包分发），这组在源码目录里跑")
+            else:
+                skills = os.path.join(tmp31, "skills")
+                os.makedirs(skills, exist_ok=True)
+                man31 = os.path.join(tmp31, "targets.json")
+                write(man31, '{"skill": "doc-driven-development", "targets": '
+                             '[{"id": "fake", "name": "假宿主", "paths": ["%s"]}]}'
+                             % skills.replace("\\", "/"))
+                c, out = run(installer31, "--manifest", man31, "--from", "worktree", cwd=tmp31)
+                check("装机后逐字节核对 缺 0 / 不等 0",
+                      c == 0 and "核对 缺 0 / 不等 0" in out, out[-400:])
+
+                dest31 = os.path.join(skills, "doc-driven-development")
+                write(os.path.join(dest31, "build.py"), "手工拷进来的旧文件")
+                c, out = run(installer31, "--manifest", man31, "--from", "worktree", cwd=tmp31)
+                check("历史残留被报出并清掉（ISS-039）",
+                      c == 0 and "清理多余 1" in out
+                      and not os.path.exists(os.path.join(dest31, "build.py")), out[-400:])
+        finally:
+            shutil.rmtree(tmp31, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

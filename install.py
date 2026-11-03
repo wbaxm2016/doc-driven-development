@@ -140,7 +140,18 @@ def install_one(target: dict, entries: list[tuple[str, bytes]], meta: dict,
     if dry_run:
         return True, f"将安装到 {dest}（{len(entries)} 个文件；来源：{why}）"
 
+    expected = {os.path.normpath(rel).replace("\\", "/"): data for rel, data in entries}
+
+    # 装之前先看目标目录里有没有不属于包的东西（ISS-039：手工拷贝/旧版残留）。
+    # 它们会被后面的整目录重装清掉，但必须**先报出来**——「清掉了什么」也是装机事实。
+    stale = []
     if os.path.isdir(dest):
+        for base, _dirs, files in os.walk(dest):
+            for name in files:
+                full = os.path.join(base, name)
+                rel = os.path.relpath(full, dest).replace("\\", "/")
+                if rel not in expected and rel != ".install.json":
+                    stale.append(rel)
         shutil.rmtree(dest)
     os.makedirs(dest, exist_ok=True)
     for rel, data in entries:
@@ -164,8 +175,23 @@ def install_one(target: dict, entries: list[tuple[str, bytes]], meta: dict,
         marker["artifact"] = meta["artifact"]
     with open(os.path.join(dest, ".install.json"), "w", encoding="utf-8") as fh:
         json.dump(marker, fh, ensure_ascii=False, indent=2)
-    return True, (f"{dest}（{marker['files']} 个文件，v{marker['version']}，"
-                  f"source={marker['source']}，commit {marker['commit']}）")
+
+    # 装完自己核一遍（ISS-039）：装了什么不能靠「命令返回 0」——逐字节比一遍，
+    # 缺 / 不等算失败；装前发现的多余文件已经清掉，一并写进结论。
+    missing, mismatch = [], []
+    for rel, data in expected.items():
+        full = os.path.join(dest, rel.replace("/", os.sep))
+        if not os.path.exists(full):
+            missing.append(rel)
+        elif open(full, "rb").read() != data:
+            mismatch.append(rel)
+    ok = not missing and not mismatch
+    detail_tail = "；核对 缺 %d / 不等 %d" % (len(missing), len(mismatch))
+    if stale:
+        detail_tail += "；清理多余 %d（%s%s）" % (
+            len(stale), "、".join(stale[:3]), "…" if len(stale) > 3 else "")
+    return ok, (f"{dest}（{marker['files']} 个文件，v{marker['version']}，"
+                f"source={marker['source']}，commit {marker['commit']}）" + detail_tail)
 
 
 SKILL_NAME = "doc-driven-development"
