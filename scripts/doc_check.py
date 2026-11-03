@@ -91,7 +91,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
-         "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18",
+         "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
          "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]
 
@@ -170,13 +170,57 @@ def h1_of(body):
     return ""
 
 
+def split_row(s):
+    """按**未转义**的竖线切一行表格；`\\|` 还原成 `|`（GFM 的转义写法）。
+
+    ISS-070：原来直接 `split("|")`。一格写了 `| ID | 发现日 |` 就把 7 列的行切成 12 格，
+    E18 读到第 4 格「ID」——校验全绿而 CI 的 verify 红，人先去怀疑 CI。
+    """
+    s = s.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|") and not s.endswith("\\|"):
+        s = s[:-1]
+    cells, cur, i = [], "", 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s) and s[i + 1] == "|":
+            cur += "|"
+            i += 2
+            continue
+        if s[i] == "|":
+            cells.append(cur.strip())
+            cur = ""
+            i += 1
+            continue
+        cur += s[i]
+        i += 1
+    cells.append(cur.strip())
+    return cells
+
+
+def table_width_errors(text):
+    """[(行号, 表头格数, 本行格数)]：行内未转义竖线会让整行错位（E28）。"""
+    out, head = [], None
+    for no, line in enumerate(text.splitlines(), 1):
+        s = line.strip()
+        if s.startswith("|") and s.endswith("|") and len(s) > 2:
+            n = len(split_row(s))
+            if head is None:
+                head = n
+            elif n != head:
+                out.append((no, head, n))
+        else:
+            head = None
+    return out
+
+
 def read_tables(text):
     """极简 Markdown 表解析：返回 [(header, rows)]。"""
     tables, block = [], []
     for line in text.splitlines() + [""]:
         s = line.strip()
         if s.startswith("|") and s.endswith("|") and len(s) > 2:
-            block.append([c.strip() for c in s[1:-1].split("|")])
+            block.append(split_row(s))
         else:
             if len(block) >= 2:
                 header, rows = block[0], block[1:]
@@ -267,7 +311,7 @@ def row_req_ids(text, req_re):
         s = line.strip()
         if not s.startswith("|"):
             continue
-        for cell in s.strip("|").split("|"):
+        for cell in split_row(s):
             m = req_re.fullmatch(strip_md(cell))
             if m:
                 ids.append(m.group(0))
@@ -561,6 +605,12 @@ def main():
             if re.search(r"[-_]v\d+(\.\d+)?(\.|$)", base):
                 add(errors, rel, "E14", f"文件名带版本号：{base}（版本走 front-matter 或 Git）")
 
+        # ---- E28 表格行格数 ≠ 表头：cell 里未转义的竖线会让整行错位（ISS-070）
+        for no, hn, rn in table_width_errors(strip_fences(body)):
+            add(errors, rel, "E28",
+                f"第 {no} 行有 {rn} 格、表头 {hn} 格：cell 里出现了未转义的竖线，整行会错位"
+                f"（写成「A / B / C 三列」，或用 `\\|` 转义）")
+
         # ---- ADR 结构（E10 / E12 / E15）
         if decision_dir and rel.startswith(f"{decision_dir}/{names['adr_dir']}/"):
             adr_files.append(rel)
@@ -614,7 +664,7 @@ def main():
             for line in strip_code(body).splitlines():
                 if not line.strip().startswith("|"):
                     continue
-                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                cells = split_row(line)
                 if not cells or not req_re.fullmatch(strip_md(cells[0])):
                     continue
                 joined = " ".join(c for c in cells if not req_re.fullmatch(strip_md(c)))
@@ -821,7 +871,7 @@ def main():
                         s = line.strip()
                         if not s.startswith("|"):
                             continue
-                        cells = [c.strip() for c in s.strip("|").split("|")]
+                        cells = split_row(s)
                         ids = [strip_md(c) for c in cells if req_re.fullmatch(strip_md(c))]
                         if not ids:
                             continue
