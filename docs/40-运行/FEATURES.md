@@ -45,7 +45,7 @@ tags: [功能, 台账, 追溯]
 | **F-018** | 任务双亲与考核下沉 | REQ-007 | 任务同时挂功能与工作；任务是最小可实施 / 可验证 / 可考核单元；考核四格下沉到任务，功能只留汇总 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户确认｜ADR-003 | scripts/plan.py、scripts/doc_check.py、docs/40-运行/FEATURES.md | `self_test` 第 36 组；`plan.py check` / `doc_check` 0 error（2026-11-02） | 各任务考核见 T5.6.1｜整体一致：全｜代价：M（同估）｜结论：保留 | f4b69ed |
 | **F-019** | 方向线的形成过程 | REQ-008 | 现状（含方向）→ 工作 → 任务 → 推进的模板与判据；方向卡含现状 / 成功状态 / 路径 / 接缝 / 不覆盖 / 走通验收 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户描述方向线过程｜ADR-003 | docs/00-门面/方向卡.md、scripts/plan.py、assets/templates/direction.md | `self_test` 第 37 组；`plan.py check` 0 error（2026-11-02） | 各任务考核见 T5.7.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 56e629a |
 | **F-020** | 设计步与可替换性 | REQ-009 | 设计卡含接口 / 可替换点 / 扩展点 / 失败边界 / 任务拆分；设计门在拆任务前；考核回顾可回到设计 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜2026-11-02 用户指出缺设计｜ADR-003 | docs/00-门面/设计卡.md、scripts/plan.py、assets/templates/design.md | `self_test` 第 38 组；`plan.py check` 0 error（2026-11-02） | 各任务考核见 T5.8.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 72d5947 |
-| **F-021** | 主干道落点在项目里可达 | REQ-010 | `doc_init` 之后第 7 格有冒烟命令、第 8 格有对照清单实例；模板表头与 SKILL 同口径（四列）；README 的指针指向真实存在的内容 | `python scripts/self_test.py -v`（第 1 组） | S | 已对照 | 采纳✓ 可做✓ 代价S｜T9.1.1–T9.1.3｜2026-11-03（用户「继续」＝采纳本轮修复方案） | scripts/doc_init.py、assets/templates/feature-check.md、SKILL.md、README.md | `self_test` 第 1 组新增两条（对照清单落地 / 四列表头）；205/205（2026-11-03） | 各任务考核见 T9.1.1–T9.1.3｜整体一致：全｜代价：S（同估）｜结论：保留 | 待提交 |
+| **F-021** | 主干道落点在项目里可达 | REQ-010 | `doc_init` 之后第 7 格有冒烟命令、第 8 格有对照清单实例；模板表头与 SKILL 同口径（四列）；README 的指针指向真实存在的内容 | `python scripts/self_test.py -v`（第 1 组） | S | 已验收 | 采纳✓ 可做✓ 代价S｜T9.1.1–T9.1.3｜2026-11-03（用户「继续」＝采纳本轮修复方案） | scripts/doc_init.py、assets/templates/feature-check.md、SKILL.md、README.md | `self_test` 第 1 组新增两条（对照清单落地 / 四列表头）；205/205；2.4.1 装 5 端逐字节一致（2026-11-03） | 各任务考核见 T9.1.1–T9.1.3｜整体一致：全｜代价：S（同估）｜结论：保留 | 5cea2f0 |
 
 ## 2. 任务考核
 
@@ -102,10 +102,10 @@ tags: [功能, 台账, 追溯]
 | **T5.8.1** | 设计卡落成 `00-门面/设计卡.md`（K1 · W5.8）+ `P19`（三格 / 待开工与进行中有卡 / 孤儿卡 / 一工作一卡）；设计门进 SKILL，模板 `design.md` | 全 | M（同估） | 保留 | 72d5947 |
 | **T8.1.1** | 发版 2.4.0：`VERSION` + CHANGELOG 汇总 T4.4.1–T5.8.1；`build.py` 验包 32 文件、解包自测 203/203；`--from dist` 装 5 端并逐字节核（2026-11-03 复测：缺 0 / 不等 0） | 全 | S（同估） | 保留 | 6136031 |
 | **T7.2.1** | 发 GitHub Release `v2.4.0`：tag → `780607f`，正文截 CHANGELOG 2.4.0 段，上传 `.skill` 资产；下载回核 sha256 | 全 | S（同估） | 保留 | 780607f |
-| **T9.1.1** | 模板补 front-matter、表头统一四列；`doc_init` 复制为 `40-运行/功能对照.md`；SKILL 第 8 格与 `devlog features` 的提示改指同一路径；`self_test` 第 1 组加两条断言 | 全 | S（同估） | 保留 | 待提交 |
-| **T9.1.2** | 主干道第 7 格写明 `python scripts/self_test.py`，并注明「你的项目里＝一条最便宜的端到端命令」 | 全 | S（同估） | 保留 | 待提交 |
-| **T9.1.3** | README 快速开始末句改指 `install-targets.json`（`install.py --list` 打印每端目标目录），不再声称 CONTRIBUTING 写有宿主目录 | 全 | S（同估） | 保留 | 待提交 |
-| **T9.1.4** | `VERSION` 2.4.1 + CHANGELOG；`build.py` 验包；`--from dist` 装 5 端；独立脚本按包内文件逐字节核对 | 全 | S（同估） | 保留 | 待提交 |
+| **T9.1.1** | 模板补 front-matter、表头统一四列；`doc_init` 复制为 `40-运行/功能对照.md`；SKILL 第 8 格与 `devlog features` 的提示改指同一路径；`self_test` 第 1 组加两条断言 | 全 | S（同估） | 保留 | 5cea2f0 |
+| **T9.1.2** | 主干道第 7 格写明 `python scripts/self_test.py`，并注明「你的项目里＝一条最便宜的端到端命令」 | 全 | S（同估） | 保留 | 5cea2f0 |
+| **T9.1.3** | README 快速开始末句改指 `install-targets.json`（`install.py --list` 打印每端目标目录），不再声称 CONTRIBUTING 写有宿主目录 | 全 | S（同估） | 保留 | 5cea2f0 |
+| **T9.1.4** | `VERSION` 2.4.1 + CHANGELOG；`build.py` 验包；`--from dist` 装 5 端；独立脚本按包内文件逐字节核对 | 全 | S（同估） | 保留 | 5cea2f0 |
 
 ## 已评审提案
 
