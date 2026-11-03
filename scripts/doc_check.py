@@ -778,10 +778,10 @@ def main():
                             f"{fid} 的考核汇总没指出考核在哪：写「各任务考核见 T…」，"
                             f"让汇总可以逐条回溯到任务")
                     dn = strip_md(row[i_dn]) if i_dn is not None and i_dn < len(row) else ""
-                    if st == "已验收" and dn in REF_PLACEHOLDERS:
+                    if st == "已验收" and (dn in REF_PLACEHOLDERS or dn == "待提交"):
                         add(errors, rel, "E27",
                             f"{fid} 已验收但没记「完成于」：写该功能验收时的 commit 短号"
-                            f"（回滚到它之前就靠这个锚点）")
+                            f"（回滚到它之前就靠这个锚点；「待提交」不算记，ISS-046）")
 
         # ---- 契约增量（E19 / E20 / E21，T1.1.2）
         # 机器判据只覆盖 _delta/README.md 里能机械判的部分：目录与 status、

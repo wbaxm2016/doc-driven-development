@@ -1554,6 +1554,46 @@ def main():
         finally:
             shutil.rmtree(tmp29, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 39
+        print("\n39. 反向判据会自己醒来（@日期）+ 完成于不许「待提交」（ISS-046 / ISS-050）")
+        tmp30 = tempfile.mkdtemp(prefix="ddd-selftest30-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp30)
+            inbox30 = os.path.join(tmp30, "docs", "70-过程", "问题收件箱.md")
+            base30 = read(inbox30)
+            past = base30.replace("| 抽单一常量（`docs/_schema.json`） | — |",
+                                  "| 抽单一常量（`docs/_schema.json`） | @2020-01-01 |", 1)
+            check("用例就位：回到条件里写了一个过去的 @日期", past != base30)
+            write(inbox30, past)
+            c, out = run("devlog.py", "brief", cwd=tmp30)
+            check("brief 报出已到期的复核项（ISS-050）",
+                  c == 0 and "已到期 1" in out and "ISS-001" in out, out[-400:])
+
+            write(inbox30, past.replace("@2020-01-01", "@2099-01-01"))
+            c, out = run("devlog.py", "brief", cwd=tmp30)
+            check("没到期的只报「最近到期」，不冒充已到期",
+                  c == 0 and "已到期" not in out and "2099-01-01" in out, out[-400:])
+
+            # 完成于 = 「待提交」按没记算：任务级 P15 要报（模板里那行示例的锚点是 `abc1234`）
+            plan30 = os.path.join(tmp30, "docs", "00-门面", "开发计划.md")
+            feat30 = os.path.join(tmp30, "docs", "40-运行", "FEATURES.md")
+            write(plan30, read(plan30).replace("| W1.1 | 待开工 |", "| W1.1 | 已完成 |", 1))
+            checked_row = read(feat30).replace("| `abc1234` |", "| 待提交 |", 1).replace(
+                "（这场改了什么、怎么改的）", "补了断言与码", 1)
+            check("用例就位：考核行的完成于改成「待提交」", checked_row != read(feat30))
+            write(feat30, checked_row)
+            c, out = run("plan.py", "check", cwd=tmp30)
+            check("任务考核的「完成于：待提交」→ P15（ISS-046）",
+                  c == 1 and "[P15]" in out and "完成于" in out, out[-400:])
+
+            write(feat30, checked_row.replace("| 待提交 |", "| abc1234 |", 1))
+            c, out = run("plan.py", "check", cwd=tmp30)
+            check("写成 commit 短号后 P15 消失",
+                  c == 0 and "[P15]" not in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp30, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -48,8 +48,10 @@ FEATURE_ID_RE = re.compile(r"^F-\d+$")
 TASK_ID_RE = re.compile(r"^T\d+\.\d+\.\d+$")
 LEGACY = "—（历史）"
 # 考核一行里这些写法等于没写（与 doc_check 的 REF_PLACEHOLDERS 同口径）。
-# 注意「待提交」不在集合里：编码与校验必须发生在提交之前，commit 短号是提交后回写的。
+# 「待提交」也按没记算（ISS-046）：它曾经是个合规的免死金牌，锚点可以永远空着。
+# 正确顺序是「先提交代码 → 回写完成于 → 再补一次 docs 提交」。
 PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "待定", "tbd", "todo"}
+ANCHOR_PLACEHOLDERS = PLACEHOLDERS | {"待提交"}
 ASSESS_CELLS = ("做法", "一致", "代价", "结论")
 # 方向卡的三格必填（P18）。路径与接缝不判：步数靠人读，接缝按 ADR-003 的已知缺口不做机器判。
 CARD_CELLS = ("现状", "成功状态", "走通验收")
@@ -538,9 +540,9 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=N
                 if miss:
                     E("P15", f"{it['id']} 的任务考核缺槽位：{'、'.join(miss)}"
                              f"（四格要同时写满，否则考核退化成一句话总结）")
-                if blank(row.get("完成于")):
+                if (row.get("完成于") or "").strip() in ANCHOR_PLACEHOLDERS:
                     E("P15", f"{it['id']} 的考核没记「完成于」：写该任务的 commit 短号，"
-                             f"回滚到它之前就靠这个锚点")
+                             f"回滚到它之前就靠这个锚点（「待提交」不算记）")
             for tid in sorted(feats["assess"]):
                 if tid not in all_task_ids:
                     E("P15", f"「任务考核」表里的 {tid} 不在计划 §5："

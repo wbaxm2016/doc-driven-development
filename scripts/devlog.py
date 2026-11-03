@@ -1103,6 +1103,59 @@ def handoff_first_line(text):
     return next((ln.strip() for ln in m.group(1).splitlines() if ln.strip()), "")
 
 
+DUE_RE = re.compile(r"@(\d{4}-\d{2}-\d{2})")
+
+
+def _read_text(path):
+    try:
+        with open(path, encoding="utf-8-sig") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def due_items(ctx):
+    """反向判据的唤醒点：回到条件 / ADR 撤销条件 / 方向卡走通验收 里的 `@YYYY-MM-DD`。
+
+    只认显式日期。「下次动 X 时」这类条件脚本判不了，也不该猜——猜错就变成噪音，
+    而噪音会让这条提醒本身失去可信度（ISS-050 的最小机制：先让写了日期的那部分会响）。
+    """
+    out = []
+    for r in inbox_entries(ctx):
+        if r.get("table") != "main":
+            continue
+        m = DUE_RE.search(r.get("back") or "")
+        if m:
+            out.append((r["id"], m.group(1), "回到条件"))
+    adr_dir = os.path.join(ctx.docs, layer_dir(ctx.schema, "decision") or "",
+                           ctx.schema["names"]["adr_dir"])
+    if os.path.isdir(adr_dir):
+        for name in sorted(os.listdir(adr_dir)):
+            if not name.endswith(".md"):
+                continue
+            text = _read_text(os.path.join(adr_dir, name))
+            sec = re.search(r"##\s*撤销条件\s*\n(.*?)(?=\n##\s|\Z)", text, re.S)
+            hit = DUE_RE.search(sec.group(1)) if sec else None
+            if hit:
+                out.append((name[:-3], hit.group(1), "撤销条件"))
+    card = os.path.join(ctx.docs, layer_dir(ctx.schema, "facade") or "",
+                        ctx.schema["names"].get("direction_card", "方向卡.md"))
+    if os.path.exists(card):
+        for header, rows in read_tables(_read_text(card)):
+            heads = [strip_md(h) for h in header]
+            if "走通验收" not in heads:
+                continue
+            i_ok = heads.index("走通验收")
+            i_dir = heads.index("方向") if "方向" in heads else 0
+            for r in rows:
+                if len(r) != len(heads):
+                    continue
+                m = DUE_RE.search(r[i_ok])
+                if m:
+                    out.append((strip_md(r[i_dir]), m.group(1), "走通验收"))
+    return out
+
+
 def cmd_brief(ctx, as_json=False):
     """开场简报：上一场交接锚点 / 计划未完成 / 收件箱计数 / 最近三场。
 
@@ -1118,6 +1171,10 @@ def cmd_brief(ctx, as_json=False):
     counts = {"确立": 0, "实施中": 0, "实现关闭": 0, "拒绝": 0}
     for r in rows:
         counts[r["state"]] = counts.get(r["state"], 0) + 1
+
+    due = due_items(ctx)
+    today = datetime.date.today().isoformat()
+    overdue = [d for d in due if d[1] <= today]
 
     recent = []
     for p in ctx.sessions()[-3:][::-1]:
@@ -1145,6 +1202,8 @@ def cmd_brief(ctx, as_json=False):
             "pending": sorted(pending),
             "awaiting": {"open": len(p_open), "deferred": len(p_def)},
             "inbox": counts,
+            "due": {"total": len(due), "overdue": [{"id": i, "date": d, "where": w}
+                                                   for i, d, w in overdue]},
             "recent": recent,
         }, ensure_ascii=False, indent=2))
         return 0
@@ -1163,6 +1222,13 @@ def cmd_brief(ctx, as_json=False):
         print("待分诊：open 0 · deferred %d" % len(p_def))
     print(f"收件箱：确立 {counts.get('确立', 0)} · 实施中 {counts.get('实施中', 0)}"
           f" · 实现关闭 {counts.get('实现关闭', 0)} · 拒绝 {counts.get('拒绝', 0)}")
+    if overdue:
+        shown = "；".join(f"{k} @{d}（{w}）" for k, d, w in overdue[:4])
+        print(f"复核：已到期 {len(overdue)}（{shown}）← 回来判断它还算不算成立")
+    elif due:
+        print("复核：%d 条设了日期，最近到期 %s" % (len(due), min(d for _, d, _ in due)))
+    else:
+        print("复核：无——在「回到条件 / 撤销条件 / 走通验收」里写 @YYYY-MM-DD，到期就出现在这里")
     print("最近 3 场：" + (" / ".join(recent) if recent else "无"))
     return 0
 
