@@ -42,6 +42,7 @@ tags: [契约, 需求, EARS]
 | **REQ-012** | WHEN 一条反向判据写下到期日 `@YYYY-MM-DD`、或一条已完成的任务记下 `完成于` THE SYSTEM SHALL 到期日在开场 `brief` 里被列出，且 `完成于` 不接受「待提交」这类空锚点 | 收件箱「回到条件」写 `@2020-01-01` → `brief` 输出含「已到期 1」；写 `@2099-01-01` → 不含「已到期」；任务考核的 `完成于` 写「待提交」→ `[P15]`；改成 commit 短号 → 0 error | `python scripts/self_test.py -v`（第 39 组） | 已实现 | `scripts/devlog.py`、`scripts/plan.py`、T9.3.1 | 采纳✓ 2026-11-03｜档案 2026-11-03-001 §2 |
 | **REQ-013** | WHEN 一场会话收尾 THE SYSTEM SHALL 在会话档案 §3.6 留下「本轮摩擦」，按固定判据记（同一动作 ≥3 次 / 同一失败 ≥2 次 / 某一步明显超出预期），会再犯的转收件箱 | 归档模板含 `### 3.6 本轮摩擦`；转正一条 ISS 后新行「影响」列不是「—」 | `python scripts/self_test.py -v`（第 41 组） | 已实现 | `assets/templates/session-record.md`、T11.1.1 | 采纳✓ 2026-11-03｜006 §2 |
 | **REQ-014** | WHEN 一条 `ISS-nnn` 进入「已闭环」 THE SYSTEM SHALL 该行保留「发现日」，使「发现 → 闭环」的周期可计算 | 归档模板与 `doc_init` 铺出的实例，已闭环表头都是 `| ID | 发现日 | 结论 | 闭环日 |`；缺「发现日」→ 自测第 42 组失败 | `python scripts/self_test.py -v`（第 42 组） | 已实现 | `assets/templates/inbox.md`、T11.1.4 | 采纳✓ 2026-11-03｜006 §2 |
+| **REQ-015** | WHEN 用户想知道计划全貌 THE SYSTEM SHALL 用一条只读命令列出 方向 / 工作 / 任务 三层，每行带功能、状态与完成于，且不改写任何文档 | `plan.py tree` 含 D1 / W1.1 / T1.1.1；`--html` 是单文件且零外部请求；`--json` 的 tasks 与计划表行数一致 | `python scripts/self_test.py -v`（第 43 组） | 已实现 | `scripts/plan.py`、T12.1.1 | 采纳✓ 2026-11-03｜007 §2 |
 
 ## 2. 不得做的事
 
