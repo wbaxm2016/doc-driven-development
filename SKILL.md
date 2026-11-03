@@ -72,6 +72,7 @@ python scripts/devlog.py check      # 七段顺序、front-matter、ISS 引用�
 python scripts/devlog.py index      # 重建时间线
 python scripts/plan.py check        # 编号 / 分值 / 状态词 / 所属工作 / 前置与方向引用
 python scripts/plan.py index        # 重建排序视图
+python scripts/plan.py tree         # 只读全貌：方向 → 工作 → 任务（要页面加 --html --out x.html）
 python scripts/doc_check.py         # 全库字段与链接
 ```
 
@@ -238,7 +239,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
-| `scripts/plan.py` | `index [--check]` / `check [--json]`；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯） |
+| `scripts/plan.py` | `index [--check]` / `check [--json]` / `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯） |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
 | `scripts/self_test.py` | 自检：把本文「验收」1–32 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 | `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |
@@ -308,6 +309,8 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 31. **方向卡**：计划里有 `D1` 而卡里没有 → `[P18]`；卡的「现状 / 成功状态 / 走通验收」任一为空 → `[P18]` 指名那一格；卡里有 `D9` 而计划没有 → `[P18]` 孤儿方向；删掉方向卡 → 一条 `[P18]`（不逐行刷屏）；骨架自带的示例行 → 0 error。
 
 32. **设计卡**：工作停在「待开工」却没有卡 → `[P19]`；卡的「接口 / 可替换点 / 失败边界」任一为空或只写「无」→ `[P19]` 指名那一格；卡里写 `W9.9` 而计划 §4 没有 → `[P19]` 孤儿卡；一个工作两张卡 → `[P19]`；删掉设计卡 → 一条 `[P19]`（不逐行刷屏）；已做完的工作不追溯；骨架自带的示例卡 → 0 error。
+
+33. **计划树视图**：`plan.py tree` 列出 方向 / 工作 / 任务 三层，每行带功能、状态、完成于；`--html` 是**单文件**（不引外部资源、页面里写明「不要手改」、离线可看）；`--json` 的 `tasks` 计数与计划表行数一致。
 
 33. **摩擦留痕与转正列**：会话档案模板缺 `### 3.6 本轮摩擦` → 自测第 41 组失败；`pending --clear --as iss` 转正时 `--impact` 落进「影响（不处理会怎样）」列（不是「—」）→ 通过；落进别的列 → 失败。
 

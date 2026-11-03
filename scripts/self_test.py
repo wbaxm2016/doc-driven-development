@@ -1679,6 +1679,33 @@ def main():
         finally:
             shutil.rmtree(tmp34, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 43
+        print("\n43. 计划树视图：D → W → T，另出单文件页面")
+        # 读者是人，但页面必须是**生成物**：手写的视图会成为第二个事实源，
+        # 那正是 ISS-064 那类「文档与仓库对不上」的温床。
+        tmp35 = tempfile.mkdtemp(prefix="ddd-selftest35-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp35)
+            c, out = run("plan.py", "tree", cwd=tmp35)
+            check("tree 列出方向 / 工作 / 任务三层",
+                  c == 0 and "D1" in out and "W1.1" in out and "T1.1.1" in out, out[-200:])
+            c, out = run("plan.py", "tree", "--html", cwd=tmp35)
+            check("tree --html 是单文件页面且写明不要手改",
+                  c == 0 and out.lstrip().lower().startswith("<!doctype html>")
+                  and "不要手改" in out, out[:120])
+            check("tree --html 不引任何外部资源（离线可看）",
+                  "http://" not in out and "https://" not in out)
+            c, out = run("plan.py", "tree", "--json", cwd=tmp35)
+            ok_json = False
+            try:
+                ok_json = json.loads(out)["tasks"] == 1
+            except (ValueError, KeyError, TypeError):
+                ok_json = False
+            check("tree --json 给机读结构（tasks 计数）", c == 0 and ok_json, out[:150])
+        finally:
+            shutil.rmtree(tmp35, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

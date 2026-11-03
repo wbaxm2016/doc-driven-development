@@ -17,6 +17,7 @@ P14–P16 要读功能台账（`40-运行/FEATURES.md`）：任务挂的功能�
 """
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -638,18 +639,173 @@ def render(views):
     return "\n".join(out)
 
 
+# ---------------------------------------------------------------- 树视图（D → W → T）
+def tree_build(dirs, works, items, feats):
+    """把三层拼成树：方向 → 工作 → 任务。孤儿（方向不存在 / 工作不存在）单独收尾。
+
+    只读视图：不改任何文档，也不替 `check` 判合规——它回答的是「现在长什么样」，
+    合规由 `plan.py check` 判。
+    """
+    d_order, d_name = [], {}
+    if dirs:
+        for r in dirs[1]:
+            if not r:
+                continue
+            d_order.append(r[0])
+            d_name[r[0]] = r[1] if len(r) > 1 else ""
+    w_rows, w_by_d = {}, {d: [] for d in d_order}
+    if works:
+        h = works[0]
+        for r in works[1]:
+            if not r or len(r) != len(h):
+                continue
+            wid = r[0]
+            did = r[h.index("方向")] if "方向" in h else ""
+            w_rows[wid] = {"name": r[h.index("工作")] if "工作" in h else "",
+                           "state": r[h.index("状态")] if "状态" in h else "",
+                           "dir": did}
+            w_by_d.setdefault(did, []).append(wid)
+    t_by_w = {}
+    for it in items:
+        t_by_w.setdefault(it["work"], []).append(it)
+    return d_order, d_name, w_rows, w_by_d, t_by_w
+
+
+def tree_tail(it, assess):
+    """任务行的尾巴：功能 · 状态 · 完成于。"""
+    tail = f"{it['feature']} · {it['status']}"
+    anchor = (assess.get(it["id"]) or {}).get("完成于", "")
+    if anchor and anchor not in ("—", "-"):
+        tail += f" · {anchor}"
+    return tail
+
+
+def tree_text(d_order, d_name, w_rows, w_by_d, t_by_w, items, assess):
+    out = [f"方向 → 工作 → 任务：{len(d_order)} 方向 · {len(w_rows)} 工作 · {len(items)} 任务"]
+
+    def block(prefix, kids):
+        for i, (label, render) in enumerate(kids):
+            last = i == len(kids) - 1
+            out.append(prefix + ("└─ " if last else "├─ ") + label)
+            render(prefix + ("   " if last else "│  "))
+
+    def task_kid(it):
+        return (f"{it['id']}  {it['name']}   [{tree_tail(it, assess)}]", lambda _p: None)
+
+    for did in d_order:
+        wids = w_by_d.get(did, [])
+        ts = [t for wid in wids for t in t_by_w.get(wid, [])]
+        done_n = sum(1 for t in ts if t["status"] == "已完成")
+        out.append("")
+        out.append(f"{did}  {d_name[did]}   ({len(wids)} 工作 · {len(ts)} 任务 · 完成 {done_n})")
+        kids = []
+        for wid in wids:
+            w = w_rows[wid]
+            inner = [task_kid(t) for t in t_by_w.get(wid, [])]
+
+            def render_inner(p, inner=inner):
+                for j, (label, _) in enumerate(inner):
+                    out.append(p + ("└─ " if j == len(inner) - 1 else "├─ ") + label)
+
+            kids.append((f"{wid}  {w['name']}   [{w['state']}]", render_inner))
+        block("", kids)
+
+    orphans_w = [w for w in w_rows if w_rows[w]["dir"] not in d_order]
+    orphans_t = [it for it in items if it["work"] not in w_rows]
+    if orphans_w or orphans_t:
+        out.append("")
+        out.append("未挂：")
+        for wid in orphans_w:
+            out.append(f"├─ {wid}  {w_rows[wid]['name']}   方向 {w_rows[wid]['dir'] or '空'}")
+            for t in t_by_w.get(wid, []):
+                out.append(f"│  └─ {t['id']}  {t['name']}   [{tree_tail(t, assess)}]")
+        for it in orphans_t:
+            out.append(f"└─ {it['id']}  {it['name']}   工作 {it['work'] or '空'}")
+    return "\n".join(out)
+
+
+def tree_html(d_order, d_name, w_rows, w_by_d, t_by_w, items, assess, date):
+    """单文件 HTML：不引外部资源、不连网、不跑脚本；只为「人在浏览器里看一眼」。"""
+    import html as _h
+    e = lambda s: _h.escape(str(s or ""), quote=True)
+    chip = lambda s: f'<span class="chip">{e(s)}</span>'
+    chunks = []
+    for did in d_order:
+        wids = w_by_d.get(did, [])
+        ts = [t for wid in wids for t in t_by_w.get(wid, [])]
+        done_n = sum(1 for t in ts if t["status"] == "已完成")
+        rows = []
+        for wid in wids:
+            w = w_rows[wid]
+            tasks = "".join(
+                f'<li><span class="tid">{e(t["id"])}</span> <span class="tname">{e(t["name"])}</span> '
+                f'{chip(t["feature"])} {chip(t["status"])} '
+                f'<code>{e((assess.get(t["id"]) or {}).get("完成于", "") or "")}</code></li>'
+                for t in t_by_w.get(wid, []))
+            rows.append(f'<div class="work"><div class="wh"><span class="wid">{e(wid)}</span> '
+                        f'<span class="wname">{e(w["name"])}</span> {chip(w["state"])}</div>'
+                        f'<ul class="tasks">{tasks}</ul></div>')
+        chunks.append(
+            f'<section><h2><span class="did">{e(did)}</span> {e(d_name[did])}'
+            f'<span class="meta">{len(wids)} 工作 · {len(ts)} 任务 · 完成 {done_n}</span></h2>'
+            + "".join(rows) + "</section>")
+    return f"""<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>开发计划：方向 → 工作 → 任务</title>
+<style>
+:root{{--fg:#1f2328;--muted:#656d76;--line:#d0d7de;--bg:#fff;--soft:#f6f8fa;--accent:#0969da}}
+*{{box-sizing:border-box}}
+body{{margin:0;padding:32px 24px 64px;background:var(--bg);color:var(--fg);
+font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}}
+main{{max-width:1040px;margin:0 auto}}
+h1{{font-size:22px;margin:0 0 4px}}
+.sub{{color:var(--muted);font-size:13px;margin-bottom:24px}}
+section{{border:1px solid var(--line);border-radius:8px;padding:16px 18px;margin:0 0 16px;background:var(--bg)}}
+h2{{font-size:16px;margin:0 0 12px;display:flex;align-items:baseline;gap:8px}}
+.did,.wid,.tid{{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-weight:600}}
+.did{{color:var(--accent)}}
+.meta{{margin-left:auto;color:var(--muted);font-size:12px;font-weight:400}}
+.work{{border-left:2px solid var(--line);padding:6px 0 6px 12px;margin:8px 0}}
+.wh{{font-size:14px}}
+.wid{{color:var(--muted);margin-right:4px}}
+ul.tasks{{list-style:none;margin:6px 0 0;padding:0}}
+ul.tasks li{{padding:2px 0;font-size:14px;color:var(--fg)}}
+ul.tasks li .tname{{margin-right:6px}}
+.tid{{color:var(--muted);font-size:13px;margin-right:4px}}
+.chip{{display:inline-block;border:1px solid var(--line);border-radius:10px;padding:0 7px;
+font-size:12px;color:var(--muted);background:var(--soft);margin-right:4px;white-space:nowrap}}
+code{{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;color:var(--muted)}}
+footer{{color:var(--muted);font-size:12px;border-top:1px solid var(--line);padding-top:12px;margin-top:24px}}
+</style></head><body><main>
+<h1>开发计划：方向 → 工作 → 任务</h1>
+<div class="sub">{len(d_order)} 方向 · {len(w_rows)} 工作 · {len(items)} 任务 · 生成于 {e(date)}</div>
+{''.join(chunks)}
+<footer>本文件由 <code>python scripts/plan.py tree --html</code> 生成，不参与校验，<strong>不要手改</strong>；
+数据改 <code>docs/</code> 下的计划与台账，改完重跑命令。</footer>
+</main></body></html>
+"""
+
+
 # ---------------------------------------------------------------- main
 def main():
     argv = sys.argv[1:]
-    docs_arg, file_arg = None, None
-    for i, a in enumerate(argv):
-        if a in ("--docs", "--file") and i + 1 < len(argv):
+    docs_arg, file_arg, out_arg = None, None, None
+    rest, i = [], 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--docs", "--file", "--out") and i + 1 < len(argv):
             if a == "--docs":
                 docs_arg = argv[i + 1]
-            else:
+            elif a == "--file":
                 file_arg = argv[i + 1]
-            del argv[i:i + 2]
-            break
+            else:
+                out_arg = argv[i + 1]
+            i += 2
+            continue
+        rest.append(a)
+        i += 1
+    argv = rest
     as_json = "--json" in argv
     argv = [a for a in argv if a != "--json"]
 
@@ -694,6 +850,39 @@ def main():
         for e in errs:
             print(f"  ERROR [{e['code']}] {e['message']}")
         print(f"errors={len(errs)}")
+        return 1 if errs else 0
+
+    if cmd == "tree":
+        d_order, d_name, w_rows, w_by_d, t_by_w = tree_build(dirs, works, items, feats)
+        assess = (feats or {}).get("assess", {}) if feats else {}
+        today = datetime.date.today().isoformat()
+        if "--html" in argv:
+            text = tree_html(d_order, d_name, w_rows, w_by_d, t_by_w, items, assess, today)
+        elif as_json:
+            print(json.dumps({
+                "directions": [{"id": d, "name": d_name[d],
+                                "works": [{"id": w, "name": w_rows[w]["name"],
+                                           "state": w_rows[w]["state"],
+                                           "tasks": [{"id": t["id"], "name": t["name"],
+                                                      "feature": t["feature"],
+                                                      "status": t["status"],
+                                                      "done_at": (assess.get(t["id"]) or {}).get("完成于", "")}
+                                                     for t in t_by_w.get(w, [])]}
+                                          for w in w_by_d.get(d, [])]}
+                               for d in d_order],
+                "tasks": len(items), "works": len(w_rows), "errors": errs},
+                ensure_ascii=False, indent=2))
+            return 1 if errs else 0
+        else:
+            text = tree_text(d_order, d_name, w_rows, w_by_d, t_by_w, items, assess)
+        if out_arg:
+            with open(out_arg, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(text + "\n")
+            print(f"written: {out_arg}（{len(d_order)} 方向 · {len(w_rows)} 工作 · {len(items)} 任务）")
+        else:
+            print(text)
+        for e in errs:
+            print(f"  ERROR [{e['code']}] {e['message']}", file=sys.stderr)
         return 1 if errs else 0
 
     if errs:
