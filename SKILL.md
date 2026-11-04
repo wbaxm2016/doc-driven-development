@@ -82,6 +82,8 @@ python scripts/doc_check.py         # 全库字段与链接
 
 **`完成于` 的顺序**：`完成于` 记的是**提交之后**才有的 commit 短号，所以收尾按这个顺序——先提交代码与文档 → 再回写 `完成于` / `已验收` → 再补一次 docs 提交。写 `待提交` 不算记：`P15` / `E27` 都按缺锚点报（ISS-046）。没有锚点的「已完成」不可回滚，等于只能靠记忆复原。
 
+回写状态有一条命令，不必三个文件手工改：`python scripts/plan.py set-status <T-id> --to 已完成 --commit <短号> --review "做法=…｜一致=…｜代价=…｜结论=…"`（`--dry-run` 只打印清单）。它只写既有列、先验「改完之后」的文本、任一校验失败零写入、重跑幂等，不新增状态载体（REQ-017）；人工编辑仍是等价路径。
+
 契约回检另有一条：`python scripts/verify.py` 按每条需求的 `verify:` 真跑（失败/超时 → exit 1，状态=`待实现/阻塞` 的行跳过）。它可能很慢，所以**不在收尾五连跑里**；CI 每次 push 跑它，改了契约或测试再本地跑一次。
 
 **实施完之后先对照，再测**（顺序别倒）：
@@ -244,7 +246,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
-| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯）；`--help` 只读、不写生成区 |
+| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）/ `set-status <T-id> --to <状态> [--commit] [--review] [--dry-run] [--json]`（状态转写：只写既有列、失败零写入、幂等）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯）；`--help` 只读、不写生成区 |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
 | `scripts/self_test.py` | 自检：把本文「验收」1–32 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 | `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |
@@ -321,4 +323,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 33. **摩擦留痕与转正列**：会话档案模板缺 `### 3.6 本轮摩擦` → 自测第 41 组失败；`pending --clear --as iss` 转正时 `--impact` 落进「影响（不处理会怎样）」列（不是「—」）→ 通过；落进别的列 → 失败。
 
-`scripts/self_test.py` 把上面 1–33 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+35. **状态转写子命令**：`plan.py set-status <T-id> --to 已完成 --commit <短号> --review "做法=…｜一致=…｜代价=…｜结论=…"` 一次写全计划 §5 的状态与 FEATURES 的考核行；任务号不存在 / 状态不在白名单 / 锚点写「待提交」/ 缺四格 → exit 1 且两个文件哈希不变；`--dry-run` 只打印清单；原样重跑 → 无改动、不新增任何文件。
+
+`scripts/self_test.py` 把上面 1–35 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
