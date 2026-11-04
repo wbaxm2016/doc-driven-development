@@ -1854,6 +1854,70 @@ def main():
         finally:
             shutil.rmtree(tmp39, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 48
+        print("\n48. 状态转写子命令：输入校验、零写入与幂等（REQ-017）")
+        tmp40 = tempfile.mkdtemp(prefix="ddd-selftest40-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp40)
+            plan40 = os.path.join(tmp40, "docs", "00-门面", "开发计划.md")
+            feat40 = os.path.join(tmp40, "docs", "40-运行", "FEATURES.md")
+
+            def digest():
+                return (hashlib.sha256(read(plan40).encode("utf-8")).hexdigest(),
+                        hashlib.sha256(read(feat40).encode("utf-8")).hexdigest())
+
+            def tree():
+                got = []
+                for root, _, names in os.walk(tmp40):
+                    for n in names:
+                        got.append(os.path.relpath(os.path.join(root, n), tmp40))
+                return sorted(got)
+
+            base, files = digest(), tree()
+            review = "做法=自测｜一致=全｜代价=S｜结论=保留"
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "已完成",
+                         "--commit", "abc1234", "--review", review, "--dry-run", cwd=tmp40)
+            check("--dry-run 只打印清单、不落盘",
+                  c == 0 and "dry-run" in out and digest() == base, out[-160:])
+
+            c, out = run("plan.py", "set-status", "T9.9.9", "--to", "已完成",
+                         "--commit", "abc1234", "--review", review, cwd=tmp40)
+            check("任务号不在计划 §5 → 退出 1 且零写入",
+                  c == 1 and digest() == base, out[-160:])
+
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "完成", cwd=tmp40)
+            check("目标状态不在白名单 → 退出 1", c == 1 and "白名单" in out, out[-160:])
+
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "已完成",
+                         "--review", review, cwd=tmp40)
+            check("「已完成」缺完成于锚点 → 退出 1", c == 1 and "完成于" in out, out[-160:])
+
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "已完成",
+                         "--commit", "待提交", "--review", review, cwd=tmp40)
+            check("锚点写「待提交」→ 退出 1", c == 1 and digest() == base, out[-160:])
+
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "已完成",
+                         "--commit", "abc1234", cwd=tmp40)
+            check("「已完成」缺考核四格 → 退出 1", c == 1 and "四格" in out, out[-160:])
+
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "已完成",
+                         "--commit", "abc1234", "--review", review, cwd=tmp40)
+            after = digest()
+            check("转写成功：状态与考核行一起写、清单可读",
+                  c == 0 and "T1.1.1" in out and after != base
+                  and "自测" in read(feat40), out[-200:])
+            c, out = run("plan.py", "check", cwd=tmp40)
+            check("转写后 plan.py check 0 error", c == 0 and "errors=0" in out, out[-200:])
+            c, out = run("plan.py", "set-status", "T1.1.1", "--to", "已完成",
+                         "--commit", "abc1234", "--review", review, cwd=tmp40)
+            check("原样重跑 → 无改动、不落盘",
+                  c == 0 and "无改动" in out and digest() == after, out[-160:])
+            check("没有新增任何文件（不新增载体）",
+                  tree() == files, str(sorted(set(tree()) - set(files))[:3]))
+        finally:
+            shutil.rmtree(tmp40, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

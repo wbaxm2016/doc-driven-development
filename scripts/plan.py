@@ -8,6 +8,8 @@
     python scripts/plan.py check [--json]   # 结构校验（含任务与功能的双亲、考核）
     python scripts/plan.py next [--json]    # 唯一出口：按第一个视角给出「下一步」与理由链
     python scripts/plan.py tree [--html|--json]  # 只读全貌：方向 → 工作 → 任务
+    python scripts/plan.py set-status T1.1.1 --to 已完成 --commit abc1234 \\
+        --review "做法=…｜一致=…｜代价=…｜结论=…" [--dry-run]  # 状态转写（REQ-017）
 
 维度与视角全部从表头读取，脚本不认识具体维度名 —— 加维度/加视角不改代码。
 编号规则、状态词、文件位置来自 <docs>/_schema.json。
@@ -20,6 +22,7 @@ P14–P16 要读功能台账（`40-运行/FEATURES.md`）：任务挂的功能�
 from __future__ import annotations
 
 import datetime
+import hashlib
 import json
 import os
 import re
@@ -220,7 +223,12 @@ def dim_codes(header):
 
 # ---------------------------------------------------------------- 载入
 def load(path):
-    lines = read(path).splitlines()
+    return load_lines(read(path).splitlines())
+
+
+def load_lines(lines):
+    """按行解析计划。与 `load(path)` 同源——`set-status` 要先验「改完之后」的文本，
+    不能靠写盘再读（那正是「写半截」的来源）。"""
     weights = tasks = works = dirs = None
     fragments = []
     for header, rows, no in read_tables(lines):
@@ -263,9 +271,14 @@ def load_features(path):
     """
     if not path or not os.path.exists(path):
         return None
+    return parse_features(read(path).splitlines())
+
+
+def parse_features(lines):
+    """按行解析功能台账（`load_features` 的同一份逻辑，供「改完之后」的文本复用）。"""
     feats, assess = {}, {}
     has_feature_table = has_assess_table = False
-    for header, rows, _ in read_tables(read(path).splitlines()):
+    for header, rows, _ in read_tables(lines):
         heads = [strip_md(h) for h in header]
         if {"ID", "功能", "满足的需求", "状态"} <= set(heads):
             has_feature_table = True
@@ -812,6 +825,252 @@ footer{{color:var(--muted);font-size:12px;border-top:1px solid var(--line);paddi
 """
 
 
+# ---------------------------------------------------------------- set-status（REQ-017）
+# 只做「把已由人裁决的状态写进既有载体」的转写：不推断证据、不新增载体、
+# 任一校验失败一个字节都不写。判定读的是**改完之后**的文本，不是写盘再读——
+# 写盘再读正是 ISS-036 记的「改了一半、文件被重写」那条路。
+def sha256_of(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def write_atomic(path, text):
+    """写临时文件再 replace：中途失败不会留下半截文件。"""
+    tmp = path + ".set-status.tmp"
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(text)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def table_windows(lines):
+    """[(header, header_line, [(line_idx, cells)])] —— 原始单元格，供原地改写用。"""
+    out = []
+    i, n = 0, len(lines)
+    while i < n:
+        header = cells(lines[i])
+        if header is None:
+            i += 1
+            continue
+        j = i + 1
+        if j < n:
+            sc = cells(lines[j])
+            if sc is not None and is_sep(sc):
+                j += 1
+        rows = []
+        while j < n:
+            rc = cells(lines[j])
+            if rc is None:
+                break
+            if not is_sep(rc):
+                rows.append((j, rc))
+            j += 1
+        out.append((header, i, rows))
+        i = j
+    return out
+
+
+def join_row(cs):
+    return "| " + " | ".join(cs) + " |"
+
+
+def parse_set_status(argv):
+    opts = {"task": "", "to": "", "commit": "", "review": "", "dry": False}
+    i = 0
+    args = [a for a in argv if a != "set-status"]
+    while i < len(args):
+        a = args[i]
+        if a in ("--to", "--commit", "--review") and i + 1 < len(args):
+            opts[a[2:]] = args[i + 1]
+            i += 2
+            continue
+        if a == "--dry-run":
+            opts["dry"] = True
+        elif not a.startswith("--") and not opts["task"]:
+            opts["task"] = a
+        i += 1
+    return opts
+
+
+def parse_review(text):
+    """`做法=…｜一致=…｜代价=…｜结论=…` → dict；半角竖线也认。"""
+    out = {}
+    for part in re.split(r"[｜|]", text or ""):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            out[k.strip()] = v.strip()
+    return out
+
+
+def cmd_set_status(docs, schema, plan_path, argv, as_json):
+    opts = parse_set_status(argv)
+    tid, to = opts["task"].strip(), opts["to"].strip()
+    if not tid or not to:
+        return die("用法：plan.py set-status <T-id> --to <状态> [--commit <短号>] "
+                   "[--review \"做法=…｜一致=…｜代价=…｜结论=…\"] [--dry-run]", as_json, 2)
+    cfg = schema["plan"]
+    if to not in cfg["states"]:
+        return die(f"目标状态不在白名单：{to!r}（允许：{'、'.join(cfg['states'])}）",
+                   as_json, 1)
+    done = set(cfg["done_states"])
+    review = parse_review(opts["review"])
+    commit = (opts["commit"] or "").strip()
+    if to in done:
+        miss = [c for c in ASSESS_CELLS
+                if not review.get(c) or review.get(c) in ANCHOR_PLACEHOLDERS]
+        if miss:
+            return die(f"目标状态是「{to}」，但考核四格缺：{'、'.join(miss)}"
+                       f"（一条命令写全，才不必事后再手工补 FEATURES）", as_json, 1)
+        if commit in ANCHOR_PLACEHOLDERS:
+            return die(f"目标状态是「{to}」，但没给可用的 `完成于` 锚点："
+                       f"写 commit 短号；「待提交」不算记（ISS-046）", as_json, 1)
+        for c in ASSESS_CELLS:
+            if "|" in review[c]:
+                return die(f"考核格「{c}」里有竖线，会撑破表格：改写成「A / B」", as_json, 1)
+
+    feats_path = features_path(docs, schema)
+    if feats_path is None:
+        return die("找不到功能台账（FEATURES.md）：任务考核无处落", as_json, 1)
+    plan_text, feats_text = read(plan_path), read(feats_path)
+    before_hash = {plan_path: sha256_of(plan_path), feats_path: sha256_of(feats_path)}
+    cards = load_directions(directions_path(docs, schema))
+    designs = load_designs(designs_path(docs, schema))
+
+    # ---- 在计划 §5 里定位任务行
+    lines = plan_text.splitlines()
+    task_hit = None
+    for header, _, rows in table_windows(lines):
+        h = [strip_md(x) for x in header]
+        if h and h[0] == "ID" and "任务" in h and "状态" in h:
+            for idx, cs in rows:
+                if strip_md(cs[0]) == tid:
+                    task_hit = (h, idx, cs)
+                    break
+        if task_hit:
+            break
+    if task_hit is None:
+        return die(f"计划 §5 里没有任务 {tid}：编号写错？先确认它在任务表里", as_json, 1)
+    h, idx, cs = task_hit
+    old = strip_md(cs[h.index("状态")])
+    cs_new = list(cs)
+    cs_new[h.index("状态")] = to
+    lines[idx] = join_row(cs_new)
+
+    # ---- 在 FEATURES「任务考核」里定位 / 插入考核行
+    flines = feats_text.splitlines()
+    changes = [{"file": os.path.relpath(plan_path), "table": "任务表", "row": tid,
+                "field": "状态", "old": old, "new": to}]
+    if to in done:
+        assess_hit, insert_at, a_header = None, None, None
+        for a_h, a_hidx, rows in table_windows(flines):
+            ah = [strip_md(x) for x in a_h]
+            if {"任务", "做法", "一致", "代价", "结论"} <= set(ah):
+                a_header = ah
+                for aidx, acs in rows:
+                    if strip_md(acs[0]) == tid:
+                        assess_hit = (aidx, acs)
+                        break
+                if assess_hit is None:
+                    insert_at = (rows[-1][0] + 1) if rows else (a_hidx + 2)
+                break
+        if a_header is None:
+            return die("FEATURES 里找不到「任务考核」表：已完成的任务要各占一行", as_json, 1)
+        vals = {c: review[c] for c in ASSESS_CELLS}
+        vals["完成于"] = commit
+        if assess_hit:
+            aidx, acs = assess_hit
+            acs_new = list(acs)
+            for c in ASSESS_CELLS + ("完成于",):
+                if c in a_header:
+                    acs_new[a_header.index(c)] = vals[c]
+            flines[aidx] = join_row(acs_new)
+            changes.append({"file": os.path.relpath(feats_path), "table": "任务考核",
+                            "row": tid, "field": "四格 + 完成于",
+                            "old": "｜".join(f"{c}={strip_md(acs[a_header.index(c)])}"
+                                             for c in ASSESS_CELLS + ("完成于",)
+                                             if c in a_header),
+                            "new": "｜".join(f"{c}={vals[c]}" for c in ASSESS_CELLS + ("完成于",)
+                                             if c in a_header)})
+        else:
+            row = [vals.get(name, "—") for name in a_header]
+            row[0] = f"**{tid}**"
+            flines.insert(insert_at, join_row(row))
+            changes.append({"file": os.path.relpath(feats_path), "table": "任务考核",
+                            "row": tid, "field": "新增考核行",
+                            "old": "（无）",
+                            "new": "｜".join(f"{c}={vals[c]}" for c in ASSESS_CELLS + ("完成于",)
+                                            if c in a_header)})
+
+    new_plan = "\n".join(lines) + "\n"
+    new_feats = "\n".join(flines) + "\n"
+    if new_plan == plan_text and new_feats == feats_text:
+        if as_json:
+            print(json.dumps({"ok": True, "dry_run": opts["dry"], "written": False,
+                              "changes": []}, ensure_ascii=False, indent=2))
+        else:
+            print(f"set-status：无改动（{tid} 已是「{to}」，考核行已一致）")
+        return 0
+
+    # ---- 先验「改完之后」的文本：只拒绝这次改动造成的错误，项目原有的债不拦转写
+    try:
+        l0, w0, t0, wo0, d0, fr0 = load_lines(plan_text.splitlines())
+        errs0 = validate(w0, t0, wo0, d0, cfg, fr0,
+                         parse_features(feats_text.splitlines()), cards, designs)[0]
+        l2, w2, t2, wo2, d2, fr2 = load_lines(new_plan.splitlines())
+        errs2 = validate(w2, t2, wo2, d2, cfg, fr2,
+                         parse_features(new_feats.splitlines()), cards, designs)[0]
+    except SystemExit as exc:
+        return die(f"改完之后的文档解析失败（不落盘）：{exc}", as_json, 1)
+    old_keys = {(e["code"], e["message"]) for e in errs0}
+    fresh = [e for e in errs2 if (e["code"], e["message"]) not in old_keys]
+    if fresh:
+        return die("改完之后校验不过（不落盘）："
+                   + "；".join(f"[{e['code']}] {e['message']}" for e in fresh), as_json, 1)
+
+    if opts["dry"]:
+        if as_json:
+            print(json.dumps({"ok": True, "dry_run": True, "written": False,
+                              "changes": changes}, ensure_ascii=False, indent=2))
+        else:
+            print("set-status（dry-run，不落盘）：")
+            for c in changes:
+                print(f"  {c['file']} · {c['table']} · {c['row']} · "
+                      f"{c['field']}：{c['old']} → {c['new']}")
+        return 0
+
+    # ---- stale 守卫：读入到写入之间文件被改过，就一个字节都不写
+    for p, h0 in before_hash.items():
+        if not os.path.exists(p) or sha256_of(p) != h0:
+            return die(f"{os.path.relpath(p)} 在读取后被改动过（stale）：不写，重跑一次",
+                       as_json, 1)
+    try:
+        write_atomic(plan_path, new_plan)
+    except OSError as exc:
+        return die(f"写 {os.path.relpath(plan_path)} 失败，两个文件都没改：{exc}", as_json, 2)
+    try:
+        write_atomic(feats_path, new_feats)
+    except OSError as exc:
+        return die(f"已写 {os.path.relpath(plan_path)}，但写 "
+                   f"{os.path.relpath(feats_path)} 失败：{exc}"
+                   f"——先 git diff 核对，再重跑一次", as_json, 2)
+
+    if as_json:
+        print(json.dumps({"ok": True, "dry_run": False, "written": True,
+                          "changes": changes}, ensure_ascii=False, indent=2))
+    else:
+        print(f"set-status：{tid} →「{to}」")
+        for c in changes:
+            print(f"  {c['file']} · {c['table']} · {c['row']} · "
+                  f"{c['field']}：{c['old']} → {c['new']}")
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def main():
     argv = sys.argv[1:]
@@ -841,8 +1100,8 @@ def main():
         return 0
 
     cmd = next((a for a in argv if not a.startswith("--")), "index")
-    if cmd not in ("index", "check", "tree", "next"):
-        return die(f"未知命令：{cmd}（可用：index / check / tree / next）", as_json)
+    if cmd not in ("index", "check", "tree", "next", "set-status"):
+        return die(f"未知命令：{cmd}（可用：index / check / tree / next / set-status）", as_json)
     check_only = "--check" in argv
 
     docs = find_docs(docs_arg)
@@ -856,6 +1115,9 @@ def main():
     path = file_arg or os.path.join(docs, fdir or "", schema["names"]["plan"])
     if not os.path.exists(path):
         return die(f"找不到计划文档：{path}", as_json)
+
+    if cmd == "set-status":
+        return cmd_set_status(docs, schema, path, argv, as_json)
 
     try:
         lines, weights, tasks, works, dirs, fragments = load(path)
