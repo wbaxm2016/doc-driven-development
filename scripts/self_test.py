@@ -1847,6 +1847,10 @@ def main():
             check("填过一行后 brief 不再提醒", c == 0 and "整理：" not in out, out[-200:])
             c, out = run("devlog.py", "check", cwd=tmp39)
             check("填过一行后 check 不再报 S13", c == 0 and "[S13]" not in out, out[-200:])
+
+            skill_md = read(os.path.join(SKILL, "SKILL.md"))
+            check("SKILL 硬规则含「开场先跑 brief + 收尾回填 §3.7」",
+                  "开场先跑 `brief`" in skill_md and "§3.7" in skill_md, "")
         finally:
             shutil.rmtree(tmp39, ignore_errors=True)
 
