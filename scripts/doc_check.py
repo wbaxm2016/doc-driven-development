@@ -457,6 +457,86 @@ def load_aliases(docs, schema):
     return sorted(set(out))
 
 
+# ---------------------------------------------------------------- 想法候选
+IDEAS_HEADING = re.compile(r"^### 3\.7\b[^\n]*", re.M)
+ID_PATTERN = re.compile(r"REQ-\d+|F-\d+|(?<![A-Za-z])D\d+")
+IDEA_KINDS = ("目标", "愿景", "功能", "需求")
+
+
+def ideas_parts(body):
+    """切出所有「### 3.7 想法候选」小节，并给出「不含这些小节」的正文（原话要在正文里逐字存在）。"""
+    spans = []
+    for m in IDEAS_HEADING.finditer(body):
+        rest = body[m.end():]
+        nxt = re.search(r"^#{1,3} ", rest, re.M)
+        end = m.end() + (nxt.start() if nxt else len(rest))
+        spans.append((m.start(), end))
+    if not spans:
+        return None, body
+    segs = [body[s:e] for s, e in spans]
+    parts, last = [], 0
+    for s, e in spans:
+        parts.append(body[last:s])
+        last = e
+    parts.append(body[last:])
+    return "\n".join(segs), "".join(parts)
+
+
+def ideas_problems(seg, scope, docs_dir, repo_root, cache, all_ids):
+    """E29：类别白名单 / 原话逐字存在 / 建议落点的编号存在。返回 (问题, 原话列表)。"""
+    probs, quotes = [], []
+    for header, rows in read_tables(seg):
+        if not any(h.startswith("原话") for h in header):
+            continue
+        col = {h: i for i, h in enumerate(header)}
+
+        def pick(name):
+            if name in col:
+                return col[name]
+            for h, i in col.items():
+                if h.startswith(name):
+                    return i
+            return None
+
+        def cell(row, name):
+            i = pick(name)
+            return row[i].strip() if i is not None and i < len(row) else ""
+
+        for row in rows:
+            kind = strip_md(cell(row, "类别")).strip()
+            quote = strip_md(cell(row, "原话")).strip().strip("「」").strip()
+            src = cell(row, "出处")
+            target = cell(row, "建议落点")
+            if not quote:
+                continue
+            if kind not in IDEA_KINDS:
+                probs.append("想法类别 %r 不在白名单（目标 / 愿景 / 功能 / 需求）" % kind)
+                continue
+            if src.startswith("本档"):
+                hay = scope
+            else:
+                hay = None
+                cands = [src] if os.path.isabs(src) else [
+                    os.path.join(docs_dir, src), os.path.join(repo_root, src)]
+                for cand in cands:
+                    if os.path.exists(cand):
+                        if cand not in cache:
+                            cache[cand] = read(cand)
+                        hay = cache[cand]
+                        break
+                if hay is None:
+                    probs.append("想法的出处文件不存在：%s" % src)
+                    continue
+            if quote not in hay:
+                probs.append("原话在出处里找不到（逐字）：%s" % quote[:24])
+                continue
+            for pid in ID_PATTERN.findall(target):
+                if pid not in all_ids:
+                    probs.append("建议落点 %s 不存在" % pid)
+            quotes.append(quote)
+    return probs, quotes
+
+
 # ---------------------------------------------------------------- 主流程
 def main():
     argv = sys.argv[1:]
@@ -507,6 +587,14 @@ def main():
 
     aliases = load_aliases(docs, schema)
     errors, warns = [], []
+    idea_quotes, idea_cache = {}, {}
+    all_ids = set()
+    for path in files:
+        _txt = read(path)
+        _fm, _body = parse_fm(_txt)
+        # 想法候选表里的编号是「建议」，不能自己证明自己存在：取编号时先把这一节去掉
+        all_ids.update(ID_PATTERN.findall(_body if _fm else _txt)
+                       if not _fm else ID_PATTERN.findall(ideas_parts(_body)[1]))
     per_layer = {v: [] for v in layers.values()}
     summaries = {}
     adr_files, adr_ids, adr_states, adr_links = [], {}, {}, {}
@@ -610,6 +698,16 @@ def main():
             add(errors, rel, "E28",
                 f"第 {no} 行有 {rn} 格、表头 {hn} 格：cell 里出现了未转义的竖线，整行会错位"
                 f"（写成「A / B / C 三列」，或用 `\\|` 转义）")
+
+        # ---- E29 想法候选：类别 / 原话逐字 / 落点编号（ISS-073、REQ-016）
+        idea_seg, idea_scope = ideas_parts(body)
+        if idea_seg is not None:
+            idea_probs, idea_qs = ideas_problems(
+                idea_seg, idea_scope, docs, repo_root, idea_cache, all_ids)
+            for msg in idea_probs:
+                add(errors, rel, "E29", msg)
+            for q in idea_qs:
+                idea_quotes.setdefault(q, []).append(rel)
 
         # ---- ADR 结构（E10 / E12 / E15）
         if decision_dir and rel.startswith(f"{decision_dir}/{names['adr_dir']}/"):
@@ -961,6 +1059,13 @@ def main():
             for n in [int(x) for x in ref_re.findall(sup)]:
                 if n not in adr_states:
                     add(errors, rel, "E15", f"supersedes 指向不存在的 ADR-{n:03d}")
+
+    # ---- E29 同一原话在跨篇档案里重复建议
+    for q, rels in idea_quotes.items():
+        uniq = sorted(set(rels))
+        if len(uniq) > 1:
+            add(errors, uniq[-1], "E29",
+                "同一原话在 %d 篇档案里重复建议：%s" % (len(uniq), q[:24]))
 
     # ---- W2 summary 重复
     for _s, rels in summaries.items():

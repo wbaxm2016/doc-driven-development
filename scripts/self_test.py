@@ -1783,6 +1783,49 @@ def main():
         finally:
             shutil.rmtree(tmp37, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 46
+        print("\n46. 想法候选：原话逐字、落点存在、不重复（E29）")
+        tmp38 = tempfile.mkdtemp(prefix="ddd-selftest38-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp38)
+            run("devlog.py", "new", "--title", "想法候选", "--scope", "试", cwd=tmp38)
+
+            def archives():
+                d = os.path.join(tmp38, "docs", "70-过程", "会话")
+                return sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith(".md"))
+
+            block = (
+                "\n\n### 3.7 想法候选（整理产物）\n\n"
+                "| # | 类别 | 原话（逐字） | 出处 | 建议落点 | 裁决 |\n"
+                "|---|---|---|---|---|---|\n"
+                "| 1 | 需求 | 想法候选 | 本档 §2 | REQ-001 | 待裁 |\n"
+            )
+            a1 = archives()[-1]
+            write(a1, read(a1) + block)
+            c, out = run("doc_check.py", cwd=tmp38)
+            check("合法想法建议：0 error", c == 0 and "[E29]" not in out, out[-200:])
+
+            write(a1, read(a1).replace("| 1 | 需求 | 想法候选 |",
+                                       "| 1 | 需求 | 想法候选改字 |"))
+            c, out = run("doc_check.py", cwd=tmp38)
+            check("原话被改一个字 → [E29]", c == 1 and "[E29]" in out, out[-200:])
+
+            write(a1, read(a1).replace("| 1 | 需求 | 想法候选改字 |",
+                                       "| 1 | 需求 | 想法候选 |")
+                .replace("| REQ-001 |", "| REQ-999 |"))
+            c, out = run("doc_check.py", cwd=tmp38)
+            check("建议落点不存在 → [E29]", c == 1 and "[E29]" in out, out[-200:])
+
+            write(a1, read(a1).replace("| REQ-999 |", "| REQ-001 |"))
+            run("devlog.py", "new", "--title", "想法候选二", "--scope", "试", cwd=tmp38)
+            a2 = archives()[-1]
+            write(a2, read(a2) + block)
+            c, out = run("doc_check.py", cwd=tmp38)
+            check("同一原话第二篇重复建议 → [E29]", c == 1 and "[E29]" in out, out[-200:])
+        finally:
+            shutil.rmtree(tmp38, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
