@@ -1980,6 +1980,15 @@ def main():
                 "| 对齐门 | — | 复述不能代 | 不适用 | 待裁决 |"))
             c, out = run("doc_check.py", cwd=tmp41)
             check("对齐门改成「不适用」→ 0 error", c == 0 and "[E30]" not in out, out[-200:])
+
+            # 已裁决的行是当时快照：修复改动原文后，引文不再逐字也放行（只对「待裁决」判逐字）。
+            write(a49, read(a49)
+                  .replace("| 本档 §1 | 本次范围 | 需求与实现对不上 | 补证据 | 待裁决 |",
+                           "| 本档 §1 | 修复后已不存在的引文 | 需求与实现对不上 | 补证据 | 采纳 |")
+                  .replace("| 对齐门 | — | 复述不能代 | 不适用 | 待裁决 |",
+                           "| 对齐门 | — | 复述不能代 | 不适用 | 采纳 |"))
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("已采纳的行：引文不再逐字也放行", c == 0 and "[E30]" not in out, out[-200:])
         finally:
             shutil.rmtree(tmp41, ignore_errors=True)
 
