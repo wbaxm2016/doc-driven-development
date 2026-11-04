@@ -554,8 +554,8 @@ def precheck_problems(seg, scope, docs_dir, repo_root, cache):
             else:
                 hay = None
                 for cand in ([pm.group(0)] if pm and os.path.isabs(pm.group(0)) else [
-                        os.path.join(docs_dir, pm.group(0)) if pm else "",
-                        os.path.join(repo_root, pm.group(0)) if pm else ""]):
+                        os.path.join(repo_root, pm.group(0)) if pm else "",
+                        os.path.join(docs_dir, pm.group(0)) if pm else ""]):
                     if cand and os.path.isfile(cand):
                         if cand not in cache:
                             cache[cand] = read(cand)
