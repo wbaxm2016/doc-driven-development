@@ -25,6 +25,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # 文档层也进门禁：断链 / 字段 / 编号 / 码表 / 收件箱状态都在这里判，
+      # 否则「本地五连跑」是文档唯一的检查点，PR 改 docs 没人拦。
+      - name: Check docs
+        run: python scripts/doc_check.py --quiet
+
       # 契约 verify: 指向的测试必须真跑；任一失败 → 本步非 0 → workflow 失败
       - name: Verify contracts
         run: python scripts/verify.py --quiet
