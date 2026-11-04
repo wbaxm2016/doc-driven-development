@@ -155,7 +155,14 @@ python scripts/plan.py check            # P1–P19：编号 / 分值 / 状态词
 python scripts/plan.py check --json     # 给 CI 用
 python scripts/plan.py index            # 重算各视角排序视图，写回文档生成区
 python scripts/plan.py index --check    # 只比对，CI 用
+python scripts/plan.py next             # 唯一出口：第一个视角的第一名 + 方向 → 工作 → 任务 路径
+python scripts/plan.py next --json      # 机读：每个视角的第一名
+python scripts/plan.py tree             # 只读全貌：方向 → 工作 → 任务（--html 出单文件页面）
 ```
+
+`next` 回答「下一步做什么、为什么是它」：默认取**第一个视角**的第一名（视角表第一行），并把所属方向 / 工作 / 功能与弱项一起打出来；其它视角的第一名若不同会并列列出——**排序不是唯一答案，先看哪个由人定**。全部完成或被前置阻塞时输出「无可排任务」，不瞎挑。
+
+`--help` 只打用法，不写生成区（写盘只发生在 `index`）。
 
 脚本按**表头**识别维度列（单个大写字母列即维度），因此：加维度＝加列+加权重，加视角＝加一行，**都不改脚本**。
 

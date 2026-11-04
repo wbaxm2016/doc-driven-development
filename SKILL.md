@@ -53,7 +53,9 @@ python scripts/devlog.py new --title "本次主题" --scope "范围"
 
 > `brief` 是只读命令，不写文件、不产生码。开场先跑它，是因为「先读现状」靠自觉必然失效——不读就不会知道自己落后在哪。
 >
-> **反向判据靠 `@日期` 醒来**：在 `ISS` 的「回到条件」、ADR 的「撤销条件」、方向卡的「走通验收」里写 `@YYYY-MM-DD`（下次该复核的那天），到期后 `brief` 会单列一行「复核：已到期 N」。没写日期的那部分脚本判不了，也不猜——猜错会变成噪音，噪音会让整条提醒失效（ISS-050）。
+> **反向判据靠 `@日期` 醒来**：在 `ISS` 的「回到条件」、ADR 的「撤销条件」、方向卡的「走通验收」里写 `@YYYY-MM-DD`（下次该复核的那天），到期后 `brief` 会单列一行「复核：已到期 N」。没写日期的那部分脚本判不了，也不猜——猜错会变成噪音，噪音会让整条提醒失效（ISS-050）。没收口的活跃问题会另起一行「回访：N 条活跃问题没设 @日期」——它们不会自己响，收口时补日期，或写明「无日期」原因。
+>
+> **下一步只有一个出口**：`python scripts/plan.py next` 按第一个视角给出 Top-1 与「方向 → 工作 → 任务」路径；其它视角第一名不同会并列出来——排序不是唯一答案，先看哪个由人定。
 
 > `brief` 只给一屏现状；方向不是从这一屏直接拍出来的。先和用户多轮对话，把「现在有什么、卡在哪、哪些是旧账、哪些是新问题」说清楚，再从现状里定方向。方向卡写在 `00-门面/方向卡.md`（现状 / 为什么是现在 / 用户·起点 / 成功状态 / 路径 / 接缝 / 不覆盖 / 走通验收 / 关联），**卡没写出来之前，不要往计划 §3 加 `D`**——`P18` 会检查两处编号对上、三格（现状 / 成功状态 / 走通验收）不空。
 
@@ -241,7 +243,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
-| `scripts/plan.py` | `index [--check]` / `check [--json]` / `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯） |
+| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯）；`--help` 只读、不写生成区 |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
 | `scripts/self_test.py` | 自检：把本文「验收」1–32 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 | `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |

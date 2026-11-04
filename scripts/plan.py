@@ -6,6 +6,8 @@
     python scripts/plan.py index            # 重算各视角排序视图，写回文档生成区
     python scripts/plan.py index --check    # 只比对，不写（CI / 收尾用）
     python scripts/plan.py check [--json]   # 结构校验（含任务与功能的双亲、考核）
+    python scripts/plan.py next [--json]    # 唯一出口：按第一个视角给出「下一步」与理由链
+    python scripts/plan.py tree [--html|--json]  # 只读全貌：方向 → 工作 → 任务
 
 维度与视角全部从表头读取，脚本不认识具体维度名 —— 加维度/加视角不改代码。
 编号规则、状态词、文件位置来自 <docs>/_schema.json。
@@ -832,7 +834,15 @@ def main():
     as_json = "--json" in argv
     argv = [a for a in argv if a != "--json"]
 
+    # 帮助必须是只读的：以前 --help 会掉进默认的 index 分支，顺手把排序视图重写一遍
+    # （内容碰巧相同，git status 看不出来；文档一改就静默弄脏工作区）。
+    if any(a in ("-h", "--help") for a in argv):
+        print((__doc__ or "").strip())
+        return 0
+
     cmd = next((a for a in argv if not a.startswith("--")), "index")
+    if cmd not in ("index", "check", "tree", "next"):
+        return die(f"未知命令：{cmd}（可用：index / check / tree / next）", as_json)
     check_only = "--check" in argv
 
     docs = find_docs(docs_arg)
@@ -904,6 +914,65 @@ def main():
             print(f"written: {out_arg}（{len(d_order)} 方向 · {len(w_rows)} 工作 · {len(items)} 任务）")
         else:
             print(text)
+        for e in errs:
+            print(f"  ERROR [{e['code']}] {e['message']}", file=sys.stderr)
+        return 1 if errs else 0
+
+    if cmd == "next":
+        # 唯一出口：第一个视角的第一名就是「下一步」；其它视角的第一名若不同，
+        # 一并列出——排序不是唯一答案，选哪条由人定（README「可调优先级」）。
+        views = compute(weights, items, codes, done, work_ids, cfg)
+        work_meta, dir_name = {}, {}
+        if works:
+            wh, wrows = works
+            i_wname = wh.index("工作") if "工作" in wh else None
+            i_wdir = wh.index("方向") if "方向" in wh else None
+            for r in wrows:
+                if len(r) == len(wh) and r:
+                    work_meta[r[0]] = {"name": r[i_wname] if i_wname is not None else "",
+                                       "dir": r[i_wdir] if i_wdir is not None else ""}
+        if dirs:
+            dh, drows = dirs
+            i_dname = dh.index("方向") if "方向" in dh else None
+            for r in drows:
+                if len(r) == len(dh) and r and i_dname is not None:
+                    dir_name[r[0]] = r[i_dname]
+
+        picks = []
+        for view, order in views:
+            free = [o for o in order if not o[1]["blocked_by"]]
+            picks.append((view, free[0] if free else None))
+
+        if as_json:
+            out = {"ok": not errs, "errors": errs, "views": []}
+            for view, top in picks:
+                if top is None:
+                    out["views"].append({"view": view, "task": None})
+                    continue
+                score, t, worst = top
+                wm = work_meta.get(t["work"], {})
+                out["views"].append({"view": view, "task": t["id"], "name": t["name"],
+                                     "score": score, "weak": f"{worst}={t['scores'][worst]}",
+                                     "feature": t["feature"], "status": t["status"],
+                                     "work": t["work"], "direction": wm.get("dir", "")})
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+            return 1 if errs else 0
+
+        if not picks or picks[0][1] is None:
+            print("下一步：无可排任务（没有未完成、也未被前置阻塞的任务）")
+        else:
+            view, top = picks[0]
+            score, t, worst = top
+            wm = work_meta.get(t["work"], {})
+            print(f"下一步：{t['id']} {t['name']}")
+            print(f"  排序：视角「{view}」总分 {score:.2f}；弱项 {worst}={t['scores'][worst]}")
+            print(f"  路径：{wm.get('dir', '')} {dir_name.get(wm.get('dir', ''), '')} → "
+                  f"{t['work']} {wm.get('name', '')} → {t['id']}")
+            print(f"  功能：{t['feature']}；状态：{t['status']}")
+            others = [f"{v}→{o[1]['id']}" for v, o in picks[1:] if o and o[1]["id"] != t["id"]]
+            if others:
+                print("  其它视角的第一名：" + "；".join(others)
+                      + " ← 排序不是唯一答案，先看哪个由人定")
         for e in errs:
             print(f"  ERROR [{e['code']}] {e['message']}", file=sys.stderr)
         return 1 if errs else 0

@@ -1728,6 +1728,61 @@ def main():
         finally:
             shutil.rmtree(tmp35, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 44
+        print("\n44. 唯一出口：plan.py next；--help 只读、未知命令不落盘")
+        tmp36 = tempfile.mkdtemp(prefix="ddd-selftest36-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp36)
+            c, out = run("plan.py", "next", cwd=tmp36)
+            check("next 给出 Top-1 与 方向→工作→任务 路径",
+                  c == 0 and "下一步：T1.1.1" in out and "D1" in out and "W1.1" in out,
+                  out[-200:])
+            c, out = run("plan.py", "next", "--json", cwd=tmp36)
+            ok_json = False
+            try:
+                ok_json = json.loads(out)["views"][0]["task"] == "T1.1.1"
+            except (ValueError, KeyError, TypeError, IndexError):
+                ok_json = False
+            check("next --json 给机读结构（task / direction / work）",
+                  c == 0 and ok_json, out[:150])
+            # --help 必须只读：先把生成区弄脏，跑完 --help 还脏 → 说明没写；
+            # 再跑 index 把它修好，作为对照组，防止这条断言恒真（ISS-050 同类）。
+            plan36 = os.path.join(tmp36, "docs", "00-门面", "开发计划.md")
+            dirty = read(plan36).replace("<!-- BEGIN:plan-rank -->",
+                                         "<!-- BEGIN:plan-rank -->\nSTALE", 1)
+            write(plan36, dirty)
+            c, out = run("plan.py", "--help", cwd=tmp36)
+            check("--help 只打用法、不写生成区",
+                  c == 0 and "STALE" in read(plan36) and "plan-rank written" not in out,
+                  out[-150:])
+            c, out = run("plan.py", "index", cwd=tmp36)
+            check("对照：index 才会重写生成区（STALE 被修掉）",
+                  c == 0 and "STALE" not in read(plan36), out[-150:])
+            c, out = run("plan.py", "bogus", cwd=tmp36)
+            check("未知命令报错、不落盘", c == 2 and "未知命令" in out, out[-150:])
+        finally:
+            shutil.rmtree(tmp36, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 45
+        print("\n45. 开场简报提醒「没写 @日期」的活跃问题")
+        tmp37 = tempfile.mkdtemp(prefix="ddd-selftest37-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp37)
+            c, out = run("devlog.py", "brief", cwd=tmp37)
+            check("brief 列出没有 @日期 的活跃问题",
+                  c == 0 and "回访：" in out and "ISS-001" in out, out[-200:])
+            c, out = run("devlog.py", "brief", "--json", cwd=tmp37)
+            ok_json = False
+            try:
+                ok_json = "ISS-001" in json.loads(out)["due"]["undated"]
+            except (ValueError, KeyError, TypeError):
+                ok_json = False
+            check("brief --json 的 due.undated 给机读", c == 0 and ok_json, out[:150])
+        finally:
+            shutil.rmtree(tmp37, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

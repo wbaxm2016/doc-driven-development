@@ -1209,6 +1209,10 @@ def cmd_brief(ctx, as_json=False):
     due = due_items(ctx)
     today = datetime.date.today().isoformat()
     overdue = [d for d in due if d[1] <= today]
+    # 没有 @日期 的活跃问题不会自己响。不猜日期，只把数量与编号摆出来：让「记得回来」
+    # 从自觉变成一屏可见的清单（ISS-050 的同一思路：只提醒，不替人判）。
+    active = [r for r in rows if r.get("state") in ("确立", "实施中")
+              and not DUE_RE.search(r.get("back") or "")]
 
     recent = []
     for p in ctx.sessions()[-3:][::-1]:
@@ -1237,7 +1241,8 @@ def cmd_brief(ctx, as_json=False):
             "awaiting": {"open": len(p_open), "deferred": len(p_def)},
             "inbox": counts,
             "due": {"total": len(due), "overdue": [{"id": i, "date": d, "where": w}
-                                                   for i, d, w in overdue]},
+                                                   for i, d, w in overdue],
+                    "undated": [r["id"] for r in active]},
             "recent": recent,
         }, ensure_ascii=False, indent=2))
         return 0
@@ -1263,6 +1268,10 @@ def cmd_brief(ctx, as_json=False):
         print("复核：%d 条设了日期，最近到期 %s" % (len(due), min(d for _, d, _ in due)))
     else:
         print("复核：无——在「回到条件 / 撤销条件 / 走通验收」里写 @YYYY-MM-DD，到期就出现在这里")
+    if active:
+        shown = "、".join(r["id"] for r in active[:6]) + ("…" if len(active) > 6 else "")
+        print(f"回访：{len(active)} 条活跃问题没设 @日期（{shown}）"
+              "← 它们不会自己响；收口时补日期，或写明「无日期」原因")
     print("最近 3 场：" + (" / ".join(recent) if recent else "无"))
     return 0
 
