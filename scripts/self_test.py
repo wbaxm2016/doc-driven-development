@@ -1939,6 +1939,50 @@ def main():
         finally:
             shutil.rmtree(tmp40, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 49
+        print("\n49. 语义门预审：五列 / 引文逐字 / 表头无状态列（E30）")
+        tmp41 = tempfile.mkdtemp(prefix="ddd-selftest41-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp41)
+            run("devlog.py", "new", "--title", "预审记录", "--scope", "试", cwd=tmp41)
+            d49 = os.path.join(tmp41, "docs", "70-过程", "会话")
+            a49 = sorted(os.path.join(d49, f) for f in os.listdir(d49)
+                         if f.endswith(".md"))[-1]
+            block49 = (
+                "\n\n### 3.8 预审记录（LLM 辅助，只出疑点）\n\n"
+                "| 指向 | 逐字引文 | 疑点 | 建议动作 | 裁决 |\n"
+                "|---|---|---|---|---|\n"
+                "| 本档 §1 | 本次范围 | 需求与实现对不上 | 补证据 | 待裁决 |\n"
+            )
+            write(a49, read(a49) + block49)
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("合法预审记录：0 error", c == 0 and "[E30]" not in out, out[-200:])
+
+            write(a49, read(a49).replace("| 本档 §1 | 本次范围 |", "| 本档 §1 | 本次范围改 |"))
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("引文被改一个字 → [E30]", c == 1 and "[E30]" in out, out[-200:])
+
+            write(a49, read(a49).replace("| 本档 §1 | 本次范围改 |", "| 本档 §1 | 本次范围 |")
+                  .replace("| 裁决 |", "| 状态 |"))
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("表头出现「状态」列 → [E30]", c == 1 and "[E30]" in out, out[-200:])
+
+            write(a49, read(a49).replace("| 状态 |", "| 裁决 |")
+                  .replace("| 本档 §1 | 本次范围 | 需求与实现对不上 | 补证据 | 待裁决 |",
+                           "| 本档 §1 | 本次范围 | 需求与实现对不上 | 补证据 | 待裁决 |\n"
+                           "| 对齐门 | — | 复述不能代 | 补证据 | 待裁决 |"))
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("对齐门条目写建议 → [E30]", c == 1 and "[E30]" in out, out[-200:])
+
+            write(a49, read(a49).replace(
+                "| 对齐门 | — | 复述不能代 | 补证据 | 待裁决 |",
+                "| 对齐门 | — | 复述不能代 | 不适用 | 待裁决 |"))
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("对齐门改成「不适用」→ 0 error", c == 0 and "[E30]" not in out, out[-200:])
+        finally:
+            shutil.rmtree(tmp41, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

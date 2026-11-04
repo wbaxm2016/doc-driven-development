@@ -482,6 +482,93 @@ def ideas_parts(body):
     return "\n".join(segs), "".join(parts)
 
 
+PRECHECK_HEADING = re.compile(r"^### 3\.8\b[^\n]*", re.M)
+PRECHECK_ACTIONS = ("补证据", "改条款", "维持")
+PRECHECK_VERDICTS = ("待裁决", "采纳", "驳回")
+PRECHECK_NOT_APPLICABLE = ("对齐门", "发版", "回滚", "开放问题收口")
+PRECHECK_COLS = ("指向", "逐字引文", "疑点", "建议动作", "裁决")
+PRECHECK_FORBIDDEN = ("状态", "确认", "评审", "考核")
+
+
+def precheck_parts(body):
+    """切出所有「### 3.8 预审记录」小节，并给出「不含这些小节」的正文（本档引文要在正文里逐字存在）。"""
+    spans = []
+    for m in PRECHECK_HEADING.finditer(body):
+        rest = body[m.end():]
+        nxt = re.search(r"^#{1,3} ", rest, re.M)
+        end = m.end() + (nxt.start() if nxt else len(rest))
+        spans.append((m.start(), end))
+    if not spans:
+        return None, body
+    segs = [body[s:e] for s, e in spans]
+    parts, last = [], 0
+    for s, e in spans:
+        parts.append(body[last:s])
+        last = e
+    parts.append(body[last:])
+    return "\n".join(segs), "".join(parts)
+
+
+def precheck_problems(seg, scope, docs_dir, repo_root, cache):
+    """E30：预审记录的形状 / 引文逐字 / 指向存在 / 不适用条目不写结论。"""
+    probs = []
+    path_re = re.compile(r"[\w\-./]+\.md")
+    for header, rows in read_tables(seg):
+        heads = [strip_md(h) for h in header]
+        for bad in PRECHECK_FORBIDDEN:
+            if bad in heads:
+                probs.append("预审记录的表头不能有「%s」列——预审不是台账" % bad)
+        if not set(PRECHECK_COLS) <= set(heads):
+            probs.append("预审记录缺列：需要 指向 / 逐字引文 / 疑点 / 建议动作 / 裁决")
+            continue
+        col = {h: i for i, h in enumerate(heads)}
+
+        def cell(row, name):
+            i = col[name]
+            return row[i].strip() if i < len(row) else ""
+
+        for row in rows:
+            target = strip_md(cell(row, "指向"))
+            quote = strip_md(cell(row, "逐字引文")).strip("「」").strip()
+            action = strip_md(cell(row, "建议动作"))
+            verdict = strip_md(cell(row, "裁决"))
+            if not target:
+                continue
+            pm = path_re.search(target)
+            if pm is None and any(k in target for k in PRECHECK_NOT_APPLICABLE):
+                if action != "不适用":
+                    probs.append("「%s」不在预审范围，建议动作必须写「不适用」" % target[:12])
+                continue
+            if action == "不适用":
+                probs.append("「%s」不在不适用三处，却写了「不适用」" % target[:12])
+                continue
+            if action not in PRECHECK_ACTIONS:
+                probs.append("预审的建议动作 %r 不在白名单（补证据 / 改条款 / 维持）" % action)
+            if verdict and verdict not in PRECHECK_VERDICTS:
+                probs.append("预审的裁决 %r 不在白名单（待裁决 / 采纳 / 驳回）" % verdict)
+            if not quote:
+                probs.append("预审记录有一行缺「逐字引文」：%s" % target[:18])
+                continue
+            if target.startswith("本档"):
+                hay = scope
+            else:
+                hay = None
+                for cand in ([pm.group(0)] if pm and os.path.isabs(pm.group(0)) else [
+                        os.path.join(docs_dir, pm.group(0)) if pm else "",
+                        os.path.join(repo_root, pm.group(0)) if pm else ""]):
+                    if cand and os.path.isfile(cand):
+                        if cand not in cache:
+                            cache[cand] = read(cand)
+                        hay = cache[cand]
+                        break
+                if hay is None:
+                    probs.append("预审的指向文件不存在：%s" % (pm.group(0) if pm else target[:18]))
+                    continue
+            if quote not in hay:
+                probs.append("预审引文在指向里找不到（逐字）：%s" % quote[:24])
+    return probs
+
+
 def ideas_problems(seg, scope, docs_dir, repo_root, cache, all_ids):
     """E29：类别白名单 / 原话逐字存在 / 建议落点的编号存在。返回 (问题, 原话列表)。"""
     probs, quotes = [], []
@@ -588,6 +675,7 @@ def main():
     aliases = load_aliases(docs, schema)
     errors, warns = [], []
     idea_quotes, idea_cache = {}, {}
+    precheck_cache = {}
     all_ids = set()
     for path in files:
         _txt = read(path)
@@ -708,6 +796,13 @@ def main():
                 add(errors, rel, "E29", msg)
             for q in idea_qs:
                 idea_quotes.setdefault(q, []).append(rel)
+
+        # ---- E30 语义门预审：形状 / 引文逐字 / 指向存在 / 不适用条目不写结论（REQ-019）
+        pre_seg, pre_scope = precheck_parts(body)
+        if pre_seg is not None:
+            for msg in precheck_problems(
+                    pre_seg, pre_scope, docs, repo_root, precheck_cache):
+                add(errors, rel, "E30", msg)
 
         # ---- ADR 结构（E10 / E12 / E15）
         if decision_dir and rel.startswith(f"{decision_dir}/{names['adr_dir']}/"):
