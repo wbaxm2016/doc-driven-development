@@ -801,6 +801,24 @@ def section_body(text, keyword):
     return m.group(1) if m else ""
 
 
+IDEA_KINDS = ("目标", "愿景", "功能", "需求")
+
+
+def ideas_filled(text):
+    """§3.7 是否真的填过一行想法：类别是四类之一且原话非空。
+
+    只判「填没填」，判不了「这条算不算想法」——所以它只做提醒（S13 / brief），不阻断收尾。
+    """
+    m = re.search(r"(?ms)^###\s*3\.7\b[^\n]*\n(.*?)(?=^#{1,3}\s|\Z)", text)
+    if not m:
+        return False
+    for _header, rows in read_tables(m.group(1)):
+        for row in rows:
+            if len(row) >= 2 and row[1].strip().strip("`*") in IDEA_KINDS and row[2].strip():
+                return True
+    return False
+
+
 def check_user_side(rel, text):
     """S10：§2 用户侧记录里**已填类型**的行必须给出落点。
 
@@ -1086,6 +1104,10 @@ def cmd_check(ctx, as_json=False):
         errors.extend(check_user_side(rel, text))
         if i == len(sessions) - 1:      # S12 只判最新一篇：存量不追溯（ISS-032）
             errors.extend(check_decision_review(rel, text))
+            if not ideas_filled(text):
+                warns.append({"file": rel, "code": "S13",
+                              "message": "想法候选（§3.7）还没填：收尾时把本场用户原话里的"
+                                         " 目标 / 愿景 / 功能 / 需求 抽一次"})
 
         m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
         if m and len(re.sub(r"[>\-*#\s]", "", m.group(1))) < 40:
@@ -1243,6 +1265,7 @@ def cmd_brief(ctx, as_json=False):
             "due": {"total": len(due), "overdue": [{"id": i, "date": d, "where": w}
                                                    for i, d, w in overdue],
                     "undated": [r["id"] for r in active]},
+            "ideas_filled": ideas_filled(read(path)) if path else None,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
         return 0
@@ -1272,6 +1295,9 @@ def cmd_brief(ctx, as_json=False):
         shown = "、".join(r["id"] for r in active[:6]) + ("…" if len(active) > 6 else "")
         print(f"回访：{len(active)} 条活跃问题没设 @日期（{shown}）"
               "← 它们不会自己响；收口时补日期，或写明「无日期」原因")
+    if path and not ideas_filled(read(path)):
+        print("整理：上一场档案还没填 §3.7（想法候选）← 收尾时抽一次 目标/愿景/功能/需求，"
+              "原话逐字（E29 会核）")
     print("最近 3 场：" + (" / ".join(recent) if recent else "无"))
     return 0
 

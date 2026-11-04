@@ -1826,6 +1826,30 @@ def main():
         finally:
             shutil.rmtree(tmp38, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 47
+        print("\n47. 开场/收尾提醒「想法候选还没填」（S13）")
+        tmp39 = tempfile.mkdtemp(prefix="ddd-selftest39-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp39)
+            run("devlog.py", "new", "--title", "想法候选模板", "--scope", "试", cwd=tmp39)
+            c, out = run("devlog.py", "brief", cwd=tmp39)
+            check("brief 开场提醒 §3.7 还没填", c == 0 and "整理：" in out, out[-200:])
+            c, out = run("devlog.py", "check", cwd=tmp39)
+            check("check 给 WARN [S13]（不阻断收尾）", c == 0 and "[S13]" in out, out[-200:])
+
+            d = os.path.join(tmp39, "docs", "70-过程", "会话")
+            a = sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith(".md"))[-1]
+            ph = "| | 目标 / 愿景 / 功能 / 需求 | | 本档 §2 | vision / D-n / REQ-nnn / F-nnn / 新建 | 待裁 / 已落位：<编号> / 丢弃 |"
+            filled = "| 1 | 需求 | 想法候选 | 本档 §2 | REQ-001 | 待裁 |"
+            write(a, read(a).replace(ph, filled))
+            c, out = run("devlog.py", "brief", cwd=tmp39)
+            check("填过一行后 brief 不再提醒", c == 0 and "整理：" not in out, out[-200:])
+            c, out = run("devlog.py", "check", cwd=tmp39)
+            check("填过一行后 check 不再报 S13", c == 0 and "[S13]" not in out, out[-200:])
+        finally:
+            shutil.rmtree(tmp39, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
