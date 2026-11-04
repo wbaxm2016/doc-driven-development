@@ -1441,7 +1441,7 @@ def main():
                   c == 1 and "[P14]" in out and "找不到功能台账" in out, out[-400:])
             os.rename(feat27 + ".bak", feat27)
 
-            no_task_feat = ("| **F-002** | 第二个功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
+            no_task_feat = ("| **F-009** | 第二个功能 | REQ-001 | 口径 | `python -c pass` | S | 已验收"
                             " | 满足✓ 可做✓ 代价S | docs/20-契约/requirements.md | self_test 2026-11-02"
                             " | 各任务考核见 T1.1.1｜整体一致：全｜代价：S（同估）｜结论：保留 | abc1234 |\n")
             write(feat27, insert_after(base_feat27.replace(tpl_assess, ok_assess),
@@ -1449,7 +1449,7 @@ def main():
             c, out = run("plan.py", "check", cwd=tmp27)
             check("已验收功能没有任何任务挂它 → P16", c == 1 and "[P16]" in out, out[-400:])
 
-            write(plan27, base_plan27.replace(tpl_task, done_task.replace("| F-001 |", "| F-002 |")))
+            write(plan27, base_plan27.replace(tpl_task, done_task.replace("| F-001 |", "| F-009 |")))
             c, out = run("plan.py", "check", cwd=tmp27)
             check("汇总点名的任务真挂在这个功能下 → 0 error",
                   c == 0 and "[P16]" not in out, out[-400:])
@@ -1498,9 +1498,26 @@ def main():
             c, out = run("plan.py", "check", cwd=tmp28)
             check("成功状态为空 → P18", c == 1 and "[P18]" in out and "成功状态" in out, out[-400:])
 
-            write(card28, base28.replace("干净环境按三步走一遍，每步记观察", "—"))
+            write(card28, base28.replace("在干净环境里按三步走一遍，每步记观察（@2026-12-31 复核）", "—"))
             c, out = run("plan.py", "check", cwd=tmp28)
             check("走通验收为空 → P18", c == 1 and "[P18]" in out and "走通验收" in out, out[-400:])
+
+            # REQ-018：走通验收要带复核日期（@YYYY-MM-DD），否则到期提醒无从触发
+            write(card28, base28.replace("（@2026-12-31 复核）", ""))
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("走通验收缺 @复核日 → P18（ISS-061）",
+                  c == 1 and "[P18]" in out and "@" in out, out[-400:])
+
+            # 接缝是步与步之间的分水岭；格空着，方向就退化成功能清单
+            write(card28, base28.replace("注册成功后的空状态；记录保存失败的重试", "—"))
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("接缝为空 → P18（ISS-061）", c == 1 and "[P18]" in out and "接缝" in out, out[-400:])
+
+            # 引用存在性：路径里的 F-nnn / W<n.m> / K<n> 必须真实存在
+            write(card28, base28.replace("（F-001）", "（F-999）"))
+            c, out = run("plan.py", "check", cwd=tmp28)
+            check("路径引用不存在的 F-999 → P18（ISS-061）",
+                  c == 1 and "[P18]" in out and "F-999" in out, out[-400:])
 
             orphan = ("| **D9** | 现状甲 | 现在不做就晚 | 用户 · 起点 | 成功状态甲 "
                       "| ① 一 → ② 二 | 接缝甲 | 不覆盖甲 | 走通一遍 | — |")
@@ -1608,6 +1625,10 @@ def main():
             check("brief 报出已到期的复核项（ISS-050）",
                   c == 0 and "已到期 1" in out and "ISS-001" in out, out[-400:])
 
+            # 模板方向卡的示例自带 @2026-12-31；本组只测「收件箱的日期」是否冒充已到期，
+            # 把方向卡那条推到 2099-12-31（晚于收件箱的 2099-01-01），让最近到期仍是收件箱那条。
+            card30 = os.path.join(tmp30, "docs", "00-门面", "方向卡.md")
+            write(card30, read(card30).replace("（@2026-12-31 复核）", "（@2099-12-31 复核）"))
             write(inbox30, past.replace("@2020-01-01", "@2099-01-01"))
             c, out = run("devlog.py", "brief", cwd=tmp30)
             check("没到期的只报「最近到期」，不冒充已到期",

@@ -59,8 +59,9 @@ LEGACY = "—（历史）"
 PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "待定", "tbd", "todo"}
 ANCHOR_PLACEHOLDERS = PLACEHOLDERS | {"待提交"}
 ASSESS_CELLS = ("做法", "一致", "代价", "结论")
-# 方向卡的三格必填（P18）。路径与接缝不判：步数靠人读，接缝按 ADR-003 的已知缺口不做机器判。
-CARD_CELLS = ("现状", "成功状态", "走通验收")
+# 方向卡的必填格（P18）。REQ-018：走通验收还要带 @复核日；路径 / 接缝 / 走通验收里
+# 出现的 F- / W / K 引用必须存在——机器只判存在，走没走通、接缝归谁仍人读（ISS-061）。
+CARD_CELLS = ("现状", "成功状态", "走通验收", "接缝")
 # 设计卡的三格必填（P19）。扩展点 / 任务拆分 / 取舍按改动大小可省：ADR-003 允许小改动只写
 # 三行，判满六格会把设计门变成填表仪式。
 DESIGN_CELLS = ("接口", "可替换点", "失败边界")
@@ -345,7 +346,7 @@ def load_directions(path):
             did = strip_md(r[i_d])
             if not re.fullmatch(r"D\d+", did):
                 continue
-            out[did] = {h: strip_md(r[heads.index(h)]) for h in CARD_CELLS if h in heads}
+            out[did] = {h: strip_md(r[heads.index(h)]) for h in heads}
         return out
     return None
 
@@ -441,11 +442,14 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=N
 
     # P18 方向卡：方向不能只是一句「成功状态 + 依据」——它是现状的结论，还要说清怎么算走通。
     # 卡缺失时不逐行刷屏，只报一条（否则一个没迁移的项目会红一片，看不出真正的毛病）。
+    # REQ-018 / ISS-061：机器判形式（复核日 / 引用存在 / 接缝非空），语义仍人读。
     if dir_ids:
         if cards is None:
             E("P18", "找不到方向卡（00-门面/方向卡.md）：方向的现状 / 成功状态 / "
                      "走通验收无处可查；先按模板建卡，再往计划里加 D")
         else:
+            feat_ids = set(feats["feats"]) if feats else set()
+            design_ids = set(designs) if designs else set()
             for did in sorted(dir_ids):
                 card = cards.get(did)
                 if card is None:
@@ -456,6 +460,23 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=N
                 if miss:
                     E("P18", f"方向卡 {did} 缺{'、'.join(miss)}：方向是现状的结论，"
                              f"缺了这一格就只剩一句口号")
+                    continue
+                if not re.search(r"@\d{4}-\d{2}-\d{2}", card.get("走通验收", "")):
+                    E("P18", f"方向卡 {did} 的走通验收缺复核日期（@YYYY-MM-DD）："
+                             f"到期提醒无从触发（REQ-018 / ISS-061）")
+                for cell, text in card.items():
+                    if cell not in ("接缝", "走通验收") and not cell.startswith("路径"):
+                        continue
+                    for ref in sorted(set(re.findall(r"F-\d+", text))):
+                        if ref not in feat_ids:
+                            E("P18", f"方向卡 {did} 的{cell}引用了不存在的功能 {ref}："
+                                     f"引用存在才能说清「每步靠哪个功能」（REQ-018 / ISS-061）")
+                    for ref in sorted(set(re.findall(r"W\d+\.\d+", text))):
+                        if ref not in work_ids:
+                            E("P18", f"方向卡 {did} 的{cell}引用了不存在的工作 {ref}")
+                    for ref in sorted(set(re.findall(r"K\d+", text))):
+                        if ref not in design_ids:
+                            E("P18", f"方向卡 {did} 的{cell}引用了不存在的设计卡 {ref}")
             for did in sorted(set(cards) - dir_ids):
                 E("P18", f"方向卡里的 {did} 不在计划 §3：孤儿方向——要么补进计划，要么删掉卡")
 
