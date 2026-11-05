@@ -1961,6 +1961,17 @@ def main():
             c, out = run("doc_check.py", cwd=tmp41)
             check("合法预审记录：0 error", c == 0 and "[E30]" not in out, out[-200:])
 
+            # ISS-083：原文带行内代码，引文按去掉标记的字面引用时不能误报
+            write(a49, read(a49).replace(
+                "| 本档 §1 | 本次范围 |",
+                "| 本档 §1 | 收尾时跑 python scripts/devlog.py check |"))
+            c, out = run("doc_check.py", cwd=tmp41)
+            check("引文跨行内代码（原文带反引号）→ 不误报",
+                  c == 0 and "[E30]" not in out, out[-200:])
+            write(a49, read(a49).replace(
+                "| 本档 §1 | 收尾时跑 python scripts/devlog.py check |",
+                "| 本档 §1 | 本次范围 |"))
+
             write(a49, read(a49).replace("| 本档 §1 | 本次范围 |", "| 本档 §1 | 本次范围改 |"))
             c, out = run("doc_check.py", cwd=tmp41)
             check("引文被改一个字 → [E30]", c == 1 and "[E30]" in out, out[-200:])

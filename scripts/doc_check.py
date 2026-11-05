@@ -567,7 +567,7 @@ def precheck_problems(seg, scope, docs_dir, repo_root, cache):
             if verdict in ("采纳", "驳回"):
                 # 已裁决的行是当时的快照：修复会改动原文，不要求引文今天仍逐字存在。
                 continue
-            if quote not in hay:
+            if quote not in hay and quote not in strip_md(hay):
                 probs.append("预审引文在指向里找不到（逐字）：%s" % quote[:24])
     return probs
 
