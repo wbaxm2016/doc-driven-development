@@ -93,7 +93,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
          "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27",
-         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8"]
+         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9"]
 
 
 # ---------------------------------------------------------------- 基础工具
@@ -703,6 +703,9 @@ def main():
     req_ids = set()
     req_defs = {}
     feat_cover = set()
+    accepted_features = {}
+    checked_features = set()
+    check_table_seen = False
     if contract_dir:
         req_pat = re.compile(rf"{re.escape(schema['ids']['req'])}-\d+")
         for path in files:
@@ -926,6 +929,16 @@ def main():
                                     f"写 `复述✓ YYYY-MM-DD｜档案 §` 或 `采纳✓ …`；"
                                     f"先于确认门的存量行写 `—（历史）`")
 
+        # ---- W9 取数：功能对照清单里的 F 行（供循环后判「已验收 → 有行」）
+        for header, rows in read_tables(strip_fences(body)):
+            heads = [strip_md(h) for h in header]
+            if not any(h.startswith("该验什么") for h in heads):
+                continue
+            check_table_seen = True
+            for row in rows:
+                if row and re.fullmatch(r"F-\d+", strip_md(row[0])):
+                    checked_features.add(strip_md(row[0]))
+
         # ---- E24 功能台账（需求 → 功能 → 入口 → 证据）
         # 一张表两种读法：待评审/已评审/实施中＝设计视图，已对照/已验收＝已实现清单。
         # 只判能机械判的：编号、状态词、需求引用存在、入口存在、已验收有 verify 与证据。
@@ -950,6 +963,8 @@ def main():
                     continue
                 st = strip_md(row[i_st])
                 reqcell = strip_md(row[i_req])
+                if st == "已验收":
+                    accepted_features[fid] = rel
                 if st not in FEATURE_STATES:
                     add(errors, rel, "E24",
                         f"{fid} 的状态词不在白名单：{st!r}"
@@ -1175,6 +1190,14 @@ def main():
         if not items:
             d = layer_dir(schema, lay) or "?"
             add(errors, f"{d}/", "E9", f"层为空（{lay}）：加一篇，或从 _schema.json 删掉这层")
+
+    # ---- W9 已验收 → 功能对照行（提醒不阻断：有行 ≠ 对照过；F-001–F-020 存量豁免）
+    if check_table_seen:
+        for fid in sorted(accepted_features):
+            if int(fid.split("-")[1]) >= 21 and fid not in checked_features:
+                add(warns, accepted_features[fid], "W9",
+                    f"{fid} 已验收，但 40-运行/功能对照.md 没有它的行："
+                    f"补一行对照，或写明为什么不需要；有行 ≠ 对照过")
 
     # ---- W8 需求 ↔ 功能对账：每条需求至少要有一个功能覆盖它（提醒不阻断：需求可以先写、功能后补）
     for rid in sorted(req_defs):

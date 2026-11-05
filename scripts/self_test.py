@@ -1992,6 +1992,34 @@ def main():
         finally:
             shutil.rmtree(tmp41, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 50
+        print("\n50. 已验收 → 对照行：W9 提醒（REQ-020）")
+        tmp50 = tempfile.mkdtemp(prefix="ddd-selftest50-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp50)
+            feat50 = os.path.join(tmp50, "docs", "40-运行", "FEATURES.md")
+            fc50 = os.path.join(tmp50, "docs", "40-运行", "功能对照.md")
+            row50 = ("| **F-021** | 测试功能 | —（历史） | 有行 | "
+                     "`python scripts/self_test.py -v` | S | 已验收 | —（历史） | "
+                     "scripts/doc_check.py | self_test 第 1 组（2026-11-04） | —（历史） | —（历史） |")
+            write(feat50, insert_after(read(feat50), FEATURE_ANCHOR, row50))
+            c, out = run("doc_check.py", cwd=tmp50)
+            check("F-021 已验收、对照清单无行 → [W9] 且 exit 0",
+                  c == 0 and "[W9]" in out and "F-021" in out, out[-300:])
+            check("W9 文案含「有行 ≠ 对照过」", "有行 ≠ 对照过" in out, out[-300:])
+
+            write(fc50, insert_after(read(fc50), "| F-001 |", "| F-021 | 有行 | 一致 | 测试 |"))
+            c, out = run("doc_check.py", cwd=tmp50)
+            check("对照清单补 F-021 行后 W9 消失", c == 0 and "[W9]" not in out, out[-300:])
+
+            row20 = row50.replace("F-021", "F-020")
+            write(feat50, insert_after(read(feat50), FEATURE_ANCHOR, row20))
+            c, out = run("doc_check.py", cwd=tmp50)
+            check("F-020 存量豁免：无对照行也不报 W9", c == 0 and "[W9]" not in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp50, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
