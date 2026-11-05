@@ -52,6 +52,7 @@ tags: [契约, 需求, EARS]
 | **REQ-022** | WHEN 运行 `brief` THE SYSTEM SHALL 输出一行「覆盖：n/m」——n 为方向卡「覆盖」表里有「最近走通」记录的方向数，m 为方向卡方向总数；缺表或没有记录时输出 `0/m` 且不报错 | 本仓 `devlog.py brief` 出 `覆盖：1/12`；补一条 D3 走通记录 → `覆盖：2/12`；删掉「覆盖」节 → `覆盖：0/12` 且 exit 0；`self_test` 第 52 组 4 条 | `python scripts/self_test.py -v`（第 52 组） | 已实现 | 本会话、ISS-080、K16、F-033、T18.1.1、2.9.3 | 采纳✓ 2026-11-05｜用户「采纳，开工」 |
 | **REQ-023** | WHEN 运行 `brief` 且存在「所属方向的工作全部处于完成态、但覆盖表没有该方向走通记录」的方向 THE SYSTEM SHALL 列出这些方向编号（「走通待补」）；补齐覆盖后该行消失；没有待补项时不输出该行 | 临时项目把 W1.1 置为已完成、覆盖无记录 → 列出 D1；补上 D1 覆盖记录 → 该行消失；本仓 `brief` 列出 11 条；`self_test` 第 53 组 2 条 | `python scripts/self_test.py -v`（第 53 组） | 已实现 | 本会话、ISS-086、K17、F-034、T18.2.1、2.9.5 | 采纳✓ 2026-11-05｜用户「继续Top-1」 |
 | **REQ-024** | WHEN 归档 delta 的 front-matter 带 `superseded_by: DELTA-nnn` THE SYSTEM SHALL 不再要求它的 `after` 仍在目标里（允许后续 delta 删掉/改掉它新增的行）；若该编号在项目里不存在（proposed 或 archived 都没有），报 `E31` | 临时项目两篇归档 delta（ADDED 后又被 REMOVED）：无 `superseded_by` → `E21`；指向存在的 `DELTA-002` → 0 error；指向 `DELTA-999` → `E31` | `python scripts/self_test.py -v`（第 54 组） | 已实现 | 本会话、ISS-088、K18、F-035、T19.1.1、2.9.6 | 采纳✓ 2026-11-05｜用户「A」 |
+| **REQ-025** | WHEN 会话档案 §3.7 的出处是活文档（`.md`）THE SYSTEM SHALL 要求它带版本日期（`路径.md（YYYY-MM-DD）`）：带日期只核文件存在与日期合法、不核逐字；不带日期报 `E29` | 临时项目：`vision.md（2026-11-04）` → 0 error；去掉日期 → `E29`；`（2026-13-40）` → `E29` | `python scripts/self_test.py -v`（第 55 组） | 已实现 | 本会话、ISS-082、K19、F-036、T20.1.1、2.9.7 | 采纳✓ 2026-11-05｜用户「C」 |
 
 ## 2. 不得做的事
 

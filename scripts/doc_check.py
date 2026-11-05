@@ -467,6 +467,8 @@ def load_aliases(docs, schema):
 IDEAS_HEADING = re.compile(r"^### 3\.7\b[^\n]*", re.M)
 ID_PATTERN = re.compile(r"REQ-\d+|F-\d+|(?<![A-Za-z])D\d+")
 IDEA_KINDS = ("目标", "愿景", "功能", "需求")
+# 活文档出处：`路径.md（YYYY-MM-DD）`——带版本日期才跳过逐字（REQ-025）
+DOC_SRC_RE = re.compile(r"^(?P<path>[^\s（(]+\.md)\s*[（(](?P<date>\d{4}-\d{2}-\d{2})[)）]$")
 
 
 def ideas_parts(body):
@@ -611,6 +613,30 @@ def ideas_problems(seg, scope, docs_dir, repo_root, cache, all_ids):
             if src.startswith("本档"):
                 hay = scope
             else:
+                m = DOC_SRC_RE.match(src)
+                if m:
+                    # 活文档带版本日期：只核文件存在与日期合法，不核逐字——
+                    # 引文记的是「那一版」，拿今天的文本去核它必然失效（REQ-025）。
+                    path_v, date_v = m.group("path").strip(), m.group("date")
+                    try:
+                        datetime.date.fromisoformat(date_v)
+                    except ValueError:
+                        probs.append("出处的版本日期不合法：%s（要 YYYY-MM-DD）" % src)
+                        continue
+                    cands = [path_v] if os.path.isabs(path_v) else [
+                        os.path.join(docs_dir, path_v), os.path.join(repo_root, path_v)]
+                    if not any(os.path.exists(c) for c in cands):
+                        probs.append("想法的出处文件不存在：%s" % path_v)
+                        continue
+                    for pid in ID_PATTERN.findall(target):
+                        if pid not in all_ids:
+                            probs.append("建议落点 %s 不存在" % pid)
+                    quotes.append(quote)
+                    continue
+                if src.endswith(".md"):
+                    probs.append("出处不能用活文档（源头一改引文就失效）：%s"
+                                 "——写成本档 §N，或带版本日期如 vision.md（2026-11-04）" % src)
+                    continue
                 hay = None
                 cands = [src] if os.path.isabs(src) else [
                     os.path.join(docs_dir, src), os.path.join(repo_root, src)]

@@ -2187,6 +2187,40 @@ def main():
         finally:
             shutil.rmtree(tmp54, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 55
+        print("\n55. 活文档出处：带版本日期才放行（REQ-025）")
+        tmp55 = tempfile.mkdtemp(prefix="ddd-selftest55-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp55)
+            run("devlog.py", "new", "--title", "想法出处", "--scope", "试", cwd=tmp55)
+            d55 = os.path.join(tmp55, "docs", "70-过程", "会话")
+            a55 = sorted(os.path.join(d55, f) for f in os.listdir(d55)
+                         if f.endswith(".md"))[-1]
+            block55 = (
+                "\n\n### 3.7 想法候选（整理产物）\n\n"
+                "| # | 类别 | 原话（逐字） | 出处 | 建议落点 | 裁决 |\n"
+                "|---|---|---|---|---|---|\n"
+                "| 1 | 愿景 | 想法经由会话流入项目 | docs/00-门面/vision.md（2026-11-04） | — | 待定 |\n"
+            )
+            write(a55, read(a55) + block55)
+            c, out = run("doc_check.py", cwd=tmp55)
+            check("带版本日期的活文档出处 → 不核逐字（0 error）",
+                  c == 0 and "[E29]" not in out, out[-300:])
+
+            write(a55, read(a55).replace("vision.md（2026-11-04）", "vision.md"))
+            c, out = run("doc_check.py", cwd=tmp55)
+            check("活文档出处不带日期 → [E29]",
+                  c == 1 and "[E29]" in out, out[-300:])
+
+            write(a55, read(a55).replace("| docs/00-门面/vision.md |",
+                                         "| docs/00-门面/vision.md（2026-13-40） |"))
+            c, out = run("doc_check.py", cwd=tmp55)
+            check("版本日期不合法 → [E29]",
+                  c == 1 and "[E29]" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp55, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
