@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "status": [
+    "active",
+    "proposed",
+    "draft",
+    "implemented",
+    "superseded",
+    "snapshot",
+    "reference"
+  ],
+  "authority": [
+    "1",
+    "2",
+    "3",
+    "4"
+  ],
+  "domain": null,
+  "session_sections": [
+    "本次范围",
+    "用户侧记录",
+    "AI 侧记录",
+    "决策与选项对比",
+    "开放项",
+    "本次产出",
+    "交接"
+  ],
+  "adr_sections": [
+    "状态",
+    "背景",
+    "决策",
+    "备选方案",
+    "影响",
+    "撤销条件"
+  ],
+  "names": {
+    "plan": "开发计划.md",
+    "inbox": "问题收件箱.md",
+    "timeline": "时间线.md",
+    "features": "FEATURES.md",
+    "direction_card": "方向卡.md",
+    "design_card": "设计卡.md",
+    "session_template": "会话档案模板.md",
+    "sessions_dir": "会话",
+    "adr_dir": "adr",
+    "adr_index": "decisions.md",
+    "alias_table": "别名表.md"
+  },
+  "ids": {
+    "issue": "ISS",
+    "adr": "ADR",
+    "req": "REQ",
+    "digits": 3
+  },
+  "issue": {
+    "states": [
+      "候选",
+      "确立",
+      "实施中",
+      "实现关闭",
+      "拒绝"
+    ],
+    "active_states": [
+      "确立",
+      "实施中"
+    ],
+    "terminal_states": [
+      "实现关闭",
+      "拒绝"
+    ],
+    "natures": [
+      "可关闭",
+      "开放"
+    ],
+    "types": [
+      "缺陷",
+      "缺口",
+      "债",
+      "冲突",
+      "风险",
+      "机会",
+      "待决"
+    ],
+    "state_aliases": {
+      "open": "确立",
+      "deferred": "确立",
+      "done": "实现关闭"
+    }
+  },
+  "plan": {
+    "done_states": [
+      "已完成"
+    ],
+    "states": [
+      "待开工",
+      "进行中",
+      "已实现（未验收）",
+      "已完成",
+      "阻塞",
+      "搁置"
+    ],
+    "task_pattern": "^T\\d+\\.\\d+\\.\\d+$",
+    "work_pattern": "^W\\d+\\.\\d+$",
+    "direction_pattern": "^D\\d+$",
+    "design_before_states": [
+      "待开工",
+      "进行中"
+    ]
+  },
+  "ears": {
+    "enabled": true
+  },
+  "baseline": ".docs-baseline.json",
+  "layers": {
+    "00-门面": "facade",
+    "20-契约": "contract",
+    "30-决策": "decision",
+    "40-运行": "operation",
+    "70-过程": "process",
+    "10-架构": "architecture",
+    "50-术语": "glossary",
+    "60-规范": "norm"
+  }
+}
