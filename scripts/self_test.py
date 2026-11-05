@@ -2258,6 +2258,40 @@ def main():
         finally:
             shutil.rmtree(tmp56, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 57
+        print("\n57. 决策台账：生成 / 断链 / brief 提醒（REQ-028）")
+        tmp57 = tempfile.mkdtemp(prefix="ddd-selftest57-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp57)
+            run("devlog.py", "new", "--title", "决策台账", "--scope", "试", cwd=tmp57)
+            d57 = os.path.join(tmp57, "docs", "70-过程", "会话")
+            a57 = sorted(os.path.join(d57, f) for f in os.listdir(d57)
+                         if f.endswith(".md"))[-1]
+            base57 = read(a57)
+            base57 = base57.replace(
+                "### D1 · （在决定什么）", "### D1 · 落哪一层")
+            base57 = (base57
+                      .replace("**拍板**：（用户 / agent 自选；只有用户拍板的进收尾决策回顾）",
+                               "**拍板**：用户")
+                      .replace("**依据**：（用户原话照抄，用 `「…」` 引起来——`S12` 会核它在正文里逐字可查；或 ADR / 任务号）",
+                               "**依据**：「就落 L2」")
+                      .replace("**撤销条件**：（什么可观察的事实出现就推翻它；写不出就是断链）",
+                               "**撤销条件**：若 ISS-999 闭合时重议。"))
+            base57 = base57.replace("## 2. 用户侧记录（分类）",
+                                    "## 2. 用户侧记录（分类）\n\n- 用户原话：「就落 L2」\n", 1)
+            write(a57, base57)
+            c, out = run("devlog.py", "decisions", cwd=tmp57)
+            ledger = os.path.join(tmp57, "docs", "70-过程", "决策台账.md")
+            text57 = read(ledger) if os.path.exists(ledger) else ""
+            check("decisions 生成台账：1 条、断链 1 条",
+                  c == 0 and "共 **1** 条决策" in text57 and "| 断链 |" in text57, out[-300:])
+
+            c, out = run("devlog.py", "brief", cwd=tmp57)
+            check("brief 提醒决策待复核", c == 0 and "决策待复核：1" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp57, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

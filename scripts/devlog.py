@@ -1407,6 +1407,12 @@ def cmd_brief(ctx, as_json=False):
     if gaps:
         print(f"走通待补：{'、'.join(gaps)}（工作已全部完成、覆盖表无记录）"
               "← 跑一次该方向的走通验收并写进覆盖表（REQ-023）")
+    dec_bad = [r for r in collect_decisions(ctx) if r["status"] != "正常"]
+    if dec_bad:
+        n_link = sum(1 for r in dec_bad if r["status"] == "断链")
+        print(f"决策待复核：{len(dec_bad)} 条（断链 {n_link} / "
+              f"久未复核 {len(dec_bad) - n_link}）"
+              "← 跑 `devlog.py decisions` 看台账（REQ-028）")
     if path and not ideas_filled(read(path)):
         print("整理：上一场档案还没填 §3.7（想法候选）← 收尾时抽一次 目标/愿景/功能/需求，"
               "原话逐字（E29 会核）")
@@ -1442,6 +1448,122 @@ def build_timeline(ctx):
     return "\n".join(out) + "\n"
 
 
+DECISION_LEDGER = "决策台账.md"
+# 决策「撤销条件」里引用的编号：只在「表格首格」出现才算被定义（避免自证）
+DEF_ID_RE = re.compile(
+    r"^\|\s*\**\s*((?:REQ|ISS|F)-\d+|(?:W|T)\d+(?:\.\d+)*|(?:D|K)\d+)\s*\**\s*\|")
+# 方向卡 / 设计卡用标题定义编号：`## K16 · W18.1 · …`、`| **D11** | …`（后者走表格规则）
+DEF_HEAD_RE = re.compile(r"^#{2,3}\s*((?:D|K)\d+)\b")
+REF_ID_RE = re.compile(r"\b(?:REQ|ISS|F)-\d+\b|\b(?:W|T)\d+\.\d+(?:\.\d+)?\b|\b(?:D|K)\d+\b")
+DECISION_STALE_DAYS = 60
+
+
+def _known_ids(ctx):
+    """全库「定义过」的编号：表格首格出现的才算（正文里提到的不算）。"""
+    ids = set()
+    for root, _dirs, files in os.walk(ctx.docs):
+        for f in files:
+            if not f.endswith(".md"):
+                continue
+            for line in read(os.path.join(root, f)).splitlines():
+                s = line.strip()
+                m = DEF_ID_RE.match(s)
+                if m:
+                    ids.add(m.group(1))
+                    continue
+                m = DEF_HEAD_RE.match(s)
+                if m:
+                    ids.add(m.group(1))
+    return ids
+
+
+def collect_decisions(ctx):
+    """读全部会话档案 §4，返回每条决策的摘要与待复核状态（只读）。"""
+    known = _known_ids(ctx)
+    today = datetime.date.today()
+    out = []
+    for path in ctx.sessions():
+        text = read(path)
+        fm = parse_fm(text) or {}
+        date = (fm.get("session_date") or "").strip()
+        for title, block in decision_blocks(text):
+            if "（在决定什么）" in title:
+                continue
+            concl = decision_field(block, "结论") or ""
+            who = decision_field(block, "拍板") or ""
+            why = decision_field(block, "依据") or ""
+            redo = decision_field(block, "复述") or ""
+            undo = decision_field(block, "撤销条件") or ""
+            refs = sorted(set(REF_ID_RE.findall(undo)))
+            dangling = [r for r in refs if r not in known]
+            stale = False
+            try:
+                stale = (today - datetime.date.fromisoformat(date)).days > DECISION_STALE_DAYS
+            except ValueError:
+                pass
+            status = "断链" if dangling else ("久未复核" if stale else "正常")
+            out.append({
+                "date": date,
+                "file": os.path.basename(path),
+                "title": title,
+                "conclusion": concl.strip(),
+                "who": who.strip(),
+                "why": why.strip(),
+                "redo": redo.strip(),
+                "undo": undo.strip(),
+                "dangling": dangling,
+                "status": status,
+            })
+    return out
+
+
+def render_decision_ledger(rows):
+    today = datetime.date.today().isoformat()
+    lines = [
+        "---",
+        'title: "决策台账"',
+        "layer: process",
+        "domain: 协作",
+        "status: active",
+        "authority: 4",
+        f"updated: {today}",
+        'summary: "自动生成：每条决策的结论 / 拍板 / 撤销条件与待复核状态。"',
+        "tags: [过程, 生成区]",
+        "---",
+        "",
+        "# 决策台账",
+        "",
+        "> **自动生成，勿手改**：由 `python scripts/devlog.py decisions` 重建（生成区不手改）。",
+        "> 一屏看全：什么时候、谁拍的板、依据是什么、撤销条件写了什么、以及**是否待复核**（断链 / 久未复核）。",
+        "",
+        f"共 **{len(rows)}** 条决策；待复核 **{sum(1 for r in rows if r['status'] != '正常')}** 条"
+        f"（断链 {sum(1 for r in rows if r['status'] == '断链')} / 久未复核 {sum(1 for r in rows if r['status'] == '久未复核')}）。",
+        "",
+        "| 日期 | 档案 | 决策 | 结论 | 拍板 | 撤销条件 | 状态 |",
+        "|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        cells = [r["date"], r["file"], r["title"], r["conclusion"], r["who"],
+                 r["undo"] or "—", r["status"]]
+        # 台账比档案高一层：原文里的相对链接在这是断的，只留文字（E7）
+        cells = [re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", c)
+                 .replace("|", "\\|").replace("\n", " ") for c in cells]
+        lines.append("| " + " | ".join(cells) + " |")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_decisions(ctx, as_json):
+    rows = collect_decisions(ctx)
+    if as_json:
+        print(json.dumps({"total": len(rows), "rows": rows}, ensure_ascii=False, indent=2))
+        return 0
+    path = os.path.join(ctx.pdir, DECISION_LEDGER)
+    write(path, render_decision_ledger(rows))
+    bad = sum(1 for r in rows if r["status"] != "正常")
+    print(f"决策台账 written: {len(rows)} 条，待复核 {bad} 条（{path}）")
+    return 0
+
+
 def cmd_index(ctx, check_only):
     if not os.path.exists(ctx.timeline):
         return die(f"缺少时间线：{ctx.timeline}")
@@ -1456,7 +1578,9 @@ def cmd_index(ctx, check_only):
         print("timeline up-to-date" if same else "timeline OUT OF DATE")
         return 0 if same else 1
     write(ctx.timeline, new_text)
-    print(f"timeline written: {len(ctx.sessions())} sessions")
+    ledger = os.path.join(ctx.pdir, DECISION_LEDGER)
+    write(ledger, render_decision_ledger(collect_decisions(ctx)))
+    print(f"timeline written: {len(ctx.sessions())} sessions（决策台账同步重建）")
     return 0
 
 
@@ -1503,6 +1627,7 @@ def main():
     p_features.add_argument("--state", default=None,
                             help="只看某个状态（实施中 / 已对照 / 已验收 …）")
     sub.add_parser("check")
+    sub.add_parser("decisions")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
     args = ap.parse_args(argv)
@@ -1534,6 +1659,8 @@ def main():
         return cmd_features(ctx, args)
     if args.cmd == "check":
         return cmd_check(ctx, as_json)
+    if args.cmd == "decisions":
+        return cmd_decisions(ctx, as_json)
     return cmd_index(ctx, args.check)
 
 
