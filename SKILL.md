@@ -67,11 +67,11 @@ python scripts/devlog.py new --title "本次主题" --scope "范围"
 
 **新增 ISS 前先查一次**：`python scripts/devlog.py inbox --similar "这条问题的表述"` 摆出字面候选，把「是包含 / 扩展 / 还是独立」讲给用户定；转正时 `pending --clear <Q> --as iss --relation new|merge:ISS-nnn|extends:ISS-nnn|updates:ISS-nnn|duplicate:ISS-nnn`——`new` 由脚本自动分配 `ISS-nnn`，`--type/--impact/--to` 三格必须由你给，`--nature` 缺省按类型推断（机会 / 待决 = 开放，其余 = 可关闭）。
 
-**收尾**：先做一次**决策回顾**——只对**用户拍板的**决策，逐条回答「背景 / 影响 / 依据（用户原话照抄）/ 撤销条件」；答不出的标「断链」并用 `python scripts/devlog.py ask` 进待分诊。agent 的实现选择不进回顾；窗口与现查四路见 `references/process-recording.md` 的「决策回顾」一节。**摩擦回顾**：顺手在档案 §3.6 记本轮摩擦——同一动作 ≥3 次 / 同一失败 ≥2 次 / 某一步明显超出预期；会再犯的转收件箱（机会 / 债），只影响本轮的不转。**想法整理**：从本场用户原话里抽出 目标 / 愿景 / 功能 / 需求 四类想法写进档案 §3.7——原话逐字（`E29` 会对着出处核，改一个字就拒收），并给出落点建议（vision / `D-n` / `REQ-nnn` / `F-nnn`）；**人裁决之后**才写进载体，整理本身不新增写入路径。然后跑：
+**收尾**：先做一次**决策回顾**——只对**用户拍板的**决策，逐条回答「背景 / 影响 / 依据（用户原话照抄）/ 撤销条件」；答不出的标「断链」并用 `python scripts/devlog.py ask` 进待分诊。agent 的实现选择不进回顾；窗口与现查四路见 `references/process-recording.md` 的「决策回顾」一节。**摩擦回顾**：顺手在档案 §3.6 记本轮摩擦——同一动作 ≥3 次 / 同一失败 ≥2 次 / 某一步明显超出预期；会再犯的转收件箱（机会 / 债），只影响本轮的不转。**成本自报**：在档案 front-matter 写 `cost_minutes`（本场总耗时，分钟）、`cost_tool_minutes`（其中花在门 / 预审 / 校验上的）、`cost_note`（卡在哪、比上一场省力还是更费）；`devlog.py cost` 会汇成 `70-过程/成本台账.md`（自报 + 自动密度 + 环比）。**想法整理**：从本场用户原话里抽出 目标 / 愿景 / 功能 / 需求 四类想法写进档案 §3.7——原话逐字（`E29` 会对着出处核，改一个字就拒收），并给出落点建议（vision / `D-n` / `REQ-nnn` / `F-nnn`）；**人裁决之后**才写进载体，整理本身不新增写入路径。然后跑：
 
 ```bash
 python scripts/devlog.py check      # 七段顺序、front-matter、ISS 引用、文件名
-python scripts/devlog.py index      # 重建时间线
+python scripts/devlog.py index      # 重建时间线 + 决策台账 + 成本台账
 python scripts/plan.py check        # 编号 / 分值 / 状态词 / 所属工作 / 前置与方向引用
 python scripts/plan.py index        # 重建排序视图
 python scripts/plan.py tree         # 只读全貌：方向 → 工作 → 任务（要页面加 --html --out x.html）

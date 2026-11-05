@@ -2316,6 +2316,30 @@ def main():
         finally:
             shutil.rmtree(tmp58, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 59
+        print("\n59. 成本台账：自报耗时 + 密度 + 环比（REQ-030）")
+        tmp59 = tempfile.mkdtemp(prefix="ddd-selftest59-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp59)
+            run("devlog.py", "new", "--title", "成本", "--scope", "试", cwd=tmp59)
+            d59 = os.path.join(tmp59, "docs", "70-过程", "会话")
+            a59 = sorted(os.path.join(d59, f) for f in os.listdir(d59)
+                         if f.endswith(".md"))[-1]
+            write(a59, read(a59).replace(
+                "open_items: 0",
+                "open_items: 0\ncost_minutes: 180\ncost_tool_minutes: 30\ncost_note: 卡在 X"))
+            c, out = run("devlog.py", "cost", cwd=tmp59)
+            ledger = os.path.join(tmp59, "docs", "70-过程", "成本台账.md")
+            text59 = read(ledger) if os.path.exists(ledger) else ""
+            check("cost 生成台账：总 180 / 工具 30 / 占比 16.7%",
+                  c == 0 and "| 180 | 30 | 16.7% |" in text59, out[-300:])
+
+            c, out = run("devlog.py", "cost", "--json", cwd=tmp59)
+            check("--json 给出可读行", c == 0 and '"total": 180' in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp59, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

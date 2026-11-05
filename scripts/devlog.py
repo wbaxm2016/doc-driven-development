@@ -1593,6 +1593,108 @@ def cmd_decisions(ctx, as_json):
     return 0
 
 
+COST_LEDGER = "成本台账.md"
+
+
+def _minutes(v):
+    try:
+        return int(str(v).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _table_rows(body):
+    n = 0
+    for line in body.splitlines():
+        s = line.strip()
+        if s.startswith("|") and not re.match(r"^\|[\s\-:|]+\|$", s):
+            n += 1
+    return max(0, n - 1)          # 去掉表头
+
+
+def collect_costs(ctx):
+    """读全部会话档案：自报耗时（front-matter）+ 自动密度（预审 / 决策条数）。"""
+    rows = []
+    for path in ctx.sessions():
+        text = read(path)
+        fm = parse_fm(text) or {}
+        total = _minutes(fm.get("cost_minutes"))
+        tool = _minutes(fm.get("cost_tool_minutes"))
+        pre = _table_rows(section_body(text, "预审记录"))
+        dec = len([t for t, _b in decision_blocks(text) if "（在决定什么）" not in t])
+        rows.append({
+            "date": (fm.get("session_date") or "").strip(),
+            "file": os.path.basename(path),
+            "total": total,
+            "tool": tool,
+            "share": (round(100.0 * tool / total, 1) if total and tool is not None else None),
+            "preaudit": pre,
+            "decisions": dec,
+            "note": (fm.get("cost_note") or "").strip(),
+        })
+    return rows
+
+
+def render_cost_ledger(rows):
+    today = datetime.date.today().isoformat()
+    tot = [r for r in rows if r["total"] is not None]
+    tool = [r for r in tot if r["tool"] is not None]
+    avg = (sum(r["total"] for r in tot) / len(tot)) if tot else None
+    avg_tool = (sum(r["tool"] for r in tool) / len(tool)) if tool else None
+    lines = [
+        "---",
+        'title: "成本台账"',
+        "layer: process",
+        "domain: 协作",
+        "status: active",
+        "authority: 4",
+        f"updated: {today}",
+        'summary: "自动生成：每场自报耗时（总 / 工具）+ 密度（预审 / 决策）+ 环比。"',
+        "tags: [过程, 生成区]",
+        "---",
+        "",
+        "# 成本台账",
+        "",
+        "> **自动生成，勿手改**：由 `python scripts/devlog.py cost` 重建。",
+        "> 自报耗时写在档案 front-matter：`cost_minutes`（总）/ `cost_tool_minutes`（其中工具）/ `cost_note`（一句话）。",
+        "",
+        f"共 **{len(rows)}** 场；有自报 **{len(tot)}** 场"
+        f"（平均总耗时 **{avg:.0f} 分钟**），其中 **{len(tool)}** 场报了工具耗时"
+        f"（平均 **{avg_tool:.0f} 分钟**）。" if avg is not None else
+        f"共 **{len(rows)}** 场；还没有自报耗时（写 front-matter 的 `cost_minutes` 后重建）。",
+        "",
+        "| 日期 | 档案 | 总(分) | 工具(分) | 工具占比 | 预审条 | 决策数 | 较上一场 | 备注 |",
+        "|---|---|---|---|---|---|---|---|---|",
+    ]
+    prev = None
+    for r in rows:
+        delta = "—"
+        if prev is not None and r["total"] is not None and prev["total"] is not None:
+            d = r["total"] - prev["total"]
+            delta = f"{d:+d} 分"
+        cells = [r["date"], r["file"],
+                 "—" if r["total"] is None else str(r["total"]),
+                 "—" if r["tool"] is None else str(r["tool"]),
+                 "—" if r["share"] is None else f"{r['share']}%",
+                 str(r["preaudit"]), str(r["decisions"]), delta, r["note"] or "—"]
+        cells = [c.replace("|", "\\|").replace("\n", " ") for c in cells]
+        lines.append("| " + " | ".join(cells) + " |")
+        prev = r
+    return "\n".join(lines) + "\n"
+
+
+def cmd_cost(ctx, as_json):
+    rows = collect_costs(ctx)
+    if as_json:
+        print(json.dumps({"total": len(rows), "rows": rows}, ensure_ascii=False, indent=2))
+        return 0
+    path = os.path.join(ctx.pdir, COST_LEDGER)
+    write(path, render_cost_ledger(rows))
+    n = sum(1 for r in rows if r["total"] is not None)
+    print(f"成本台账 written: {len(rows)} 场，有自报 {n} 场（{path}）")
+    return 0
+
+
 def cmd_index(ctx, check_only):
     if not os.path.exists(ctx.timeline):
         return die(f"缺少时间线：{ctx.timeline}")
@@ -1609,7 +1711,8 @@ def cmd_index(ctx, check_only):
     write(ctx.timeline, new_text)
     ledger = os.path.join(ctx.pdir, DECISION_LEDGER)
     write(ledger, render_decision_ledger(collect_decisions(ctx)))
-    print(f"timeline written: {len(ctx.sessions())} sessions（决策台账同步重建）")
+    write(os.path.join(ctx.pdir, COST_LEDGER), render_cost_ledger(collect_costs(ctx)))
+    print(f"timeline written: {len(ctx.sessions())} sessions（决策台账 / 成本台账同步重建）")
     return 0
 
 
@@ -1657,6 +1760,7 @@ def main():
                             help="只看某个状态（实施中 / 已对照 / 已验收 …）")
     sub.add_parser("check")
     sub.add_parser("decisions")
+    sub.add_parser("cost")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
     args = ap.parse_args(argv)
@@ -1690,6 +1794,8 @@ def main():
         return cmd_check(ctx, as_json)
     if args.cmd == "decisions":
         return cmd_decisions(ctx, as_json)
+    if args.cmd == "cost":
+        return cmd_cost(ctx, as_json)
     return cmd_index(ctx, args.check)
 
 
