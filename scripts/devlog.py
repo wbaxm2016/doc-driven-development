@@ -1244,7 +1244,45 @@ def coverage_summary(ctx):
                 if m and m.group(0) > latest:
                     latest = m.group(0)
     n = sum(1 for d in dirs if d in cov)
-    return {"n": n, "m": len(dirs), "latest": latest}
+    return {"n": n, "m": len(dirs), "latest": latest, "covered": sorted(cov)}
+
+
+def plan_works(ctx):
+    """读开发计划 §4 的工作表 → [(工作号, 方向, 状态)]。只读，不判合规。"""
+    works = []
+    if not os.path.exists(ctx.plan):
+        return works
+    for header, rows in read_tables(read(ctx.plan)):
+        heads = [strip_md(h) for h in header]
+        if not heads or heads[0] != "编号" or "工作" not in heads or "方向" not in heads:
+            continue
+        i_dir = heads.index("方向")
+        i_state = heads.index("状态") if "状态" in heads else None
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            works.append((strip_md(r[0]), strip_md(r[i_dir]),
+                          strip_md(r[i_state]) if i_state is not None else ""))
+        return works
+    return works
+
+
+def coverage_gaps(ctx):
+    """工作已全部完成、但覆盖表没有走通记录的方向（REQ-023）。
+
+    这是「走通骨架」落成固定产物的一环：工作做完不等于这条线走通过，
+    所以把「工作全完成、从没走过」的方向每场都摆到开场屏幕上。
+    """
+    by_dir = {}
+    for _wid, did, st in plan_works(ctx):
+        by_dir.setdefault(did, []).append(st)
+    if not by_dir:
+        return []
+    cov = coverage_summary(ctx)
+    covered = set(cov["covered"]) if cov else set()
+    done = set(ctx.schema["plan"]["done_states"])
+    return [d for d, states in by_dir.items()
+            if states and all(s in done for s in states) and d not in covered]
 
 
 def cmd_brief(ctx, as_json=False):
@@ -1265,6 +1303,7 @@ def cmd_brief(ctx, as_json=False):
 
     due = due_items(ctx)
     cov = coverage_summary(ctx)
+    gaps = coverage_gaps(ctx)
     today = datetime.date.today().isoformat()
     overdue = [d for d in due if d[1] <= today]
     # 没有 @日期 的活跃问题不会自己响。不猜日期，只把数量与编号摆出来：让「记得回来」
@@ -1302,6 +1341,7 @@ def cmd_brief(ctx, as_json=False):
                                                    for i, d, w in overdue],
                     "undated": [r["id"] for r in active]},
             "coverage": cov,
+            "coverage_gaps": gaps,
             "ideas_filled": ideas_filled(read(path)) if path else None,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
@@ -1338,6 +1378,9 @@ def cmd_brief(ctx, as_json=False):
                   "← 覆盖 = 有走通记录的方向数 / 方向总数（REQ-022）")
         else:
             print(f"覆盖：0/{cov['m']}——还没有走通记录；跑完一条后写进方向卡的「覆盖」表")
+    if gaps:
+        print(f"走通待补：{'、'.join(gaps)}（工作已全部完成、覆盖表无记录）"
+              "← 跑一次该方向的走通验收并写进覆盖表（REQ-023）")
     if path and not ideas_filled(read(path)):
         print("整理：上一场档案还没填 §3.7（想法候选）← 收尾时抽一次 目标/愿景/功能/需求，"
               "原话逐字（E29 会核）")

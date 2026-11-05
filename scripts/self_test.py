@@ -2106,6 +2106,30 @@ def main():
         finally:
             shutil.rmtree(tmp52, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 53
+        print("\n53. 走通待补：工作全完成但无走通记录（REQ-023）")
+        tmp53 = tempfile.mkdtemp(prefix="ddd-selftest53-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp53)
+            plan53 = os.path.join(tmp53, "docs", "00-门面", "开发计划.md")
+            card53 = os.path.join(tmp53, "docs", "00-门面", "方向卡.md")
+            write(plan53, read(plan53).replace(
+                "| **W1.1** | （示例）端到端跑通一次 | D1 | 待开工 |",
+                "| **W1.1** | （示例）端到端跑通一次 | D1 | 已完成 |"))
+            c, out = run("devlog.py", "brief", cwd=tmp53)
+            check("工作已完成、覆盖无记录 → 列出走通待补 D1",
+                  c == 0 and "走通待补" in out and "D1" in out, out[-400:])
+
+            write(card53, read(card53).replace(
+                "| **D1** | —（未走通） | — | — |",
+                "| **D1** | 2026-11-03 | 走通 | 本档 §1 |"))
+            c, out = run("devlog.py", "brief", cwd=tmp53)
+            check("补上覆盖记录 → 走通待补消失",
+                  c == 0 and "走通待补" not in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp53, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
