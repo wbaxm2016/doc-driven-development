@@ -2026,11 +2026,13 @@ def main():
         try:
             run(os.path.join(SKILL, "scripts", "doc_init.py"),
                 "--target", ".", "--full", cwd=tmp51)
+            c, out = run("doc_check.py", cwd=tmp51)
+            check("新项目首跑：模板示例卡无 [W10]", c == 0 and "[W10]" not in out, out[-300:])
             dc51 = os.path.join(tmp51, "docs", "00-门面", "设计卡.md")
             fm51 = read(dc51).split("---", 2)
             head51 = "---" + fm51[1] + "---\n\n# 设计卡\n\n"
             card51 = (
-                "## K99 · W17.1 · 测试\n\n"
+                "## K99 · W1.1 · 测试\n\n"
                 "- **接口**：测试\n"
                 "- **可替换点**：测试\n"
                 "- **失败边界**：测试\n"

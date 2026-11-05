@@ -93,7 +93,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
          "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27",
-         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9"]
+         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10"]
 
 
 # ---------------------------------------------------------------- 基础工具
@@ -627,6 +627,50 @@ def ideas_problems(seg, scope, docs_dir, repo_root, cache, all_ids):
     return probs, quotes
 
 
+def design_card_problems(card_text, plan_status):
+    """W10：待开工 / 进行中工作的设计卡，选项空间是否具备最小形状。
+
+    只判形状：≥3 个方案、含一个不做 / 少做、被否方案有回到条件；广度够不够仍人读。
+    """
+    probs = []
+    head_re = re.compile(r"^## K(\d+) · (W\d+\.\d+) · [^\n]*", re.M)
+    for m in head_re.finditer(card_text):
+        kid, wid = "K" + m.group(1), m.group(2)
+        if plan_status.get(wid) not in ("待开工", "进行中"):
+            continue
+        rest = card_text[m.end():]
+        nxt = re.search(r"^## ", rest, re.M)
+        sec = rest[:nxt.start()] if nxt else rest
+        opt = re.search(r"- \*\*选项空间\*\*[：:]\s*\n(.*?)(?=\n- \*\*|\Z)", sec, re.S)
+        if not opt:
+            probs.append(f"{kid}（{wid}）缺「选项空间」表：先摆 ≥3 个结构不同的方案（含一个不做 / 少做），再选方向")
+            continue
+        tables = read_tables(opt.group(1))
+        if not tables:
+            probs.append(f"{kid}（{wid}）的「选项空间」下没有表：用表列出方案 / 轴 / 结论 / 回到条件")
+            continue
+        header, rows = tables[0]
+        heads = [strip_md(h) for h in header]
+        if "选项" not in heads or "回到条件" not in heads:
+            probs.append(f"{kid}（{wid}）的选项空间表缺「选项」或「回到条件」列")
+            continue
+        i_opt, i_back = heads.index("选项"), heads.index("回到条件")
+        i_con = heads.index("结论") if "结论" in heads else None
+        if len(rows) < 3:
+            probs.append(f"{kid}（{wid}）的选项空间少于 3 个方案：先广度后深度")
+        opts = [strip_md(r[i_opt]) for r in rows if i_opt < len(r)]
+        if not any(("不做" in o or "少做" in o) for o in opts):
+            probs.append(f"{kid}（{wid}）的选项空间没有「不做 / 少做」：补一个最省路径")
+        for r in rows:
+            verdict = strip_md(r[i_con]) if i_con is not None and i_con < len(r) else ""
+            if "被否" in verdict:
+                back = strip_md(r[i_back]) if i_back < len(r) else ""
+                if back in ("", "—", "-", "无", "待补", "待填"):
+                    probs.append(f"{kid}（{wid}）的被否方案没有回到条件：写什么信号出现时切回")
+                    break
+    return probs
+
+
 # ---------------------------------------------------------------- 主流程
 def main():
     argv = sys.argv[1:]
@@ -725,6 +769,22 @@ def main():
     st_path = os.path.join(repo_root, "scripts", "self_test.py")
     if os.path.exists(st_path):
         test_groups = {int(x) for x in re.findall(r'print\("\\n(\d+)\. ', read(st_path))}
+
+    # 设计卡选项空间（W10）要知道工作是否还没做完：只查待开工 / 进行中的卡
+    plan_status = {}
+    plan_path = os.path.join(docs, layer_dir(schema, "facade"),
+                             names.get("plan", "开发计划.md"))
+    if os.path.exists(plan_path):
+        for header, rows in read_tables(strip_fences(read(plan_path))):
+            heads = [strip_md(h) for h in header]
+            if not {"编号", "工作", "状态"} <= set(heads):
+                continue
+            i_id, i_st = heads.index("编号"), heads.index("状态")
+            for row in rows:
+                if len(row) == len(heads):
+                    wid = strip_md(row[i_id])
+                    if re.fullmatch(r"W\d+\.\d+", wid):
+                        plan_status[wid] = strip_md(row[i_st])
 
     def add(bucket, rel, code, msg):
         bucket.append({"file": rel, "code": code, "message": msg})
@@ -1138,6 +1198,14 @@ def main():
         if adr_index_rel and rel == adr_index_rel:
             for m in re.finditer(r"\]\(([^)]*adr/[^)]+)\)", text):
                 idx_links.add(os.path.basename(m.group(1)))
+
+    # ---- W10 设计卡选项空间（REQ-021）：只判形状，不判广度
+    design_path = os.path.join(docs, layer_dir(schema, "facade"),
+                               names.get("design_card", "设计卡.md"))
+    if os.path.exists(design_path):
+        drel = os.path.relpath(design_path, docs).replace(os.sep, "/")
+        for msg in design_card_problems(read(design_path), plan_status):
+            add(warns, drel, "W10", msg)
 
     # ---- E11 索引双向一致
     if adr_index_rel and adr_files:
