@@ -92,7 +92,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
-         "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27",
+         "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27", "E31",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10"]
 
 
@@ -329,8 +329,12 @@ def requirement_header(text, req_re):
     return None
 
 
-def check_delta(changes, problems, target_text, archived, req_re):
-    """返回 [(code, message)]：proposed 按 _delta/README.md §5 判冲突，归档判合并结果。"""
+def check_delta(changes, problems, target_text, archived, req_re, superseded=False):
+    """返回 [(code, message)]：proposed 按 _delta/README.md §5 判冲突，归档判合并结果。
+
+    `superseded=True`（front-matter 有 superseded_by）时，归档 delta 不核「after 仍要在目标里」：
+    它新增/改过的行可能已被后续 delta 合法删掉或再改；链条由 E31 保证。
+    """
     out = []
     code = "E21" if archived else "E20"
     for msg in problems:
@@ -349,6 +353,8 @@ def check_delta(changes, problems, target_text, archived, req_re):
         before, after = ch["before"], ch["after"]
         at_ids = row_req_ids(after or "", req_re)
         if archived:
+            if superseded:
+                continue
             if ch["op"] == "REMOVED":
                 if not before:
                     out.append((code, f"{tag} 缺 before 代码块，无法核对是否已删除"))
@@ -743,6 +749,21 @@ def main():
     delta_archive_prefix = (f"{delta_prefix}{DELTA_ARCHIVE}/" if delta_prefix else None)
     repo_root = os.path.dirname(os.path.abspath(docs))
 
+    # 取代链（REQ-024）：先收齐所有 delta 的编号，供 superseded_by 核对。
+    delta_ids = set()
+    if delta_prefix:
+        for path in files:
+            rel0 = os.path.relpath(path, docs).replace(os.sep, "/")
+            if not rel0.startswith(delta_prefix) or os.path.basename(rel0) == DELTA_README:
+                continue
+            fm0, _ = parse_fm(read(path))
+            did = ((fm0 or {}).get("delta_id") or "").strip()
+            if not did:
+                m = re.match(r"(DELTA-\d+)", os.path.basename(rel0))
+                did = m.group(1) if m else ""
+            if did:
+                delta_ids.add(did)
+
     # 功能台账要判「引用的需求是否存在」，所以先把契约层出现过的 REQ 编号收一遍
     req_ids = set()
     req_defs = {}
@@ -1133,7 +1154,14 @@ def main():
             else:
                 ttext = read(os.path.normpath(os.path.join(repo_root, target)))
                 changes, problems = parse_delta(body, schema["ids"]["req"])
-                for c_code, msg in check_delta(changes, problems, ttext, archived, req_re):
+                sup = (fm.get("superseded_by") or "").strip()
+                if sup and sup not in delta_ids:
+                    add(errors, rel, "E31",
+                        f"superseded_by 指向不存在的 delta：{sup}"
+                        f"（链条断了：被取代的一方要指到真实存在的 delta）")
+                    sup = ""
+                for c_code, msg in check_delta(changes, problems, ttext, archived, req_re,
+                                               superseded=bool(sup)):
                     add(errors, rel, c_code, msg)
                 header = requirement_header(ttext, req_re)
                 row_code = "E21" if archived else "E20"

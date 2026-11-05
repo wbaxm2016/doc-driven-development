@@ -2130,6 +2130,63 @@ def main():
         finally:
             shutil.rmtree(tmp53, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 54
+        print("\n54. 增量取代链：superseded_by 让归档 delta 的行可以被后续 delta 删掉（E31）")
+        tmp54 = tempfile.mkdtemp(prefix="ddd-selftest54-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp54)
+            req54 = os.path.join(tmp54, "docs", "20-契约", "requirements.md")
+            arc54 = os.path.join(tmp54, "docs", "20-契约", "_delta", "_archive")
+            os.makedirs(arc54, exist_ok=True)
+
+            added_row = ("| **REQ-002** | WHEN 调用跑一次 THE SYSTEM SHALL 输出 9 "
+                         "| 跑一次 → 9 | `python t.py` | 待实现 | 示例 | 采纳✓ 2026-11-05 |")
+            d1 = os.path.join(arc54, "DELTA-001-新增REQ-002.md")
+            write(d1, "---\n"
+                      'title: "DELTA-001 · 新增 REQ-002"\n'
+                      "layer: contract\ndomain: 全局\nstatus: snapshot\nauthority: 4\n"
+                      "updated: 2026-11-05\n"
+                      'summary: "新增一条示例需求。"\ntags: [契约, 增量]\n'
+                      "delta_id: DELTA-001\ntarget: docs/20-契约/requirements.md\n"
+                      "superseded_by: DELTA-002\n"
+                      "---\n\n# DELTA-001 · 新增 REQ-002\n\n"
+                      "## 1. 变更清单\n\n| # | 操作 | 一句话 |\n|---|---|---|\n"
+                      "| 1 | ADDED | 新增 REQ-002 |\n\n## 2. 逐字变更\n\n"
+                      "**变更 1 · ADDED · REQ-002**\n\n位置：需求表末尾\n\n"
+                      "```markdown\n" + added_row + "\n```\n\n"
+                      "**合并要求**：本 delta **必须**按锚点合并，**不得**直接删除。\n")
+            d2 = os.path.join(arc54, "DELTA-002-撤掉REQ-002.md")
+            write(d2, "---\n"
+                      'title: "DELTA-002 · 撤掉 REQ-002"\n'
+                      "layer: contract\ndomain: 全局\nstatus: snapshot\nauthority: 4\n"
+                      "updated: 2026-11-05\n"
+                      'summary: "撤掉上一条需求。"\ntags: [契约, 增量]\n'
+                      "delta_id: DELTA-002\ntarget: docs/20-契约/requirements.md\n"
+                      "supersedes: DELTA-001\n"
+                      "---\n\n# DELTA-002 · 撤掉 REQ-002\n\n"
+                      "## 1. 变更清单\n\n| # | 操作 | 一句话 |\n|---|---|---|\n"
+                      "| 1 | REMOVED | 撤掉 REQ-002 |\n\n## 2. 逐字变更\n\n"
+                      "**变更 1 · REMOVED · REQ-002**\n\n锚点（before，逐字）：\n\n"
+                      "```markdown\n" + added_row + "\n```\n\n"
+                      "**合并要求**：本 delta **必须**按锚点合并，**不得**直接删除。\n")
+
+            c, out = run("doc_check.py", cwd=tmp54)
+            check("REQ-002 被后续 delta 删掉、DELTA-001 标了 superseded_by → 不报 E21",
+                  c == 0 and "[E21]" not in out and "[E31]" not in out, out[-400:])
+
+            write(d1, read(d1).replace("superseded_by: DELTA-002", "superseded_by: DELTA-999"))
+            c, out = run("doc_check.py", cwd=tmp54)
+            check("superseded_by 指向不存在的 delta → [E31]",
+                  c == 1 and "[E31]" in out, out[-400:])
+
+            write(d1, read(d1).replace("superseded_by: DELTA-999\n", ""))
+            c, out = run("doc_check.py", cwd=tmp54)
+            check("去掉 superseded_by → 回到 [E21]（合并丢失）",
+                  c == 1 and "[E21]" in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp54, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
