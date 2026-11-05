@@ -2020,6 +2020,50 @@ def main():
         finally:
             shutil.rmtree(tmp50, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 51
+        print("\n51. 设计卡选项空间：W10 形状检查（REQ-021）")
+        tmp51 = tempfile.mkdtemp(prefix="ddd-selftest51-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp51)
+            dc51 = os.path.join(tmp51, "docs", "00-门面", "设计卡.md")
+            fm51 = read(dc51).split("---", 2)
+            head51 = "---" + fm51[1] + "---\n\n# 设计卡\n\n"
+            card51 = (
+                "## K99 · W17.1 · 测试\n\n"
+                "- **接口**：测试\n"
+                "- **可替换点**：测试\n"
+                "- **失败边界**：测试\n"
+                "- **选项空间**：\n\n"
+                "| 选项 | 轴 | 假设 | 失败模式 | 结论 | 回到条件 |\n"
+                "|---|---|---|---|---|---|\n"
+                "| A | 位置 | doc_check | 噪音 | 选中 | — |\n"
+                "| B | 级别 | E 级 | 假行 | 被否 | 噪音大时 |\n"
+                "| C 不做 | — | 靠人 | 会漏 | 被否 | 第 5 次漏时 |\n"
+            )
+            write(dc51, head51 + card51)
+            c, out = run("doc_check.py", cwd=tmp51)
+            check("合法设计卡：无 [W10]", c == 0 and "[W10]" not in out, out[-300:])
+
+            write(dc51, head51 + card51.replace("- **选项空间**：", "- **选项**："))
+            c, out = run("doc_check.py", cwd=tmp51)
+            check("缺选项空间 → [W10]", c == 0 and "[W10]" in out, out[-300:])
+
+            write(dc51, head51 + card51.replace(
+                "| C 不做 | — | 靠人 | 会漏 | 被否 | 第 5 次漏时 |\n", ""))
+            c, out = run("doc_check.py", cwd=tmp51)
+            check("没有「不做 / 少做」→ [W10]", c == 0 and "[W10]" in out, out[-300:])
+
+            write(dc51, head51 + card51.replace(
+                "| B | 级别 | E 级 | 假行 | 被否 | 噪音大时 |\n"
+                "| C 不做 | — | 靠人 | 会漏 | 被否 | 第 5 次漏时 |\n",
+                "| B | 级别 | E 级 | 假行 | 被否 | — |\n"
+                "| C 不做 | — | 靠人 | 会漏 | 被否 | — |\n"))
+            c, out = run("doc_check.py", cwd=tmp51)
+            check("被否方案无回到条件 → [W10]", c == 0 and "[W10]" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp51, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
