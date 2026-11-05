@@ -1521,7 +1521,9 @@ def main():
 
             orphan = ("| **D9** | 现状甲 | 现在不做就晚 | 用户 · 起点 | 成功状态甲 "
                       "| ① 一 → ② 二 | 接缝甲 | 不覆盖甲 | 走通一遍 | — |")
-            write(card28, base28.rstrip("\n") + "\n" + orphan + "\n")
+            # 追加在文件尾会落进「覆盖」表；孤儿行必须插进方向主表
+            write(card28, base28.replace(
+                "\n\n## 覆盖", "\n" + orphan + "\n## 覆盖", 1))
             c, out = run("plan.py", "check", cwd=tmp28)
             check("卡里有 D9 但计划没有 → P18 孤儿方向",
                   c == 1 and "[P18]" in out and "D9" in out, out[-400:])
@@ -2065,6 +2067,33 @@ def main():
             check("被否方案无回到条件 → [W10]", c == 0 and "[W10]" in out, out[-300:])
         finally:
             shutil.rmtree(tmp51, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 52
+        print("\n52. 方向线覆盖：brief 的 n/m（REQ-022）")
+        tmp52 = tempfile.mkdtemp(prefix="ddd-selftest52-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp52)
+            card52 = os.path.join(tmp52, "docs", "00-门面", "方向卡.md")
+            c, out = run("devlog.py", "brief", cwd=tmp52)
+            check("模板覆盖表无记录 → 覆盖：0/1 且 exit 0",
+                  c == 0 and "覆盖：0/1" in out, out[-400:])
+
+            write(card52, read(card52).replace(
+                "| **D1** | —（未走通） | — | — |",
+                "| **D1** | 2026-11-03 | 走通 | 本档 §1 |"))
+            c, out = run("devlog.py", "brief", cwd=tmp52)
+            check("补一条走通记录 → 覆盖：1/1",
+                  c == 0 and "覆盖：1/1" in out, out[-400:])
+
+            write(card52, read(card52).split("## 覆盖")[0].rstrip("\n") + "\n")
+            c, out = run("devlog.py", "brief", cwd=tmp52)
+            check("删掉覆盖节 → 覆盖：0/1 且 exit 0",
+                  c == 0 and "覆盖：0/1" in out, out[-400:])
+            check("覆盖行不误伤既有简报",
+                  "计划：" in out and "收件箱：" in out and "复核：" in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp52, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

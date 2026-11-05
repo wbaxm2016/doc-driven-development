@@ -1212,6 +1212,41 @@ def due_items(ctx):
     return out
 
 
+def coverage_summary(ctx):
+    """覆盖：方向卡「覆盖」表里有走通记录的方向数 / 方向总数（REQ-022）。
+
+    只统计记录，不判定「走通没走通」——那只有人知道。缺表或缺主表时给 0，
+    不报错：覆盖是加分项，不该把还没走通的项目变成红。
+    """
+    card = os.path.join(ctx.docs, layer_dir(ctx.schema, "facade") or "",
+                        ctx.schema["names"].get("direction_card", "方向卡.md"))
+    if not os.path.exists(card):
+        return None
+    dirs, cov, latest = [], {}, ""
+    for header, rows in read_tables(_read_text(card)):
+        heads = [strip_md(h) for h in header]
+        if "方向" not in heads:
+            continue
+        i_dir = heads.index("方向")
+        if "走通验收" in heads:
+            dirs = [strip_md(r[i_dir]).strip() for r in rows if len(r) == len(heads)]
+        if "最近走通" in heads:
+            i_ok = heads.index("最近走通")
+            for r in rows:
+                if len(r) != len(heads):
+                    continue
+                key = strip_md(r[i_dir]).strip()
+                val = strip_md(r[i_ok]).strip()
+                if not key or not val or val.startswith("—") or val.startswith("-"):
+                    continue
+                cov[key] = val
+                m = re.search(r"\d{4}-\d{2}-\d{2}", val)
+                if m and m.group(0) > latest:
+                    latest = m.group(0)
+    n = sum(1 for d in dirs if d in cov)
+    return {"n": n, "m": len(dirs), "latest": latest}
+
+
 def cmd_brief(ctx, as_json=False):
     """开场简报：上一场交接锚点 / 计划未完成 / 收件箱计数 / 最近三场。
 
@@ -1229,6 +1264,7 @@ def cmd_brief(ctx, as_json=False):
         counts[r["state"]] = counts.get(r["state"], 0) + 1
 
     due = due_items(ctx)
+    cov = coverage_summary(ctx)
     today = datetime.date.today().isoformat()
     overdue = [d for d in due if d[1] <= today]
     # 没有 @日期 的活跃问题不会自己响。不猜日期，只把数量与编号摆出来：让「记得回来」
@@ -1265,6 +1301,7 @@ def cmd_brief(ctx, as_json=False):
             "due": {"total": len(due), "overdue": [{"id": i, "date": d, "where": w}
                                                    for i, d, w in overdue],
                     "undated": [r["id"] for r in active]},
+            "coverage": cov,
             "ideas_filled": ideas_filled(read(path)) if path else None,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
@@ -1295,6 +1332,12 @@ def cmd_brief(ctx, as_json=False):
         shown = "、".join(r["id"] for r in active[:6]) + ("…" if len(active) > 6 else "")
         print(f"回访：{len(active)} 条活跃问题没设 @日期（{shown}）"
               "← 它们不会自己响；收口时补日期，或写明「无日期」原因")
+    if cov and cov["m"]:
+        if cov["n"]:
+            print(f"覆盖：{cov['n']}/{cov['m']}（最近走通 {cov['latest'] or '—'}）"
+                  "← 覆盖 = 有走通记录的方向数 / 方向总数（REQ-022）")
+        else:
+            print(f"覆盖：0/{cov['m']}——还没有走通记录；跑完一条后写进方向卡的「覆盖」表")
     if path and not ideas_filled(read(path)):
         print("整理：上一场档案还没填 §3.7（想法候选）← 收尾时抽一次 目标/愿景/功能/需求，"
               "原话逐字（E29 会核）")
