@@ -2292,6 +2292,30 @@ def main():
         finally:
             shutil.rmtree(tmp57, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 58
+        print("\n58. 产出对账：§6 列的路径要真实存在（W11）")
+        tmp58 = tempfile.mkdtemp(prefix="ddd-selftest58-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp58)
+            run("devlog.py", "new", "--title", "产出对账", "--scope", "试", cwd=tmp58)
+            d58 = os.path.join(tmp58, "docs", "70-过程", "会话")
+            a58 = sorted(os.path.join(d58, f) for f in os.listdir(d58)
+                         if f.endswith(".md"))[-1]
+            base58 = read(a58)
+            block58 = ("\n\n| 类型 | 路径 | 说明 |\n|---|---|---|\n"
+                       "| 代码 | `scripts/nope_missing.py` | 假路径 |\n")
+            write(a58, base58.replace("## 6. 本次产出", "## 6. 本次产出" + block58, 1))
+            c, out = run("devlog.py", "check", cwd=tmp58)
+            check("§6 列了不存在的路径 → W11（不阻断）",
+                  c == 0 and "W11" in out, out[-400:])
+
+            write(a58, read(a58).replace("scripts/nope_missing.py", "scripts/doc_check.py"))
+            c, out = run("devlog.py", "check", cwd=tmp58)
+            check("路径都存在 → 无 W11", c == 0 and "W11" not in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp58, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

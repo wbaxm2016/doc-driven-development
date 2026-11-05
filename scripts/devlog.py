@@ -801,6 +801,34 @@ def section_body(text, keyword):
     return m.group(1) if m else ""
 
 
+OUTPUT_SPAN_RE = re.compile(r"`([^`]+)`")
+OUTPUT_EXT_RE = re.compile(r"\.(md|py|json|ya?ml|txt|skill|html)$")
+
+
+def check_output_paths(rel, text, ctx):
+    """W11：最新一篇 §6「本次产出」里列的路径要真实存在（只提醒，不阻断）。
+
+    只认反引号里的、带扩展名的、仓库根相对的路径；`%TEMP%` / 绝对路径 / 网址跳过。
+    """
+    body = section_body(text, "本次产出")
+    if not body:
+        return []
+    root = os.path.dirname(os.path.abspath(ctx.docs))
+    missing = []
+    for span in OUTPUT_SPAN_RE.findall(body):
+        s = span.strip()
+        if not s or "%" in s or s.startswith(("/", "~")) or "://" in s:
+            continue
+        if not OUTPUT_EXT_RE.search(s):
+            continue
+        if not os.path.exists(os.path.join(root, s)):
+            missing.append(s)
+    if not missing:
+        return []
+    return [{"file": rel, "code": "W11",
+             "message": "§6「本次产出」列了不存在的路径：" + "、".join(sorted(set(missing)))}]
+
+
 IDEA_KINDS = ("目标", "愿景", "功能", "需求")
 
 
@@ -1130,6 +1158,7 @@ def cmd_check(ctx, as_json=False):
         errors.extend(check_user_side(rel, text))
         if i == len(sessions) - 1:      # S12 只判最新一篇：存量不追溯（ISS-032）
             errors.extend(check_decision_review(rel, text))
+            warns.extend(check_output_paths(rel, text, ctx))
             if not ideas_filled(text):
                 warns.append({"file": rel, "code": "S13",
                               "message": "想法候选（§3.7）还没填：收尾时把本场用户原话里的"
