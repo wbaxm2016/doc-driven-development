@@ -1229,6 +1229,8 @@ def main():
 
             run("devlog.py", "new", "--title", "决策回顾甲", "--scope", "自测", cwd=tmp24)
             f_a = os.path.join(sess24, sorted(os.listdir(sess24))[0])
+            write(f_a, read(f_a).replace("## 2. 用户侧记录（分类）",
+                                         "## 2. 用户侧记录（分类）\n\n- 用户原话：「就选 A」\n", 1))
             c, out = run("devlog.py", "check", cwd=tmp24)
             check("模板占位决策块不报 S12", c == 0 and "S12" not in out, out[-300:])
 
@@ -2220,6 +2222,41 @@ def main():
                   c == 1 and "[E29]" in out, out[-300:])
         finally:
             shutil.rmtree(tmp55, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 56
+        print("\n56. 复述门：用户拍板的决策要引用可查的原话（REQ-026）")
+        tmp56 = tempfile.mkdtemp(prefix="ddd-selftest56-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp56)
+            run("devlog.py", "new", "--title", "复述门", "--scope", "试", cwd=tmp56)
+            d56 = os.path.join(tmp56, "docs", "70-过程", "会话")
+            a56 = sorted(os.path.join(d56, f) for f in os.listdir(d56)
+                         if f.endswith(".md"))[-1]
+            base56 = read(a56)
+            base56 = base56.replace(
+                "## 2. 用户侧记录（分类）",
+                "## 2. 用户侧记录（分类）\n\n- 用户原话：「确认后一律落到 L2」\n", 1)
+            base56 = (base56
+                      .replace("### D1 · （在决定什么）", "### D1 · 落哪一层")
+                      .replace("**拍板**：（用户 / agent 自选；只有用户拍板的进收尾决策回顾）", "**拍板**：用户")
+                      .replace("**依据**：（用户原话照抄，或 ADR / 任务号）", "**依据**：「确认后一律落到 L2」")
+                      .replace("**撤销条件**：（什么可观察的事实出现就推翻它；写不出就是断链）",
+                               "**撤销条件**：若落到别层。"))
+            write(a56, base56)
+            c, out = run("devlog.py", "check", cwd=tmp56)
+            check("依据引用本档原话 → 0 error", c == 0 and "S12" not in out, out[-400:])
+
+            write(a56, read(a56).replace("「确认后一律落到 L2」\n**撤销条件**",
+                                         "「确认后一律落到 L3」\n**撤销条件**"))
+            c, out = run("devlog.py", "check", cwd=tmp56)
+            check("引用的原话在本档查不到 → S12", c == 1 and "S12" in out, out[-400:])
+
+            write(a56, read(a56).replace("**依据**：「确认后一律落到 L3」", "**依据**：用户说要落 L2"))
+            c, out = run("devlog.py", "check", cwd=tmp56)
+            check("依据没写引号原话 → S12", c == 1 and "S12" in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp56, ignore_errors=True)
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

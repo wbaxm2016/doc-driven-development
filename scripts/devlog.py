@@ -879,14 +879,28 @@ def is_placeholder_value(val):
     return bool(re.fullmatch(r"（[^）]*）", v))   # 模板里的（…）占位
 
 
+def _without_decision_section(text):
+    """去掉「## 4. 决策与选项对比」整节：查引用原话时要跳过决策块自己。"""
+    m = re.search(r"^##\s*4[\.、\s]", text, re.M)
+    if not m:
+        return text
+    rest = text[m.end():]
+    n = re.search(r"^##\s", rest, re.M)
+    return text[:m.start()] + (rest[n.start():] if n else "")
+
+
 def check_decision_review(rel, text):
     """S12：最新一篇的 §4 用户决策块必须写「依据」与「撤销条件」。
 
     只判**有没有写**：依据是不是真用户原话、撤销条件是否可观察，仍需人读。
     只判最新一篇（与 S9 同法，ISS-032）：存量档案没有这两行，追溯会让历史集体变红。
     拍板写「agent 自选」的块豁免——实现选择不是决策，不该被抬成四问。
+
+    复述门（REQ-026）：用户拍板的块，「依据」必须引用用户原话（「…」），且该句在本档
+    §4 之外的正文里逐字可查——把「我替你总结的结论」和「你说过的话」分开。
     """
     errs = []
+    outside = _without_decision_section(text)
     for title, block in decision_blocks(text):
         if "（在决定什么）" in title:          # 新建档案的模板占位块
             continue
@@ -903,6 +917,18 @@ def check_decision_review(rel, text):
                 errs.append({"file": rel, "code": "S12",
                              "message": f"决策「{title}」的「{field}」是占位（{val or '空'}）——"
                                         f"答不出的标「断链」并用 devlog.py ask 进待分诊"})
+        ev = decision_field(block, "依据") or ""
+        quoted = re.findall(r"「([^」]+)」", ev)
+        if not quoted:
+            errs.append({"file": rel, "code": "S12",
+                         "message": f"决策「{title}」的「依据」要引用用户原话（「…」）——"
+                                    f"复述门：拍板前先让用户用自己的话核 2–4 个要点（SKILL 复述门）"})
+            continue
+        for q in quoted:
+            if q.strip() and q not in outside:
+                errs.append({"file": rel, "code": "S12",
+                             "message": f"决策「{title}」引用的原话在本档查不到（逐字）："
+                                        f"{q[:24]}——照抄用户说过的原句，别改写"})
     return errs
 
 
