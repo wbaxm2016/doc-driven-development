@@ -29,6 +29,7 @@ tags: [契约, 需求, EARS]
 | 编号 | 需求（EARS 句式） | 验收（一条命令 / 一次实测） | `verify:`（可执行入口） | 状态 | 依据 | 确认 |
 |---|---|---|---|---|---|---|
 | **REQ-001** | WHEN 调用 `python verify_square.py 7` THE SYSTEM SHALL 输出 49 并以 0 退出 | `python verify_square.py 7` → 输出 `49`、退出码 0；`python verify_square.py x` → 退出码 2 | `python verify_square.py 7` | 已实现 | verify_square.py、T1.1.1 | 采纳✓ 2026-11-05｜示例场景 |
+| **REQ-002** | WHEN 调用 `python verify_square.py -3` THE SYSTEM SHALL 输出 9 并以 0 退出 | `python verify_square.py -3` → 输出 `9`、退出码 0 | `python verify_square.py -3` | 待实现 | verify_square.py | 采纳✓ 2026-11-05｜示例场景 |
 
 ## 2. 不得做的事
 

@@ -25,7 +25,7 @@ tags: [功能, 台账, 追溯]
 | ID | 功能 | 满足的需求 | 验收口径（人读） | `verify:`（机器跑） | 代价 | 状态 | 评审 | 代码入口 | 证据 | 考核汇总 | 完成于 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | **F-001** | 平方计算 | REQ-001 | 跑 `python verify_square.py 7` 输出 49；实现入口 `verify_square.py` 的 `square()` | `python verify_square.py 7` | S | 已验收 | 满足✓ 可做✓ 代价S｜示例场景｜2026-11-05 | verify_square.py | `python verify_square.py 7` → 49（2026-11-05） | 各任务考核见 T1.1.1｜整体一致：全｜代价：S（同估）｜结论：保留 | sim-0001 |
-| **F-002** | （示例功能二） | REQ-001 | （怎么判它满足了需求） | `python tests/test_xxx.py` | S | 待评审 | — | — | — | — | — |
+| **F-002** | 负数平方 | REQ-002 | 跑 `python verify_square.py -3` 输出 9 | `python verify_square.py -3` | S | 待评审 | — | verify_square.py | — | — | — |
 | **F-003** | （示例功能三） | REQ-001 | （怎么判它满足了需求） | `python tests/test_xxx.py` | S | 待评审 | — | — | — | — | — |
 
 ## 2. 任务考核
