@@ -2340,6 +2340,121 @@ def main():
         finally:
             shutil.rmtree(tmp59, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 60
+        print("\n60. 五件套批量入口：plan.py new-feature（REQ-031）")
+        tmp60 = tempfile.mkdtemp(prefix="ddd-selftest60-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp60)
+            req60 = os.path.join(tmp60, "docs", "20-契约", "requirements.md")
+            feats60 = os.path.join(tmp60, "docs", "40-运行", "FEATURES.md")
+            plan60 = os.path.join(tmp60, "docs", "00-门面", "开发计划.md")
+            card60 = os.path.join(tmp60, "docs", "00-门面", "设计卡.md")
+            five = [req60, feats60, plan60, card60]
+
+            # 正文里的反例编号（REQ-999 / F-999）不能被当成「已用到 999」——
+            # 自动编号只认表格首列，否则下一个会变成 F-1000。
+            write(req60, read(req60).replace(
+                "## 1. 需求", "> 反例：REQ-999 只是正文，不是定义。\n\n## 1. 需求", 1))
+            write(feats60, read(feats60).replace(
+                "## 1. 功能", "> 反例：引用不存在的 F-999 会被 E24 拦下。\n\n## 1. 功能", 1))
+
+            def hashes():
+                return [hashlib.sha256(read(p).encode("utf-8")).hexdigest() for p in five]
+
+            base = tuple([
+                "new-feature",
+                "--title", "五件套批量入口",
+                "--req", "WHEN 运行 plan.py new-feature THE SYSTEM SHALL 一次写出 "
+                         "REQ / F / W / T / K 五件套",
+                "--accept", "临时项目跑一次 → 五处各多一行或一卡，plan check 0 error",
+                "--verify", "`python scripts/self_test.py -v`（第 60 组）",
+                "--direction", "D1",
+                "--work", "五件套批量入口",
+                "--task", "new-feature 子命令（断言先行）",
+                "--scores", "3,4,4,3,5,3",
+                "--cost", "S",
+                "--design-interface", "一条 CLI：参数进，五份载体出；只增不改既有行",
+                "--design-swappable", "输入形态（CLI / JSON）与落点位置是两处可替换点",
+                "--design-failure", "参数缺失 / 撞号 / 分值越界 → exit 1 且五份文件零写入",
+            ])
+
+            h0 = hashes()
+            c, out = run("plan.py", *base, cwd=tmp60)
+            check("一次调用建出五个编号（REQ-002 / F-004 / W1.2 / T1.2.1 / K2）",
+                  c == 0 and all(x in out for x in
+                                 ("REQ-002", "F-004", "W1.2", "T1.2.1", "K2")), out[-500:])
+
+            rq, ft, pl, dc = read(req60), read(feats60), read(plan60), read(card60)
+            check("REQ 行落在需求表里（§2 之前）",
+                  "**REQ-002**" in rq
+                  and rq.index("**REQ-002**") < rq.index("## 2. 不得做的事"))
+            check("F 行落在功能表里（任务考核之前，ISS-047）",
+                  "**F-004**" in ft
+                  and ft.index("**F-004**") < ft.index("## 2. 任务考核"))
+            check("W 行在 §4、T 行在 §5，且任务双亲 F + W 齐全",
+                  "**W1.2**" in pl and "**T1.2.1**" in pl
+                  and "| F-004 | W1.2 |" in pl)
+            check("设计卡 K2 挂 W1.2", "## K2 · W1.2 · " in dc)
+
+            c, out = run("plan.py", "check", cwd=tmp60)
+            check("五件套建完 plan check 0 error", c == 0 and "errors=0" in out, out[-300:])
+            c, out = run("doc_check.py", "--quiet", cwd=tmp60)
+            check("五件套建完 doc_check 0 error（无 E 码）",
+                  c == 0 and "errors=0" in out, out[-400:])
+
+            h1 = hashes()
+            c, out = run("plan.py", *base, "--dry-run", "--json", cwd=tmp60)
+            check("--dry-run --json：给出下一组五个编号且零写入",
+                  c == 0 and '"dry_run": true' in out and '"written": false' in out
+                  and all(x in out for x in
+                          ("REQ-003", "F-005", "W1.3", "T1.3.1", "K3"))
+                  and hashes() == h1, out[-500:])
+
+            h2 = hashes()
+            c, out = run("plan.py", "new-feature", "--title", "缺需求", cwd=tmp60)
+            check("缺 --req → exit 1 且五份文件零写入",
+                  c == 1 and hashes() == h2, out[-400:])
+
+            c, out = run("plan.py", *base, "--req-id", "REQ-001", cwd=tmp60)
+            check("撞号 --req-id REQ-001 → exit 1 且零写入",
+                  c == 1 and hashes() == h2, out[-400:])
+
+            bad = [x if x != "3,4,4,3,5,3" else "1,2,3" for x in base]
+            c, out = run("plan.py", *bad, cwd=tmp60)
+            check("六维分值不足 6 个 → exit 1 且零写入",
+                  c == 1 and hashes() == h2, out[-400:])
+
+            c, out = run("plan.py", *base, "--work-id", "W9.1", cwd=tmp60)
+            check("工作号与方向不一致 → exit 1 且零写入",
+                  c == 1 and hashes() == h2, out[-400:])
+
+            # 只替换 --title 的值；--work 的值保持无竖线，避免把标题的转义算进工作名
+            piped = list(base)
+            piped[piped.index("--title") + 1] = "五件|套"
+            piped[piped.index("--work") + 1] = "管道转义"
+            c, out = run("plan.py", *piped, cwd=tmp60)
+            c2, out2 = run("doc_check.py", "--quiet", cwd=tmp60)
+            check("标题含竖线被转义：不报 E28、doc_check 0 error",
+                  c == 0 and "[E28]" not in out2 and "errors=0" in out2, out2[-400:])
+
+            h3 = hashes()
+            existing = list(base)
+            existing[existing.index("--direction") + 1] = "D1"
+            existing[existing.index("--work")] = "--work-id"
+            existing[existing.index("--work-id") + 1] = "W1.1"
+            existing[existing.index("--title") + 1] = "挂已有工作"
+            c, out = run("plan.py", *existing, cwd=tmp60)
+            check("--work-id 指向已有工作：不新建卡、任务落 T1.1.2",
+                  c == 0 and "T1.1.2" in out and "K1" in out
+                  and hashes()[3] == h3[3], out[-500:])
+
+            c, out = run("plan.py", "--help", cwd=tmp60)
+            check("--help 列出 new-feature（只读，不写盘）",
+                  c == 0 and "new-feature" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp60, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

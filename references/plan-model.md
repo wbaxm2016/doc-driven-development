@@ -159,7 +159,10 @@ python scripts/plan.py index --check    # 只比对，CI 用
 python scripts/plan.py next             # 唯一出口：第一个视角的第一名 + 方向 → 工作 → 任务 路径
 python scripts/plan.py next --json      # 机读：每个视角的第一名
 python scripts/plan.py tree             # 只读全貌：方向 → 工作 → 任务（--html 出单文件页面）
+python scripts/plan.py new-feature …    # 五件套批量入口：REQ / F / W / T / K 一次写全
 ```
+
+`new-feature` 把「新增一个功能」压成一条命令：需求行（`requirements`）、功能行（`FEATURES`）、工作行与任务行（计划 §4/§5）、设计卡（一个工作一张）一次落地。编号默认从各表**首列**取 `max+1`（正文里的 `F-999` 反例不算数），也可用 `--req-id / --feature-id / --work-id / --task-id / --card-id` 指定；`--work-id` 指向已有工作时只加需求 / 功能 / 任务，不新建卡。它先验「改完之后」的文本、只拒这次改动造成的新错误，任一失败零写入；`--dry-run` 只列清单。设计门的顺序不变：卡没定，不拆任务——新工作的卡三格（接口 / 可替换点 / 失败边界）必须一起给。
 
 `next` 回答「下一步做什么、为什么是它」：默认取**第一个视角**的第一名（视角表第一行），并把所属方向 / 工作 / 功能与弱项一起打出来；其它视角的第一名若不同会并列列出——**排序不是唯一答案，先看哪个由人定**。全部完成或被前置阻塞时输出「无可排任务」，不瞎挑。
 

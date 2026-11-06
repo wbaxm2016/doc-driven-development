@@ -84,6 +84,8 @@ python scripts/doc_check.py         # 全库字段与链接
 
 回写状态有一条命令，不必三个文件手工改：`python scripts/plan.py set-status <T-id> --to 已完成 --commit <短号> --review "做法=…｜一致=…｜代价=…｜结论=…"`（`--dry-run` 只打印清单）。它只写既有列、先验「改完之后」的文本、任一校验失败零写入、重跑幂等，不新增状态载体（REQ-017）；人工编辑仍是等价路径。
 
+建一个功能同样有一条命令，不必在五份载体上手改：`python scripts/plan.py new-feature` 一次写 `REQ` / `F` / `W` / `T` / `K`——编号从表格首列自动 `max+1`（正文里的 `F-999` 反例不算），落点按表头名定位（功能行插在 `F-001` 之后，不会掉进「任务考核」表），先验「改完之后」的文本、任一校验失败零写入；`--work-id W1.1` 表示挂已有工作（不新建 `K`），`--dry-run` 只列清单（REQ-031）。
+
 契约回检另有一条：`python scripts/verify.py` 按每条需求的 `verify:` 真跑（失败/超时 → exit 1，状态=`待实现/阻塞` 的行跳过）。它可能很慢，所以**不在收尾五连跑里**；CI 每次 push 跑它，改了契约或测试再本地跑一次。
 
 **实施完之后先对照，再测**（顺序别倒）：
@@ -210,7 +212,7 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 - **写「完成」而不是「已完成」** → 不在状态白名单，P3 直接报（旧版会静默把它当成未完成继续排序，那才难查）。
 - **把旧称留在门面/契约/规范里** → E16 会报。历史快照与 ADR 不扫描，它们记录的是当时口径。
 - **`.skill` 是构建产物** → 改了源仓库的脚本要重新打包，否则技能里的版本会悄悄落后（这份包就因为漏了重新生成，曾缺 8 条规则）。
-- **往 `FEATURES.md` 末尾追加功能行** → 它落进最后一张「任务考核」表：`E24` 看不见它（首列不是 `F-nnn` 的行直接跳过），校验全绿而台账少一行。功能行要插在 `F-001` 那一行后面。
+- **手改五处建功能** → 漏一处不会报错；往 `FEATURES.md` 末尾追加功能行更会落进最后一张「任务考核」表（`E24` 看不见它，首列不是 `F-nnn` 的行直接跳过），校验全绿而台账少一行。优先用 `plan.py new-feature`（插在 `F-001` 之后、先验后写）；手工编辑时功能行仍要插在 `F-001` 那一行后面。
 
 ## 现实不配合时怎么办
 
@@ -258,9 +260,9 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
 | `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
-| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）/ `set-status <T-id> --to <状态> [--commit] [--review] [--dry-run] [--json]`（状态转写：只写既有列、失败零写入、幂等）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯）；`--help` 只读、不写生成区 |
+| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）/ `set-status <T-id> --to <状态> [--commit] [--review] [--dry-run] [--json]`（状态转写：只写既有列、失败零写入、幂等）/ `new-feature …`（五件套批量入口：一次写 REQ / F / W / T / K，自动编号只认表首列、先验后写、失败零写入；`--work-id` 挂已有工作、`--dry-run` 只列清单）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯）；`--help` 只读、不写生成区 |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–32 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把本文「验收」1–38 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 | `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
@@ -342,4 +344,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 37. **设计卡选项空间**：待开工 / 进行中工作的设计卡缺「选项空间」表 / 少于 3 个方案 / 没有「不做 / 少做」/ 被否方案没有回到条件 → `W10` 提醒（不阻断，exit 0）；合法卡不报；`W10` 只判形状，广度够不够仍人读。
 
-`scripts/self_test.py` 把上面 1–37 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+38. **五件套批量入口**：`plan.py new-feature` 一次建 `REQ` / `F` / `W` / `T` / `K`；自动编号只认表格首列（正文写 `F-999` 反例不会把下一个推成 `F-1000`）；功能行落在「任务考核」表之前；缺必填 / 撞号 / 分值越界 / 工作与方向不一致 → exit 1 且五份文件哈希不变；`--dry-run` 零写入；`--work-id W1.1` 不新建卡。
+
+`scripts/self_test.py` 把上面 1–38 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

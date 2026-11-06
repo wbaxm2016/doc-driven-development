@@ -10,6 +10,12 @@
     python scripts/plan.py tree [--html|--json]  # 只读全貌：方向 → 工作 → 任务
     python scripts/plan.py set-status T1.1.1 --to 已完成 --commit abc1234 \\
         --review "做法=…｜一致=…｜代价=…｜结论=…" [--dry-run]  # 状态转写（REQ-017）
+    python scripts/plan.py new-feature --title "功能名" --req "WHEN … THE SYSTEM SHALL …" \\
+        --accept "怎么判" --verify "`python scripts/self_test.py -v`（第 N 组）" \\
+        --direction D1 --work "工作名" --task "任务名" --scores 3,4,3,3,5,4 --cost S \\
+        --design-interface "…" --design-swappable "…" --design-failure "…" \\
+        [--design-option "A|轴|假设|失败模式|选中|—"] [--work-id W1.1] \\
+        [--dry-run]  # 五件套批量入口（REQ-031）
 
 维度与视角全部从表头读取，脚本不认识具体维度名 —— 加维度/加视角不改代码。
 编号规则、状态词、文件位置来自 <docs>/_schema.json。
@@ -375,8 +381,13 @@ def load_designs(path):
     """
     if not path or not os.path.exists(path):
         return None
+    return parse_designs(read(path).splitlines())
+
+
+def parse_designs(lines):
+    """`load_designs` 的同一份解析，供「改完之后」的文本复用（不靠写盘再读）。"""
     cards, cur = {}, None
-    for ln in read(path).splitlines():
+    for ln in lines:
         m = CARD_HEAD_RE.match(ln.strip())
         if m:
             cur = {"work": m.group(2), "title": m.group(3).strip(), "cells": {}}
@@ -1092,6 +1103,417 @@ def cmd_set_status(docs, schema, plan_path, argv, as_json):
     return 0
 
 
+# ---------------------------------------------------------------- 五件套批量入口（REQ-031）
+NEW_KEYS = ("title", "req", "accept", "verify", "direction", "work", "task",
+            "scores", "cost", "design-interface", "design-swappable",
+            "design-failure", "req-id", "feature-id", "work-id", "task-id",
+            "card-id")
+EARS_CUES = ("WHEN", "IF", "WHILE", "GIVEN", "SHALL", "当", "若", "一旦",
+             "必须", "应", "不得", "不许")
+
+
+def cell_esc(s):
+    """单元格里的竖线会撑破表格（E28）：写成 `\\|`，与 split_row 同口径。"""
+    return str(s).replace("|", "\\|").strip()
+
+
+def as_code(s):
+    s = (s or "").strip()
+    return s if "`" in s else f"`{s}`"
+
+
+def parse_new_feature(argv):
+    opts = {k: "" for k in NEW_KEYS}
+    opts["design-options"], opts["dry"] = [], False
+    args = [a for a in argv if a != "new-feature"]
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--dry-run":
+            opts["dry"] = True
+            i += 1
+            continue
+        if a.startswith("--") and i + 1 < len(args):
+            key = a[2:]
+            if key == "design-option":
+                opts["design-options"].append(args[i + 1])
+            elif key in opts:
+                opts[key] = args[i + 1]
+            else:
+                raise ValueError(f"未知参数：{a}")
+            i += 2
+            continue
+        raise ValueError(f"无法识别的参数：{a}")
+    return opts
+
+
+def find_table(lines, pred):
+    """按表头找人写的表：返回 (表头, 表头行号, [(行号, 单元格)])。"""
+    for header, at, rows in table_windows(lines):
+        heads = [strip_md(x) for x in header]
+        if pred(heads):
+            return heads, at, rows
+    return None
+
+
+def col_index(head, *names):
+    for i, h in enumerate(head):
+        for n in names:
+            if h == n or h.startswith(n):
+                return i
+    return -1
+
+
+def build_row(head, values):
+    """按表头名填一格；缺列直接抛 ValueError（不静默错位）。"""
+    row = ["—"] * len(head)
+    for names, val in values:
+        i = col_index(head, *names)
+        if i < 0:
+            raise ValueError(f"表头缺列：{' / '.join(names)}")
+        row[i] = val
+    return row
+
+
+def inc_insert(rows, header_at):
+    """表尾插入点：最后一行之后；空表插在表头与分隔行之后。"""
+    return rows[-1][0] + 1 if rows else header_at + 2
+
+
+def max_seq(text, pattern):
+    best = 0
+    for m in re.finditer(pattern, text, re.M):
+        best = max(best, int(m.group(1)))
+    return best
+
+
+def max_row_seq(rows, pattern):
+    """只认「首列就是编号」的行：正文里的反例（F-999）不能把下一个编号推成 F-1000。"""
+    best = 0
+    for _, cs in rows:
+        m = re.fullmatch(pattern, strip_md(cs[0]))
+        if m:
+            best = max(best, int(m.group(1)))
+    return best
+
+
+def id_taken(text, ident):
+    return re.search(rf"(?<![\w.]){re.escape(ident)}(?![\w.])", text) is not None
+
+
+def card_block(card_id, work_id, title, interface, swappable, failure,
+               options, task_id, task_name):
+    out = ["", f"## {card_id} · {work_id} · {title}", "",
+           f"- **接口**：{interface}",
+           f"- **可替换点**：{swappable}"]
+    if options:
+        out += ["- **选项空间**：", "",
+                "  | 选项 | 轴 | 假设 | 失败模式 | 结论 | 回到条件 |",
+                "  |---|---|---|---|---|---|"]
+        for o in options:
+            parts = [p.strip() for p in o.split("|")]
+            if len(parts) != 6:
+                raise ValueError("--design-option 要 6 段（选项|轴|假设|失败模式|结论|回到条件）："
+                                 f"{o!r}")
+            out.append("  | " + " | ".join(parts) + " |")
+    else:
+        out.append("- **选项空间**：待补（还没过设计门；`W10` 只提醒不阻断）")
+    out += [f"- **失败边界**：{failure}",
+            f"- **任务拆分**：{task_id} {task_name}。", ""]
+    return "\n".join(out)
+
+
+def cmd_new_feature(docs, schema, plan_path, argv, as_json):
+    try:
+        opts = parse_new_feature(argv)
+    except ValueError as exc:
+        return die(f"new-feature 参数错误：{exc}", as_json, 2)
+
+    title = opts["title"].strip()
+    req_text = opts["req"].strip()
+    accept = opts["accept"].strip()
+    verify = opts["verify"].strip()
+    direction = opts["direction"].strip()
+    work_name = opts["work"].strip()
+    task_name = opts["task"].strip()
+    cost = opts["cost"].strip().upper()
+
+    miss = [name for name, val in (("--title", title), ("--req", req_text),
+                                   ("--accept", accept), ("--verify", verify),
+                                   ("--direction", direction), ("--task", task_name),
+                                   ("--scores", opts["scores"].strip()),
+                                   ("--cost", cost)) if not val]
+    if not opts["work-id"].strip() and not work_name:
+        miss.append("--work")
+    if miss:
+        return die("new-feature 缺必填参数：" + "、".join(miss)
+                   + "\n（五件套一次写全：需求句 / 验收 / verify / 方向 / 工作 / 任务 / 六维 / 代价）",
+                   as_json, 1)
+    if not any(c in req_text for c in EARS_CUES):
+        return die("--req 不像 EARS 句式：至少出现 WHEN/IF/WHILE/SHALL/当/若/一旦/必须/应 之一",
+                   as_json, 1)
+    if not re.fullmatch(r"D\d+", direction):
+        return die(f"--direction 形态不对：{direction!r}（应为 D1 这种）", as_json, 1)
+    if cost not in ("S", "M", "L"):
+        return die(f"--cost 只认 S / M / L：{cost!r}", as_json, 1)
+    try:
+        scores = [int(x) for x in re.split(r"[,，\s]+", opts["scores"].strip()) if x]
+    except ValueError:
+        return die("--scores 只能是 1–5 的整数，用逗号分隔", as_json, 1)
+    if len(scores) != 6 or any(not 1 <= s <= 5 for s in scores):
+        return die(f"--scores 要给 6 个 1–5 的整数（U,C,S,R,V,E）：收到 {scores}", as_json, 1)
+
+    feats_path = features_path(docs, schema)
+    if feats_path is None:
+        return die("找不到功能台账（FEATURES.md）：五件套无处落", as_json, 1)
+    cdir = layer_dir(schema, "contract")
+    req_name = (schema.get("names") or {}).get("requirements", "requirements.md")
+    req_path = os.path.join(docs, cdir or "", req_name)
+    if not os.path.exists(req_path):
+        return die(f"找不到需求清单：{os.path.relpath(req_path)}", as_json, 1)
+    card_path = designs_path(docs, schema)
+    if card_path is None:
+        return die("找不到设计卡（00-门面/设计卡.md）：K 无处落", as_json, 1)
+
+    plan_text, feats_text = read(plan_path), read(feats_path)
+    req_all, card_text = read(req_path), read(card_path)
+    before = {p: sha256_of(p) for p in (req_path, feats_path, plan_path, card_path)}
+    lines, flines = plan_text.splitlines(), feats_text.splitlines()
+    rlines, clines = req_all.splitlines(), card_text.splitlines()
+    cards = load_directions(directions_path(docs, schema))
+    designs = parse_designs(clines)
+
+    dhit = find_table(lines, lambda h: bool(h) and h[0] == "编号" and "方向" in h)
+    if dhit is None:
+        return die("计划里找不到方向表（§3）", as_json, 1)
+    if direction not in {strip_md(c[0]) for _, c in dhit[2]}:
+        return die(f"方向 {direction} 不在计划 §3：先立方向卡再建五件套", as_json, 1)
+
+    req_t = find_table(rlines, lambda h: "编号" in h and any(x.startswith("需求") for x in h))
+    feat_t = find_table(flines, lambda h: {"ID", "功能", "满足的需求", "状态"} <= set(h))
+    work_t = find_table(lines, lambda h: bool(h) and h[0] == "编号" and "工作" in h
+                        and "方向" in h)
+    task_t = find_table(lines, lambda h: bool(h) and h[0] == "ID" and "任务" in h
+                        and "功能" in h)
+    if not all((req_t, feat_t, work_t, task_t)):
+        return die("五份文档表头不齐：需求表 / 功能表 / §4 工作表 / §5 任务表缺一", as_json, 1)
+
+    dn = int(direction[1:])
+    work_id = opts["work-id"].strip()
+    w_ids = {strip_md(c[0]) for _, c in work_t[2]}
+    existing_work = bool(work_id) and work_id in w_ids
+    if work_id:
+        m = re.fullmatch(r"W(\d+)\.(\d+)", work_id)
+        if not m:
+            return die(f"--work-id 形态不对：{work_id!r}（应为 W1.2 这种）", as_json, 1)
+        if int(m.group(1)) != dn:
+            return die(f"工作号 {work_id} 与方向 {direction} 不一致", as_json, 1)
+        tn, tm = int(m.group(1)), int(m.group(2))
+    else:
+        wm = 0
+        for _, c in work_t[2]:
+            mm = re.fullmatch(r"W(\d+)\.(\d+)", strip_md(c[0]))
+            if mm and int(mm.group(1)) == dn:
+                wm = max(wm, int(mm.group(2)))
+        work_id = f"W{dn}.{wm + 1}"
+        tn, tm = dn, wm + 1
+
+    task_id = opts["task-id"].strip()
+    if task_id:
+        if not re.fullmatch(rf"T{tn}\.{tm}\.\d+", task_id):
+            return die(f"--task-id {task_id} 与工作 {work_id} 不一致", as_json, 1)
+        if any(strip_md(c[0]) == task_id for _, c in task_t[2]):
+            return die(f"任务 {task_id} 已存在（编号只增不复用）", as_json, 1)
+    else:
+        kmax = 0
+        for _, c in task_t[2]:
+            mm = re.fullmatch(rf"T{tn}\.{tm}\.(\d+)", strip_md(c[0]))
+            if mm:
+                kmax = max(kmax, int(mm.group(1)))
+        task_id = f"T{tn}.{tm}.{kmax + 1}"
+
+    req_id = opts["req-id"].strip()
+    if req_id:
+        if not re.fullmatch(r"REQ-\d{3}", req_id):
+            return die(f"--req-id 形态不对：{req_id!r}（应为 REQ-001 这种）", as_json, 1)
+        if id_taken(req_all, req_id):
+            return die(f"需求 {req_id} 已存在（编号只增不复用）", as_json, 1)
+    else:
+        req_id = f"REQ-{max_row_seq(req_t[2], r'REQ-(\d+)') + 1:03d}"
+
+    feature_id = opts["feature-id"].strip()
+    if feature_id:
+        if not re.fullmatch(r"F-\d{3}", feature_id):
+            return die(f"--feature-id 形态不对：{feature_id!r}（应为 F-001 这种）", as_json, 1)
+        if id_taken(feats_text, feature_id):
+            return die(f"功能 {feature_id} 已存在（编号只增不复用）", as_json, 1)
+    else:
+        feature_id = f"F-{max_row_seq(feat_t[2], r'F-(\d+)') + 1:03d}"
+
+    card_id = opts["card-id"].strip()
+    if existing_work:
+        own = next((k for k, v in (designs or {}).items() if v["work"] == work_id), "")
+        if not own:
+            return die(f"工作 {work_id} 没有设计卡：先补卡再挂功能（P19）", as_json, 1)
+        if card_id and card_id != own:
+            return die(f"工作 {work_id} 的卡是 {own}，不是 {card_id}", as_json, 1)
+        card_id = own
+    elif card_id:
+        if not re.fullmatch(r"K\d+", card_id):
+            return die(f"--card-id 形态不对：{card_id!r}（应为 K1 这种）", as_json, 1)
+        if re.search(rf"^##\s*{re.escape(card_id)}\b", card_text, re.M):
+            return die(f"设计卡 {card_id} 已存在（编号只增不复用）", as_json, 1)
+    else:
+        card_id = f"K{max_seq(card_text, r'^##\s*K(\d+)') + 1}"
+
+    if not existing_work:
+        lack = [n for n, v in (("--design-interface", opts["design-interface"].strip()),
+                               ("--design-swappable", opts["design-swappable"].strip()),
+                               ("--design-failure", opts["design-failure"].strip())) if not v]
+        if lack:
+            return die("新建工作要一张设计卡（P19 三格必填）：缺 " + "、".join(lack)
+                       + "\n（只想挂已有工作：用 --work-id W1.1）", as_json, 1)
+
+    try:
+        req_row = build_row(req_t[0], [
+            (("编号",), f"**{req_id}**"),
+            (("需求",), cell_esc(req_text)),
+            (("验收",), cell_esc(accept)),
+            (("verify",), cell_esc(as_code(verify))),
+            (("状态",), "待实现"),
+            (("依据",), f"本会话、new-feature、{feature_id}、{task_id}"),
+            (("确认",), "—"),
+        ])
+        feat_row = build_row(feat_t[0], [
+            (("ID",), f"**{feature_id}**"),
+            (("功能",), cell_esc(title)),
+            (("满足的需求",), req_id),
+            (("验收口径",), cell_esc(accept)),
+            (("verify",), cell_esc(as_code(verify))),
+            (("代价",), cost),
+            (("状态",), "待评审"),
+            (("评审",), "—"),
+            (("代码入口",), "—"),
+            (("证据",), "—"),
+            (("考核汇总",), "—"),
+            (("完成于",), "—"),
+        ])
+        work_row = build_row(work_t[0], [
+            (("编号",), f"**{work_id}**"),
+            (("工作",), cell_esc(work_name or title)),
+            (("方向",), direction),
+            (("状态",), "待开工"),
+            (("验收判据", "验收"), cell_esc(accept)),
+            (("证据",), "—"),
+            (("关联",), f"{req_id}、{feature_id}、{card_id}"),
+        ])
+        task_row = build_row(task_t[0], [
+            (("ID",), f"**{task_id}**"),
+            (("任务",), cell_esc(task_name)),
+            (("功能",), feature_id),
+            (("所属",), work_id),
+            (("状态",), "待开工"),
+            (("前置",), "-"),
+            (("验收",), cell_esc(as_code(verify))),
+            (("关联",), f"{req_id}、{card_id}"),
+        ])
+        dims = dim_codes(task_t[0])
+        if len(dims) != 6:
+            return die(f"任务表应有 6 个维度列（U C S R V E），实际 {len(dims)} 个",
+                       as_json, 1)
+        for d, s in zip(dims, scores):
+            task_row[task_t[0].index(d)] = str(s)
+        block = "" if existing_work else card_block(
+            card_id, work_id, title, opts["design-interface"].strip(),
+            opts["design-swappable"].strip(), opts["design-failure"].strip(),
+            opts["design-options"], task_id, task_name)
+    except ValueError as exc:
+        return die(str(exc), as_json, 1)
+
+    new_rlines, new_flines, new_lines = list(rlines), list(flines), list(lines)
+    new_rlines.insert(inc_insert(req_t[2], req_t[1]), join_row(req_row))
+    f001 = next((idx for idx, c in feat_t[2] if strip_md(c[0]) == "F-001"), None)
+    f_at = (f001 + 1) if f001 is not None else inc_insert(feat_t[2], feat_t[1])
+    new_flines.insert(f_at, join_row(feat_row))
+    # 先插 §5（行号大），再插 §4，避免先插 §4 把 §5 的行号推后
+    new_lines.insert(inc_insert(task_t[2], task_t[1]), join_row(task_row))
+    if not existing_work:
+        new_lines.insert(inc_insert(work_t[2], work_t[1]), join_row(work_row))
+    new_req = "\n".join(new_rlines) + "\n"
+    new_feats = "\n".join(new_flines) + "\n"
+    new_plan = "\n".join(new_lines) + "\n"
+    if existing_work:
+        new_card = card_text          # 挂已有工作：卡一个字节都不动
+    else:
+        new_card = card_text.rstrip("\n") + "\n" + block
+        if not new_card.endswith("\n"):
+            new_card += "\n"
+
+    cfg = schema["plan"]
+    try:
+        l0, w0, t0, wo0, d0, fr0 = load_lines(lines)
+        errs0 = validate(w0, t0, wo0, d0, cfg, fr0, parse_features(flines),
+                         cards, designs)[0]
+        l2, w2, t2, wo2, d2, fr2 = load_lines(new_lines)
+        errs2 = validate(w2, t2, wo2, d2, cfg, fr2, parse_features(new_flines),
+                         cards, parse_designs(new_card.splitlines()))[0]
+    except SystemExit as exc:
+        return die(f"改完之后的文档解析失败（不落盘）：{exc}", as_json, 1)
+    old_keys = {(e["code"], e["message"]) for e in errs0}
+    fresh = [e for e in errs2 if (e["code"], e["message"]) not in old_keys]
+    if fresh:
+        return die("改完之后校验不过（不落盘）："
+                   + "；".join(f"[{e['code']}] {e['message']}" for e in fresh), as_json, 1)
+
+    ids = {"req": req_id, "feature": feature_id, "work": work_id,
+           "task": task_id, "card": card_id}
+    changes = [{"file": os.path.relpath(req_path), "table": "需求", "row": req_id},
+               {"file": os.path.relpath(feats_path), "table": "功能", "row": feature_id},
+               {"file": os.path.relpath(plan_path), "table": "任务", "row": task_id}]
+    if not existing_work:
+        changes.append({"file": os.path.relpath(plan_path), "table": "工作", "row": work_id})
+        changes.append({"file": os.path.relpath(card_path), "table": "设计卡", "row": card_id})
+
+    if opts["dry"]:
+        if as_json:
+            print(json.dumps({"ok": True, "dry_run": True, "written": False,
+                              "ids": ids, "changes": changes}, ensure_ascii=False, indent=2))
+        else:
+            print(f"new-feature（dry-run，不落盘）：{req_id} / {feature_id} / "
+                  f"{work_id} / {task_id} / {card_id}")
+            for c in changes:
+                print(f"  {c['file']} · {c['table']} · +{c['row']}")
+        return 0
+
+    for p, h0 in before.items():
+        if not os.path.exists(p) or sha256_of(p) != h0:
+            return die(f"{os.path.relpath(p)} 在读取后被改动过（stale）：不写，重跑一次",
+                       as_json, 1)
+    writes = [(req_path, new_req), (feats_path, new_feats), (plan_path, new_plan)]
+    if not existing_work:
+        writes.append((card_path, new_card))
+    written = []
+    for p, text in writes:
+        try:
+            write_atomic(p, text)
+        except OSError as exc:
+            tail = f"——已写：{'、'.join(written)}；先 git diff 核对，再重跑一次" if written else ""
+            return die(f"写 {os.path.relpath(p)} 失败：{exc}{tail}", as_json, 2)
+        written.append(os.path.relpath(p))
+
+    if as_json:
+        print(json.dumps({"ok": True, "dry_run": False, "written": True,
+                          "ids": ids, "changes": changes}, ensure_ascii=False, indent=2))
+    else:
+        print(f"new-feature：{req_id} / {feature_id} / {work_id} / {task_id} / {card_id}")
+        for c in changes:
+            print(f"  {c['file']} · {c['table']} · +{c['row']}")
+        if not existing_work and not opts["design-options"]:
+            print("  提示：设计卡「选项空间」待补，W10 会提醒（不阻断）")
+        print("  提示：功能停在「待评审」——过评审门后再推到「已评审」")
+    return 0
+
+
 # ---------------------------------------------------------------- main
 def main():
     argv = sys.argv[1:]
@@ -1121,8 +1543,9 @@ def main():
         return 0
 
     cmd = next((a for a in argv if not a.startswith("--")), "index")
-    if cmd not in ("index", "check", "tree", "next", "set-status"):
-        return die(f"未知命令：{cmd}（可用：index / check / tree / next / set-status）", as_json)
+    if cmd not in ("index", "check", "tree", "next", "set-status", "new-feature"):
+        return die(f"未知命令：{cmd}（可用：index / check / tree / next / "
+                   f"set-status / new-feature）", as_json)
     check_only = "--check" in argv
 
     docs = find_docs(docs_arg)
@@ -1139,6 +1562,8 @@ def main():
 
     if cmd == "set-status":
         return cmd_set_status(docs, schema, path, argv, as_json)
+    if cmd == "new-feature":
+        return cmd_new_feature(docs, schema, path, argv, as_json)
 
     try:
         lines, weights, tasks, works, dirs, fragments = load(path)
