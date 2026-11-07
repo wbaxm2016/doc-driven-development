@@ -2488,6 +2488,60 @@ def main():
         finally:
             shutil.rmtree(tmp61, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 62
+        print("\n62. 项目侧观测载体：模板 + 四格 + W12")
+        tmp62 = tempfile.mkdtemp(prefix="ddd-selftest62-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp62)
+            obs62 = os.path.join(tmp62, "docs", "40-运行", "可观测性.md")
+            check("基础 5 层 doc_init 铺出 40-运行/可观测性.md", os.path.exists(obs62))
+            if os.path.exists(obs62):
+                body62 = read(obs62)
+                check("观测地图含四维 / 四问 / 系统级串联",
+                      all(x in body62 for x in
+                          ("可观测", "可解释", "可诊断", "可改进",
+                           "运行的是什么", "预期是什么样的", "系统级")))
+            plan62 = os.path.join(tmp62, "docs", "00-门面", "开发计划.md")
+            card62 = os.path.join(tmp62, "docs", "00-门面", "设计卡.md")
+            p62 = insert_after(read(plan62), "| **W1.1** |",
+                               "| **W1.2** | 观测测试 | D1 | 待开工 | 缺四格 → W12 | — | — |")
+            write(plan62, p62)
+            write(card62, read(card62) + (
+                "\n## K2 · W1.2 · 观测测试\n\n"
+                "- **接口**：测试用。\n"
+                "- **可替换点**：无（测试卡）。\n"
+                "- **选项空间**：\n\n"
+                "  | 选项 | 轴 | 假设 | 失败模式 | 结论 | 回到条件 |\n"
+                "  |---|---|---|---|---|---|\n"
+                "  | A 少做：不做 | 范围 | 零改动 | 测不出 | 被否 | 需要时 |\n"
+                "  | B 做 | 范围 | 可测 | 多一行 | 选中 | — |\n"
+                "  | C 另一条 | 范围 | 可测 | 多一行 | 被否 | 需要时 |\n\n"
+                "- **失败边界**：测试用。\n"))
+            c, out = run("doc_check.py", cwd=tmp62)
+            check("待开工卡缺观测四格 → W12（exit 0）",
+                  c == 0 and "W12" in codes(out), out[-500:])
+
+            write(card62, read(card62).replace(
+                "- **失败边界**：测试用。\n",
+                "- **观测四格**：观测对象=组件；要回答的问题=卡在哪；信号=日志；窗口=终端。\n"
+                "- **失败边界**：测试用。\n"))
+            c, out = run("doc_check.py", cwd=tmp62)
+            check("补齐观测四格 → 无 W12", "W12" not in codes(out), out[-400:])
+
+            write(plan62, read(plan62).replace(
+                "| **W1.2** | 观测测试 | D1 | 待开工 |",
+                "| **W1.2** | 观测测试 | D1 | 已完成 |"))
+            write(card62, read(card62).replace(
+                "- **观测四格**：观测对象=组件；要回答的问题=卡在哪；信号=日志；窗口=终端。\n", ""))
+            c, out = run("doc_check.py", cwd=tmp62)
+            check("已完成卡缺观测四格不追溯（无 W12）", "W12" not in codes(out), out[-400:])
+
+            write(obs62, read(obs62) + "\n<!-- keep-me -->\n")
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp62)
+            check("重复 doc_init 不覆盖已有观测地图", "keep-me" in read(obs62))
+        finally:
+            shutil.rmtree(tmp62, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

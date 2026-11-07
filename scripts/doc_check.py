@@ -93,7 +93,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
          "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27", "E31",
-         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10"]
+         "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W12"]
 
 
 # ---------------------------------------------------------------- 基础工具
@@ -703,6 +703,40 @@ def design_card_problems(card_text, plan_status):
     return probs
 
 
+OBS_CELLS = ("观测对象", "要回答的问题", "信号", "窗口")
+OBS_PLACEHOLDERS = {"", "—", "-", "–", "待补", "待填", "待定", "…", "...", "无", "tbd", "n/a"}
+
+
+def observability_problems(card_text, plan_status):
+    """W12：待开工 / 进行中的设计卡缺「观测四格」。
+
+    只判形状：四个标签各有一个非占位值；内容够不够仍人读。存量已完成卡不追溯。
+    """
+    probs = []
+    head_re = re.compile(r"^## K(\d+) · (W\d+\.\d+) · [^\n]*", re.M)
+    for m in head_re.finditer(card_text):
+        kid, wid = "K" + m.group(1), m.group(2)
+        if plan_status.get(wid) not in ("待开工", "进行中"):
+            continue
+        rest = card_text[m.end():]
+        nxt = re.search(r"^## ", rest, re.M)
+        sec = rest[:nxt.start()] if nxt else rest
+        obs = re.search(r"- \*\*观测四格\*\*[：:]\s*(.*?)(?=\n- \*\*|\Z)", sec, re.S)
+        if not obs:
+            probs.append(f"{kid}（{wid}）缺「观测四格」：写 观测对象 / 要回答的问题 / 信号 / 窗口")
+            continue
+        val = obs.group(1)
+        missing = []
+        for lab in OBS_CELLS:
+            m2 = re.search(re.escape(lab) + r"\s*[=：:]\s*([^\n；;｜|]+)", val)
+            if not m2 or m2.group(1).strip().strip("`*_ ") in OBS_PLACEHOLDERS:
+                missing.append(lab)
+        if missing:
+            probs.append(f"{kid}（{wid}）的「观测四格」缺：{'、'.join(missing)}"
+                         "（空 / — / 待补 / 无 都算缺）")
+    return probs
+
+
 # ---------------------------------------------------------------- 主流程
 def main():
     argv = sys.argv[1:]
@@ -1260,6 +1294,8 @@ def main():
         drel = os.path.relpath(design_path, docs).replace(os.sep, "/")
         for msg in design_card_problems(read(design_path), plan_status):
             add(warns, drel, "W10", msg)
+        for msg in observability_problems(read(design_path), plan_status):
+            add(warns, drel, "W12", msg)
 
     # ---- E11 索引双向一致
     if adr_index_rel and adr_files:
