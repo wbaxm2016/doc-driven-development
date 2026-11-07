@@ -125,7 +125,19 @@ def strip_md(s):
 
 
 def h1_of(text):
-    for line in text.splitlines():
+    """正文 H1：先跳过 front-matter 块，再找第一个 `# ` 行。
+
+    front-matter 里允许出现 `# 注释`（模板的成本自报说明就是）。旧实现取全文
+    第一个 `# ` 行，会把注释当成 H1，S2 就报「title 与 H1 不一致」——新档一建
+    就假红，每场都要人工消错（ISS-094）。`doc_check` 的 E4 走的是已剥离头块的
+    body，没有这个问题；这里补上同样的口径。
+    """
+    start = 0
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end >= 0:
+            start = end + 4          # 跳过 `\n---`；没闭合就退回整篇扫，不静默返回空
+    for line in text[start:].splitlines():
         if line.startswith("# "):
             return line[2:].strip()
     return ""

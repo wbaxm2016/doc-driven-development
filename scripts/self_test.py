@@ -2455,6 +2455,39 @@ def main():
         finally:
             shutil.rmtree(tmp60, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 61
+        print("\n61. 档案 H1 识别：跳过 front-matter（ISS-094）")
+        tmp61 = tempfile.mkdtemp(prefix="ddd-selftest61-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp61)
+            run("devlog.py", "new", "--title", "H1 识别", "--scope", "试", cwd=tmp61)
+            d61 = os.path.join(tmp61, "docs", "70-过程", "会话")
+            a61 = sorted(os.path.join(d61, f) for f in os.listdir(d61)
+                         if f.endswith(".md"))[-1]
+            # front-matter 里出现以 `# ` 开头的注释行（成本自报说明就长这样）。
+            # 旧实现把全文第一个 `# ` 行当 H1，撞上注释就报 S2「title 与 H1 不一致」——
+            # 每开一场新档都要人工消错一次（上一场为此改了 4 次档案），是典型假红。
+            body61 = read(a61).replace(
+                "open_items: 0", "open_items: 0\n# 成本自报（可选，收尾时填）", 1)
+            write(a61, body61)
+            c, out = run("devlog.py", "check", cwd=tmp61)
+            check("front-matter 含 `# ` 注释行 → devlog check 0 error、无 S2",
+                  c == 0 and "S2" not in codes(out), out[-400:])
+
+            # 第二半不是缺陷，是格式坑：§4 的 `**依据**` 等字段必须各占一行
+            # （取字段的正则按 `^` 锚定）。挤成一行会连报多条 S12——把它们
+            # 固定成一条断言，免得下次再以为是「三个错」。
+            sec4 = ("## 4. 决策与选项对比\n\n### D1 · 字段挤一行\n\n"
+                    "**拍板**：用户 **依据**：「按推荐」 **撤销条件**：再出现假红就回退\n\n")
+            i4, i5 = body61.index("## 4."), body61.index("## 5.")
+            write(a61, body61[:i4] + sec4 + body61[i5:])
+            c, out = run("devlog.py", "check", cwd=tmp61)
+            check("§4 字段挤一行 → 报 S12 且不报 S2",
+                  "S12" in codes(out) and "S2" not in codes(out), out[-500:])
+        finally:
+            shutil.rmtree(tmp61, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
