@@ -2593,6 +2593,50 @@ def main():
         finally:
             shutil.rmtree(tmp63, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 64
+        print("\n64. 可改进：observe trend 跨 run 聚合")
+        tmp64 = tempfile.mkdtemp(prefix="ddd-selftest64-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp64)
+            shutil.copy(os.path.join(SKILL, "scripts", "observe.py"),
+                        os.path.join(tmp64, "scripts", "observe.py"))
+            for line in ("a.md:12", "a.md:15", "b.md:30", "c.md:40"):
+                run("observe.py", "run", "--name", "demo", "--",
+                    PY, "-c", f"print('[E12] {line} bad'); raise SystemExit(1)", cwd=tmp64)
+            runs64 = os.path.join(tmp64, ".dd", "observe", "runs")
+            before64 = sorted(os.listdir(runs64)) if os.path.isdir(runs64) else []
+            c, out = run("observe.py", "trend", cwd=tmp64)
+            check("trend 同一码+文件聚成 1 条、计数 2",
+                  c == 0 and "E12:a.md" in out and "count=2" in out, out[-500:])
+            check("trend 不同文件分开",
+                  "E12:b.md" in out and "E12:c.md" in out and "count=1" in out, out[-500:])
+            check("trend 行号漂移不拆条", out.count("E12:a.md") == 1, out[-500:])
+            after64 = sorted(os.listdir(runs64)) if os.path.isdir(runs64) else []
+            check("trend 不写运行记录", before64 == after64 and len(after64) == 4,
+                  f"{before64} -> {after64}")
+            c, out = run("observe.py", "trend", "--json", cwd=tmp64)
+            data = json.loads(out) if c == 0 else {}
+            keys = {k.get("key"): k for k in data.get("keys", [])}
+            check("trend --json 计数与 runs",
+                  keys.get("E12:a.md", {}).get("count") == 2
+                  and keys.get("E12:a.md", {}).get("runs") == 2, out[-500:])
+            check("trend --json 带首次 / 最近 / 版本",
+                  bool(keys.get("E12:a.md", {}).get("first_seen"))
+                  and bool(keys.get("E12:a.md", {}).get("last_seen"))
+                  and bool(keys.get("E12:a.md", {}).get("versions")), out[-500:])
+            c, out = run("observe.py", "trend", "--limit", "1", "--json", cwd=tmp64)
+            data = json.loads(out) if c == 0 else {}
+            check("--limit 1 只看最近一个 run",
+                  [k.get("key") for k in data.get("keys", [])] == ["E12:c.md"], out[-400:])
+            c, out = run("observe.py", "trend", "--since", "2099-01-01", "--json", cwd=tmp64)
+            data = json.loads(out) if c == 0 else {}
+            check("--since 过滤到窗口外", c == 0 and data.get("keys") == [], out[-400:])
+            shutil.rmtree(os.path.join(tmp64, ".dd", "observe"), ignore_errors=True)
+            c, out = run("observe.py", "trend", cwd=tmp64)
+            check("无记录 → 证据缺口、exit 0", c == 0 and "证据缺口" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp64, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
