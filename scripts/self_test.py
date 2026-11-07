@@ -2542,6 +2542,57 @@ def main():
         finally:
             shutil.rmtree(tmp62, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 63
+        print("\n63. 自身参考实现：observe run / five-run / status")
+        tmp63 = tempfile.mkdtemp(prefix="ddd-selftest63-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp63)
+            shutil.copy(os.path.join(SKILL, "scripts", "observe.py"),
+                        os.path.join(tmp63, "scripts", "observe.py"))
+            c, out = run("observe.py", "run", "--name", "demo",
+                         "--expected", "exit 0", "--",
+                         PY, "-c", "print('[E12] bad'); raise SystemExit(1)", cwd=tmp63)
+            check("observe run 不改变子命令退出码", c == 1, out[-300:])
+            runs = os.path.join(tmp63, ".dd", "observe", "runs")
+            files = sorted(os.listdir(runs)) if os.path.isdir(runs) else []
+            check("observe run 留下一条运行记录", len(files) == 1, str(files))
+            if files:
+                rec = json.loads(read(os.path.join(runs, files[0])).splitlines()[0])
+                check("记录含四问：argv / findings / expected / next_action",
+                      bool(rec.get("argv")) and bool(rec.get("actual", {}).get("findings"))
+                      and bool(rec.get("expected")) and bool(rec.get("next_action"))
+                      and rec.get("record_status") == "ok",
+                      json.dumps(rec, ensure_ascii=False)[:300])
+                check("预期与实际并排：expected_status=not_met、exit_code=1",
+                      rec.get("expected_status") == "not_met"
+                      and rec.get("actual", {}).get("exit_code") == 1)
+                check("finding.key 稳定（码:span）且不含行号",
+                      rec["actual"]["findings"][0].get("key") == "E12:demo")
+                c, out = run("observe.py", "show", rec["run_id"], cwd=tmp63)
+                check("observe show 回看四问", c == 0 and "next:" in out and "expected=" in out,
+                      out[-300:])
+
+            c, out = run("observe.py", "five-run", cwd=tmp63)
+            check("five-run 在干净骨架 0 error", c == 0 and "5/5" in out, out[-400:])
+            c, out = run("observe.py", "status", cwd=tmp63)
+            check("status 列出最近运行", c == 0 and "5 span" in out, out[-400:])
+            c, out = run("observe.py", "status", "--check", cwd=tmp63)
+            check("status --check 有记录时不报缺口", c == 0 and "证据缺口" not in out, out[-300:])
+
+            bad_dir = os.path.join(tmp63, "not-a-dir")
+            write(bad_dir, "x")
+            c, out = run("observe.py", "run", "--observe-dir", bad_dir, "--",
+                         PY, "-c", "raise SystemExit(1)", cwd=tmp63)
+            check("观测写失败只降级、不改退出码",
+                  c == 1 and "degraded" in out.lower(), out[-300:])
+
+            shutil.rmtree(os.path.join(tmp63, ".dd", "observe"), ignore_errors=True)
+            c, out = run("observe.py", "status", "--check", cwd=tmp63)
+            check("无运行记录 → 证据缺口、exit 0",
+                  c == 0 and "证据缺口" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp63, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
