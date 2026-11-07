@@ -23,7 +23,7 @@ python build.py                 # 体检 → 自测 → 打包 → 验包
 | 初始化的目录 / 模板 | `scripts/doc_init.py`、`assets/templates/`、`docs/_schema.json` | `self_test` 里 doc_init 的首跑断言；默认 5 层与 `--full` 8 层都要绿 |
 | 打包 / 安装 / 发版 | `build.py`、`install.py`、`install-targets.json` | `build.py` 验包；装到真实宿主后再核对 `MANIFEST.txt` |
 | 给 Agent 的说明 / 触发词 | `SKILL.md`、`references/` | `build.py` 会核对：点名的路径必须存在、包内文件必须被提到 |
-| 文档 / 错字 / 翻译 | `docs/`、`README.md` | 改完跑 `python scripts/doc_check.py` |
+| 文档 / 错字 / 翻译 | `docs/`、`README.md`、`README.en.md` | 中英两版同改（规则见 `AGENTS.md`）；改完跑 `python scripts/doc_check.py` |
 
 **加规则之前先想清楚**：这条规则判的是「会静默骗人」的失败吗？只判形式的规则也能加，但每条都要有码、要打印、要有正反例断言。没断言的规则不合并。
 
@@ -43,7 +43,7 @@ python build.py                  # 体检 + 自测 + 打包 + 验包
 python scripts/verify.py         # 按契约的 verify: 真跑（较慢，CI 会跑）
 ```
 
-只改 `docs/` / `README.md` / `CHANGELOG.md` 时，至少跑：
+只改 `docs/` / `README.md` / `README.en.md` / `CHANGELOG.md` 时，至少跑：
 
 ```bash
 python scripts/doc_check.py      # 全库字段与链接
@@ -56,7 +56,7 @@ python scripts/doc_check.py      # 全库字段与链接
 | 前缀 | 用于 |
 |---|---|
 | `feat(check):` / `fix(check):` | 改 `doc_check` / `devlog` / `plan` / `verify` 或码表 |
-| `docs:` | 只改 `docs/` 或 `README.md` |
+| `docs:` | 只改 `docs/`、`README.md` 或 `README.en.md` |
 | `release:` | 改 `VERSION`、`CHANGELOG.md`、`dist/` |
 | `ci:` | 只改 `.github/` |
 
@@ -70,7 +70,7 @@ python scripts/doc_check.py      # 全库字段与链接
 
 ### 什么时候要发版
 
-只有包内文件变了才要发版。只改 `docs/`、`README.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`build.py`、`install.py`、`install-targets.json` 不用发版，`dist/` 仍然有效。版本号规则：改规则 / 码表算 minor，破兼容算 major。
+只有包内文件变了才要发版。只改 `docs/`、`README.md`、`README.en.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`build.py`、`install.py`、`install-targets.json` 不用发版，`dist/` 仍然有效。版本号规则：改规则 / 码表算 minor，破兼容算 major。
 
 ### 顺序：先提交、后打包
 

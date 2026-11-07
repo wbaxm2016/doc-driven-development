@@ -1,5 +1,7 @@
 # doc-driven-development
 
+**中文** | [English](./README.en.md)
+
 让 AI 协作开发的每个判断都有落点、每次完成都有证据、每个下一步都有出处。
 
 ## 这是个什么东西

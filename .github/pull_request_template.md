@@ -16,4 +16,4 @@
 ## 影响面
 
 - [ ] 改了包内文件（`scripts/` / `references/` / `assets/` / `SKILL.md` / `VERSION` / `.skill-metadata.yaml`）——合并后由维护者发版
-- [ ] 只改包外文件（`docs/` / `README.md` / `CHANGELOG.md`）
+- [ ] 只改包外文件（`docs/` / `README.md` / `README.en.md` / `CHANGELOG.md`）
