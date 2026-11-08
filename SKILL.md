@@ -356,4 +356,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 40. **自身参考实现**：`observe.py run` 包一条失败命令 → 记录含四问、退出码不变；`five-run` 一条 trace 5 个 span；`show` / `status` 可回看；`trend` 跨 run 聚合（第 64 组）；写失败只降级；无记录 `status --check` 报证据缺口且 exit 0；自测第 63 / 64 组。
 
-`scripts/self_test.py` 把上面 1–40 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+41. **3.8 语法门**：随包 `scripts/*.py` 全部能被 Python 3.8 接受——`ast.parse(feature_version=(3, 8))` 拦语句级新语法，另扫 f-string 表达式里的反斜杠（PEP 701 只在 3.12 放开，3.12 的 `feature_version` 不拦）；失败给 file:line；反例（`f"{re.sub(r'\d', '', x)}"`）判出、反证（正则挪出表达式）通过；自测第 65 组。
+
+`scripts/self_test.py` 把上面 1–41 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。

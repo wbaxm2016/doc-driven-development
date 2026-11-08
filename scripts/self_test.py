@@ -12,8 +12,10 @@
 """
 from __future__ import annotations
 
+import ast
 import datetime
 import hashlib
+import io
 import json
 import os
 import re
@@ -21,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tokenize
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -2636,6 +2639,69 @@ def main():
             check("无记录 → 证据缺口、exit 0", c == 0 and "证据缺口" in out, out[-300:])
         finally:
             shutil.rmtree(tmp64, ignore_errors=True)
+
+        # ---------------------------------------------------------------- 65
+        print("\n65. 随包脚本的 3.8 语法门（ISS-101）")
+
+        def fstring_backslash_hits(name, src):
+            """f-string 表达式里含反斜杠（3.8–3.11 不支持，PEP 701 才放开）。
+
+            为什么不能只靠 `ast.parse(feature_version=(3, 8))`：在 3.12 上它只拦**语句级**
+            新语法（如 `match`），不拦 PEP 701 的回退（实测 f-string 反斜杠照样 ok）。
+            3.12 的 tokenizer 把 f-string 拆成 FSTRING_START / 表达式 token / FSTRING_MIDDLE，
+            所以这里只在「表达式区间」里找反斜杠；< 3.12 时 `ast.parse` 自己就会拒，不必重复判。
+            """
+            if not hasattr(tokenize, "FSTRING_START"):
+                return []
+            skip = {tokenize.FSTRING_MIDDLE, tokenize.COMMENT, tokenize.NL,
+                    tokenize.NEWLINE, tokenize.INDENT, tokenize.DEDENT}
+            hits, depth = [], 0
+            try:
+                for tok in tokenize.generate_tokens(io.StringIO(src).readline):
+                    if tok.type == tokenize.FSTRING_START:
+                        depth += 1
+                    elif tok.type == tokenize.FSTRING_END:
+                        depth = max(0, depth - 1)
+                    elif depth and tok.type not in skip and "\\" in tok.string:
+                        hits.append((name, tok.start[0],
+                                     "f-string 表达式含反斜杠（3.8–3.11 不支持）"))
+            except (tokenize.TokenError, IndentationError):
+                pass
+            return hits
+
+        def py38_bad(sources):
+            """[(文件名, 行号, 信息)]；sources = [(显示名, 源码)]。"""
+            out = []
+            for name, src in sources:
+                try:
+                    ast.parse(src, filename=name, feature_version=(3, 8))
+                except SyntaxError as e:
+                    out.append((name, e.lineno or 0, e.msg))
+                out.extend(fstring_backslash_hits(name, src))
+            return out
+
+        scripts_dir = os.path.join(SKILL, "scripts")
+        pkg_py = sorted(f for f in os.listdir(scripts_dir)
+                        if f.endswith(".py") and os.path.isfile(os.path.join(scripts_dir, f)))
+        check("扫到随包脚本（≥ 8 个且含 plan.py）",
+              len(pkg_py) >= 8 and "plan.py" in pkg_py, f"{len(pkg_py)} 个：{pkg_py}")
+        bad = py38_bad([(f, read(os.path.join(scripts_dir, f))) for f in pkg_py])
+        check("全部随包脚本在 3.8 语法下可解析", not bad,
+              "；".join("%s:%d %s" % b for b in bad))
+
+        # 反例自证：3.12 才放开（PEP 701）的写法必须被判出——2.10.0 的 `plan.py` 就是这样炸的
+        bad_sample = ('import re\n'
+                      'x = "a1"\n'
+                      's = f"{re.sub(r\'\\d\', \'\', x)}"\n')
+        bad = py38_bad([("bad.py", bad_sample)])
+        check("反例：f-string 表达式含反斜杠被判出", len(bad) == 1, f"{bad}")
+        check("反例：报出 file:line（第 3 行）", [b[1] for b in bad] == [3], f"{bad}")
+        # 反证：只把正则挪出表达式（同样求值）必须通过——检查器不能「一律报错」
+        good_sample = ('import re\n'
+                       'x = "a1"\n'
+                       'PAT = r"\\d"\n'
+                       's = f"{re.sub(PAT, \'\', x)}"\n')
+        check("反证：正则挪出表达式后通过", py38_bad([("good.py", good_sample)]) == [])
 
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
