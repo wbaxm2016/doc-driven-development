@@ -118,6 +118,8 @@ The division of labor is fixed: **humans provide facts and judgment; the Agent r
 
 The five gates in one sentence: do not start until the requirement or direction has been restated or adopted by the user; do not enter the plan if a feature or work cannot answer "which requirement, can it be built, what does it cost"; do not split tasks until the design card is settled; do not move to `已对照` (compared) until the comparison is done and differences are logged; do not say `已验收` (accepted) until the task assessment's four fields are complete.
 
+Review before establishing: before confirming a requirement, adding a direction to the plan, or splitting tasks, write the three review lines in session §3.3 / the direction card / the design card (upstream quote verbatim / what already exists / where it conflicts, or why this is more reasonable); after the user decides, add one line to the decision block on why it is more reasonable.
+
 The machine checks form: structure, references, numbering, status words, entry points exist, `verify` actually runs, the design card exists. Humans judge meaning: is the clause correct, is the behavior the intended one, should the open issue be closed, is the direction right, will the design survive replacement.
 
 Assessment is not the end; there are three exits: move on if no task is needed; return to "tasks & implementation" if a task is needed; return to "design" if the design must change, and mark the old task `搁置` (shelved) or `撤回` (withdrawn)—do not push on with the old design.
