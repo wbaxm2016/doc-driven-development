@@ -25,6 +25,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # 中英 README 是同一份事实的两面：改一版忘了另一版，CI 必须红（AGENTS.md「文档约定」）。
+      # 先自证检查器不空转（好对子 0 / 各轴单独改一版 1），再比对真实文件。
+      - name: README sync checker self-check
+        run: python .github/scripts/readme_sync.py --self-check
+
+      - name: Check README sync
+        run: python .github/scripts/readme_sync.py
+
       # 文档层也进门禁：断链 / 字段 / 编号 / 码表 / 收件箱状态都在这里判，
       # 否则「本地五连跑」是文档唯一的检查点，PR 改 docs 没人拦。
       - name: Check docs
