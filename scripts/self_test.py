@@ -2703,6 +2703,76 @@ def main():
                        's = f"{re.sub(PAT, \'\', x)}"\n')
         check("反证：正则挪出表达式后通过", py38_bad([("good.py", good_sample)]) == [])
 
+        # ---------------------------------------------------------------- 66
+        print("\n66. 问题链：源自 / 须先（D11–D14 / W13）")
+        tmp66 = tempfile.mkdtemp(prefix="ddd-selftest66-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp66)
+            inbox66 = os.path.join(tmp66, "docs", "70-过程", "问题收件箱.md")
+            base66 = read(inbox66)
+
+            def row66(iid, to, state="确立", date="2026-11-02"):
+                ev = "确立：自测" if state == "确立" else f"{state}：自测｜T4.7.1"
+                return ("| **%s** | %s | 自测 | 债 | 可关闭 | 甲 | 乙 | %s | %s | %s | — | %s |"
+                        % (iid, date, state, ev, to, date))
+
+            def with_rows(*rows):
+                """把模板的 ISS-001 行换成给定行（模板只有这一行）。"""
+                out, done = [], False
+                for ln in base66.splitlines():
+                    if ln.startswith("| **ISS-001** |") and not done:
+                        out.extend(rows)
+                        done = True
+                        continue
+                    out.append(ln)
+                return "\n".join(out) + "\n"
+
+            write(inbox66, with_rows(row66("ISS-001", "须先 ISS-002"), row66("ISS-002", "—")))
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("须先 未关闭 + 本行确立 → 0 error", c == 0, out[-300:])
+
+            write(inbox66, with_rows(row66("ISS-001", "须先 ISS-999")))
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("须先 指向不存在 → D11", c == 1 and "[D11]" in out, out[-300:])
+
+            write(inbox66, with_rows(row66("ISS-001", "源自 ISS-001")))
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("指向自己 → D11", c == 1 and "[D11]" in out, out[-300:])
+
+            write(inbox66, with_rows(row66("ISS-001", "须先 ISS-002"),
+                                     row66("ISS-002", "须先 ISS-001")))
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("须先 成环 → D12", c == 1 and "[D12]" in out, out[-300:])
+
+            write(inbox66, with_rows(
+                row66("ISS-001", "须先 ISS-002", state="实施中"),
+                row66("ISS-002", "—")))
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("被未关闭的须先挡住却实施中 → D13", c == 1 and "[D13]" in out, out[-300:])
+
+            txt66 = with_rows(row66("ISS-002", "—"))
+            txt66 = txt66.replace("| — | — | — | — |",
+                                  "| ISS-001 | 2026-11-01 | 已修：自测；须先 ISS-002 | 2026-11-02 |", 1)
+            write(inbox66, txt66)
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("根因未关却把表象关掉 → D13", c == 1 and "[D13]" in out, out[-300:])
+
+            write(inbox66, with_rows(
+                row66("ISS-001", "源自 ISS-002", date="2026-11-01"),
+                row66("ISS-002", "—", date="2026-11-02")))
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("源自 时间倒挂 → D14", c == 1 and "[D14]" in out, out[-300:])
+
+            txt66 = with_rows(row66("ISS-001", "须先 ISS-002"))
+            txt66 = txt66.replace("| — | — | — | — |",
+                                  "| ISS-002 | 2026-11-01 | 已修：自测 | 2026-11-02 |", 1)
+            write(inbox66, txt66)
+            c, out = run("devlog.py", "check", cwd=tmp66)
+            check("须先 已闭环 → W13 唤醒", c == 0 and "[W13]" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp66, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

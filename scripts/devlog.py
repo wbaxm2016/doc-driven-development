@@ -385,6 +385,11 @@ def set_pending_state(path, qid, state, note):
 # ---------------------------------------------------------------- 收件箱（查重 / 转正）
 ISSUE_ACTIVE = ("确立", "实施中")
 ISSUE_TERMINAL = ("实现关闭", "拒绝")
+
+# 问题链的两类边（ADR-005）：写在收件箱「落点」列里，不新增列。
+#   源自 ISS-nnn —— 这条是在处理 ISS-nnn 时发现的（历史；不能时间倒挂）
+#   须先 ISS-nnn —— ISS-nnn 不修完，这条不能推进（排期；无环；被挡住时只能「确立」）
+CHAIN_RE = re.compile(r"(源自|须先)\s*(ISS-\d+)")
 ISSUE_ALIASES = {"open": "确立", "deferred": "确立", "done": "实现关闭"}
 
 
@@ -1125,6 +1130,78 @@ def check_inbox_rows(ctx, rows, errors, warns):
                                "message": f"{iid} 在已拒绝表里但没有「重新考虑条件」"})
 
 
+def check_issue_chains(ctx, rows, errors, warns):
+    """D11–D14 / W13：问题链（ADR-005）。
+
+    只判形状与状态一致性，不判「这条是不是根因」——归属仍要人读。
+    旧行不写标记 → 一个字都不判（棘轮）。
+    """
+    f = os.path.basename(ctx.inbox)
+    by_id = {r["id"]: r for r in rows}
+    edges = []
+    for r in rows:
+        text = r["to"] or ""
+        if r["table"] != "main":
+            # 终态表的行没有「落点」列：结论文本里写 `须先 ISS-nnn` 同样算一条边，
+            # 否则「根因没关就把表象关掉」在行搬进归档表后永远查不出来（D13 要判的就是这个）。
+            text = text + " " + (r["question"] or "")
+        for kind, tid in CHAIN_RE.findall(text):
+            edges.append((r["id"], kind, tid, r))
+
+    # D11 引用存在、不自指
+    for iid, kind, tid, _ in edges:
+        if tid == iid:
+            errors.append({"file": f, "code": "D11",
+                           "message": f"{iid} 的「{kind}」指向自己"})
+        elif tid not in by_id:
+            errors.append({"file": f, "code": "D11",
+                           "message": f"{iid} 的「{kind}」指向收件箱里不存在的 {tid}"})
+
+    # D12「须先」无环
+    must = {}
+    for iid, kind, tid, _ in edges:
+        if kind == "须先":
+            must.setdefault(iid, set()).add(tid)
+    for start in sorted(must):
+        stack, seen = list(must[start]), set()
+        while stack:
+            cur = stack.pop()
+            if cur == start:
+                errors.append({"file": f, "code": "D12",
+                               "message": f"「须先」成环：{start} 必须先修自己链上的 {start}"})
+                break
+            if cur in seen:
+                continue
+            seen.add(cur)
+            stack.extend(must.get(cur, ()))
+
+    for iid, kind, tid, r in edges:
+        if tid not in by_id or tid == iid:
+            continue
+        root = by_id[tid]
+        # D13 被未关闭的「须先」挡住时，只能停在「确立」
+        if kind == "须先" and root["state"] not in ISSUE_TERMINAL and r["state"] != "确立":
+            errors.append({"file": f, "code": "D13",
+                           "message": f"{iid} 须先 {tid}（{root['state']}），本行只能是「确立」，"
+                                      f"现在是「{r['state']}」——根因未关，表象不许推进"})
+        # D14「源自」不得时间倒挂
+        if kind == "源自":
+            try:
+                mine = datetime.date.fromisoformat(r["date"])
+                src = datetime.date.fromisoformat(root["date"])
+            except ValueError:
+                continue
+            if src > mine:
+                errors.append({"file": f, "code": "D14",
+                               "message": f"{iid}（{r['date']}）源自 {tid}（{root['date']}）："
+                                          f"来源的发现日比本行还晚"})
+        # W13 根因已闭环 → 唤醒表象
+        if (kind == "须先" and root["state"] in ISSUE_TERMINAL
+                and r["state"] not in ISSUE_TERMINAL):
+            warns.append({"file": f, "code": "W13",
+                          "message": f"{iid} 的「须先」{tid} 已{root['state']}，可推进本行"})
+
+
 def cmd_check(ctx, as_json=False):
     errors, warns = [], []
     sections = ctx.schema["session_sections"]
@@ -1135,6 +1212,7 @@ def cmd_check(ctx, as_json=False):
         errors.append({"file": os.path.basename(ctx.inbox), "code": "D1",
                        "message": f"{d} 编号重复（终态条目应移入归档表并从主表删除）"})
     check_inbox_rows(ctx, rows, errors, warns)
+    check_issue_chains(ctx, rows, errors, warns)
 
     sessions = ctx.sessions()
     for i, path in enumerate(sessions):

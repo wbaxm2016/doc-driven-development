@@ -358,4 +358,6 @@ python scripts/doc_check.py --baseline          # 之后只许降不许升
 
 41. **3.8 语法门**：随包 `scripts/*.py` 全部能被 Python 3.8 接受——`ast.parse(feature_version=(3, 8))` 拦语句级新语法，另扫 f-string 表达式里的反斜杠（PEP 701 只在 3.12 放开，3.12 的 `feature_version` 不拦）；失败给 file:line；反例（`f"{re.sub(r'\d', '', x)}"`）判出、反证（正则挪出表达式）通过；自测第 65 组。
 
-`scripts/self_test.py` 把上面 1–41 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
+42. **问题链**：「落点」里的 `源自 ISS-nnn` / `须先 ISS-nnn` 由 `devlog.py check` 判——指向不存在或自指 → `D11`；`须先` 成环 → `D12`；被未关闭的 `须先` 挡住却写成「实施中」/「实现关闭」→ `D13`（根因未关，表象只停在「确立」）；`源自` 时间倒挂 → `D14`；`须先` 已闭环 → `W13` 提醒可推进；旧行不写标记不判。自测第 66 组。
+
+`scripts/self_test.py` 把上面 1–42 跑成断言；改任何脚本或文档后先跑它，再跑 `build.py`。
