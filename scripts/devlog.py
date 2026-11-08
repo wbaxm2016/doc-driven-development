@@ -1392,6 +1392,44 @@ def coverage_summary(ctx):
     return {"n": n, "m": len(dirs), "latest": latest, "covered": sorted(cov)}
 
 
+def chain_summary(ctx):
+    """链路覆盖：方向卡「链路」表里有走通记录的链路数 / 链路总数（REQ-041）。
+
+    与 `coverage_summary` 并列：那个数「每条方向线走过没有」，这个数「线之间串起来走过没有」。
+    只统计记录，不判走通；缺表返回 None，不报错（加分项）。
+    """
+    card = os.path.join(ctx.docs, layer_dir(ctx.schema, "facade") or "",
+                        ctx.schema["names"].get("direction_card", "方向卡.md"))
+    if not os.path.exists(card):
+        return None
+    ids, cov, latest = [], {}, ""
+    for header, rows in read_tables(_read_text(card)):
+        heads = [strip_md(h) for h in header]
+        if not {"链路", "起点", "终点", "涉及功能点"} <= set(heads):
+            continue
+        i_id = heads.index("链路")
+        i_ok = heads.index("最近走通") if "最近走通" in heads else None
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            key = strip_md(r[i_id]).strip()
+            if not key or not re.fullmatch(r"L\d+", key):
+                continue
+            ids.append(key)
+            if i_ok is None:
+                continue
+            val = strip_md(r[i_ok]).strip()
+            if not val or val.startswith("—") or val.startswith("-"):
+                continue
+            cov[key] = val
+            m = re.search(r"\d{4}-\d{2}-\d{2}", val)
+            if m and m.group(0) > latest:
+                latest = m.group(0)
+    n = sum(1 for x in ids if x in cov)
+    return {"n": n, "m": len(ids), "latest": latest,
+            "covered": sorted(cov), "open": [x for x in ids if x not in cov]}
+
+
 def plan_works(ctx):
     """读开发计划 §4 的工作表 → [(工作号, 方向, 状态)]。只读，不判合规。"""
     works = []
@@ -1449,6 +1487,7 @@ def cmd_brief(ctx, as_json=False):
     due = due_items(ctx)
     cov = coverage_summary(ctx)
     gaps = coverage_gaps(ctx)
+    ch = chain_summary(ctx)
     today = datetime.date.today().isoformat()
     overdue = [d for d in due if d[1] <= today]
     # 没有 @日期 的活跃问题不会自己响。不猜日期，只把数量与编号摆出来：让「记得回来」
@@ -1487,6 +1526,7 @@ def cmd_brief(ctx, as_json=False):
                     "undated": [r["id"] for r in active]},
             "coverage": cov,
             "coverage_gaps": gaps,
+            "chains": ch,
             "ideas_filled": ideas_filled(read(path)) if path else None,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
@@ -1526,6 +1566,12 @@ def cmd_brief(ctx, as_json=False):
     if gaps:
         print(f"走通待补：{'、'.join(gaps)}（工作已全部完成、覆盖表无记录）"
               "← 跑一次该方向的走通验收并写进覆盖表（REQ-023）")
+    if ch and ch["m"]:
+        print(f"链路覆盖：{ch['n']}/{ch['m']}（最近走通 {ch['latest'] or '—'}）"
+              "← 链路 = 串起 ≥2 个功能点的串联；这个数看「线之间走过没有」（REQ-041）")
+    if ch and ch["open"]:
+        print(f"接缝待验：{'、'.join(ch['open'])}（链路表里没有走通记录）"
+              "← 跨组件的串联最容易断，挑一条走一遍")
     dec_bad = [r for r in collect_decisions(ctx) if r["status"] != "正常"]
     if dec_bad:
         n_link = sum(1 for r in dec_bad if r["status"] == "断链")

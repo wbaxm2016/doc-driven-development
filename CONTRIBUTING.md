@@ -66,7 +66,7 @@ python scripts/doc_check.py      # 全库字段与链接
 
 ## 发版与回滚
 
-**发版不由 PR 作者做。** 包内文件（`scripts/`、`references/`、`assets/`、`SKILL.md`、`VERSION`、`.skill-metadata.yaml`）变了，合并后由维护者统一打包、装 5 端、提交 `dist/`；PR 里不要改 `VERSION` 或 `dist/`。
+**发版不由 PR 作者做。** 包内文件（`scripts/`、`references/`、`assets/`、`SKILL.md`、`VERSION`、`.skill-metadata.yaml`）变了，合并后由维护者统一打包、按 `install-targets.json` 装到全部启用目标（当前 6 端）、提交 `dist/`；PR 里不要改 `VERSION` 或 `dist/`。
 
 ### 什么时候要发版
 

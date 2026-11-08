@@ -2773,6 +2773,83 @@ def main():
         finally:
             shutil.rmtree(tmp66, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 67
+        print("\n67. 链路：串起 ≥2 个功能点与接缝（P20 / REQ-039–041）")
+        tmp67 = tempfile.mkdtemp(prefix="ddd-selftest67-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp67)
+            card67 = os.path.join(tmp67, "docs", "00-门面", "方向卡.md")
+            base67 = read(card67)
+
+            def chain67(f="F-001、F-002",
+                        seam="注册成功后回填哪些字段；记录保存失败时重试把用户带回哪一步",
+                        acc="注册 → 建记录 → 保存失败重试（@2026-12-31 复核）",
+                        walk="—（未走通）", concl="—", ev="—"):
+                return (f"| **L1** | 注册成功 | 建出第一条记录 | {f} | {seam} "
+                        f"| {acc} | {walk} | {concl} | {ev} |")
+
+            def with_chain67(row):
+                out_lines, done = [], False
+                for ln in base67.splitlines():
+                    if ln.startswith("| **L1** |") and not done:
+                        out_lines.append(row)
+                        done = True
+                        continue
+                    out_lines.append(ln)
+                return "\n".join(out_lines) + "\n"
+
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("模板链路：串起 2 个 F、五格齐 → 0 error",
+                  c == 0 and "[P20]" not in out, out[-400:])
+
+            write(card67, with_chain67(chain67(f="F-001")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("只涉及 1 个功能点 → P20",
+                  c == 1 and "[P20]" in out and "2 个 F" in out, out[-400:])
+
+            write(card67, with_chain67(chain67(f="F-001、F-999")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("涉及不存在的 F-999 → P20",
+                  c == 1 and "[P20]" in out and "F-999" in out, out[-400:])
+
+            write(card67, with_chain67(chain67(seam="—")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("关键接缝为空 → P20 指名「关键接缝」",
+                  c == 1 and "[P20]" in out and "关键接缝" in out, out[-400:])
+
+            write(card67, with_chain67(chain67(acc="注册 → 建记录 → 保存失败重试")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("走通验收缺 @复核日 → P20",
+                  c == 1 and "[P20]" in out and "@" in out, out[-400:])
+
+            write(card67, with_chain67(chain67(walk="2026-11-08")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("记了走通却缺结论与证据 → P20 各一条",
+                  c == 1 and out.count("[P20]") == 2, out[-400:])
+
+            write(card67, with_chain67(chain67(walk="2026-11-08", concl="走通：自测", ev="第 67 组")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("走通 + 结论 + 证据 → 0 error",
+                  c == 0 and "[P20]" not in out, out[-400:])
+
+            c, out = run("devlog.py", "brief", cwd=tmp67)
+            check("brief 出「链路覆盖：1/1」", c == 0 and "链路覆盖：1/1" in out, out[-500:])
+
+            write(card67, with_chain67(chain67()))
+            c, out = run("devlog.py", "brief", cwd=tmp67)
+            check("未走通 → 变 0/1 并列「接缝待验：L1」",
+                  c == 0 and "链路覆盖：0/1" in out and "接缝待验：L1" in out, out[-500:])
+
+            write(card67, base67.split("## 链路")[0])
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("缺链路表 → 不报 P20（棘轮）", c == 0 and "[P20]" not in out, out[-400:])
+            c, out = run("devlog.py", "brief", cwd=tmp67)
+            check("缺链路表 → brief 不报错、不出链路行",
+                  c == 0 and "链路覆盖" not in out, out[-500:])
+        finally:
+            shutil.rmtree(tmp67, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

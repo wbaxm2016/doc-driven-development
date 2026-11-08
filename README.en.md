@@ -6,15 +6,13 @@
 >
 > Translation notes: `方向线` direction track · `需求线` requirement track · `五道门` five gates · `走通验收` walkthrough acceptance · `接缝` seams · `问题收件箱` issue inbox. Status words and field names stay in Chinese because the scripts and templates use them.
 
-Every judgment in AI-assisted development has a home; every completion has evidence; every next step has a source.
+**A documentation workflow that keeps AI-assisted development on track**: every next goal and task has a source, every judgment has a home, and every completion has evidence—so a new session, a new person, or a return three months later still knows why, where we are, and what comes next.
 
-## What This Is
+## What Problem It Solves
 
-A set of practices for keeping AI-assisted development under control. Ideas enter a project through conversations, commits, and discussions; preserving the traces of that process preserves the ideas. But traces alone are not enough—they must be sorted and distilled into executable, checkable facts. Documentation is not extra work outside development; it is the development process itself: how we talked, why we decided, what comes next, and what counts as done—all stay in the repository, and whatever a script can check is checked by a script.
+Ideas live in a session and never become facts; implementations scatter across code and commits and no longer match the ideas—these are the two most common breaks in AI-assisted development.
 
-It treats two common diseases: ideas written into a session but never turned into facts, and implementations scattered across code and commits that no longer match the ideas. So it does only two things—**what you want to do becomes directions and tasks with provenance and acceptance; what you have done becomes checkable facts**—and one conclusion can be traced to a requirement, a code entry point, and that commit.
-
-The result is plain: switch sessions, switch people, or come back three months later, and you still know "why it was decided, where we are, and what comes next."
+It does only two things: **what you want to do becomes directions and tasks with provenance and acceptance; what you have done becomes checkable facts**. One conclusion can be traced to a requirement, a code entry point, and that commit; documentation is the development process itself, and whatever a script can check is checked by a script.
 
 ## Four Promises
 
@@ -25,9 +23,9 @@ The result is plain: switch sessions, switch people, or come back three months l
 
 In exchange, you get four things: no repeated alignment, no doubt about fake completion, no issues lost halfway, and no daily agonizing over what to do first.
 
-## It Works in Reverse
+## Design Trade-off: Subtract, Aim for System-Level Coverage
 
-Most methodologies expand coverage: more document types, more fields, more ceremony. This one goes the other way—**it does not seek feature coverage; it seeks path coverage**: every path a user can walk must close, and covering features does not count. Before adding a step, answer "how do you tell whether it is true or false, and when can it be removed?" If you cannot answer, do not add it. So there are only five gates, and each gate has either a machine criterion or an explicit human judgment.
+Most methodologies expand coverage: more document types, more fields, more ceremony. This one goes the other way—**it does not seek feature coverage; it seeks system-level coverage**: start anywhere in the system, walk one whole path through before starting the next, and every path a user can walk must close; covering features does not count. Before adding a step, answer "how do you tell whether it is true or false, and when can it be removed?" If you cannot answer, do not add it. So there are only five gates, and each gate has either a machine criterion or an explicit human judgment.
 
 Three judgments support this trade-off:
 
@@ -54,7 +52,7 @@ Development moves along two tracks at once: one asks "how does the user get thro
 
 What users actually perceive are **seams**—did the data from the previous step carry over, can a failure be undone, will the state still be there tomorrow, can another person pick it up? Empty states, permissions, timeouts, and retries belong to no single feature; integration bugs also live in the seams. So direction-track work is often not adding features but making A's output a legitimate input for B.
 
-The direction track can start from any feature—it looks at the whole path, not a module; walk one path through, then the next, aiming to cover every known path. The object of coverage is paths, not features: features are only nodes; the path is what must be verified.
+The direction track can start from any feature—it looks at the whole path, not a module; walk one path through, then the next. Path coverage is the means; **system-level coverage is the goal**: the object of coverage is paths, not features—features are only nodes; the path is what must be verified.
 
 This is exactly where AI is most likely to miss the point: it can make a single prompt as good as possible, but it cannot judge which path is worth walking or which experience cannot be compromised. **AI fills in the implementation; humans set the path.**
 

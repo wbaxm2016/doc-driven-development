@@ -31,6 +31,12 @@
       "name": "WorkBuddy",
       "env": ["WORKBUDDY_SKILLS"],
       "paths": ["~/.workbuddy/skills"]
+    },
+    {
+      "id": "trae-cn",
+      "name": "Trae CN",
+      "env": ["TRAE_CN_SKILLS"],
+      "paths": ["~/.trae-cn/skills"]
     }
   ]
 }

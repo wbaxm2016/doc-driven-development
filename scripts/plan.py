@@ -23,7 +23,8 @@
 P14–P16 要读功能台账（`40-运行/FEATURES.md`）：任务挂的功能必须存在、已完成的任务
 必须有任务考核、已验收的功能必须由任务支撑。P18 要读方向卡（`00-门面/方向卡.md`）：
 方向必须有现状、成功状态与走通验收。P19 要读设计卡（`00-门面/设计卡.md`）：还没做完
-的工作要有卡，卡里接口、可替换点、失败边界不能空。判定靠表头，不靠列序。
+的工作要有卡，卡里接口、可替换点、失败边界不能空。P20 要读方向卡的「链路」表：
+链路是系统视角的边，至少串起 2 个功能点，接缝与复核日不能空。判定靠表头，不靠列序。
 """
 from __future__ import annotations
 
@@ -68,6 +69,9 @@ ASSESS_CELLS = ("做法", "一致", "代价", "结论")
 # 方向卡的必填格（P18）。REQ-018：走通验收还要带 @复核日；路径 / 接缝 / 走通验收里
 # 出现的 F- / W / K 引用必须存在——机器只判存在，走没走通、接缝归谁仍人读（ISS-061）。
 CARD_CELLS = ("现状", "成功状态", "走通验收", "接缝")
+# 链路行的必填格（P20，REQ-039 / REQ-040）。链路是「线之间」的边，所以门槛是
+# 至少串起 2 个功能点，而不是跨 2 个方向——方向颗粒太粗，会漏掉同方向内跨组件的串联。
+CHAIN_CELLS = ("起点", "终点", "涉及功能点", "关键接缝", "走通验收")
 # 设计卡的三格必填（P19）。扩展点 / 任务拆分 / 取舍按改动大小可省：ADR-003 允许小改动只写
 # 三行，判满六格会把设计门变成填表仪式。
 DESIGN_CELLS = ("接口", "可替换点", "失败边界")
@@ -357,6 +361,30 @@ def load_directions(path):
     return None
 
 
+def load_chains(path):
+    """读方向卡「链路」表：`{L-n: {起点, 终点, 涉及功能点, 关键接缝, 走通验收, 最近走通, 结论, 证据}}`。
+
+    链路是系统视角的「边」：全局视角回答「每步走过没有」，链路回答「线之间串起来没有」。
+    缺表返回 None —— 不报错（与覆盖表同档：表还没建的项目不该红一片）。
+    """
+    if not path or not os.path.exists(path):
+        return None
+    for header, rows, _ in read_tables(read(path).splitlines()):
+        heads = [strip_md(h) for h in header]
+        if not {"链路", "起点", "终点", "涉及功能点", "关键接缝", "走通验收"} <= set(heads):
+            continue
+        out = {}
+        for r in rows:
+            if len(r) != len(heads):
+                continue
+            lid = strip_md(r[heads.index("链路")])
+            if not lid:
+                continue
+            out[lid] = {h: strip_md(c) for h, c in zip(heads, r)}
+        return out
+    return None
+
+
 # ---------------------------------------------------------------- 设计卡（P19）
 def designs_path(docs, schema):
     """设计卡的位置：门面层目录 + `names.design_card`（缺省 设计卡.md）。
@@ -406,7 +434,7 @@ def parse_designs(lines):
 
 # ---------------------------------------------------------------- 校验
 def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=None,
-             designs=None):
+             designs=None, chains=None):
     """返回 (errs, items, codes, done, work_ids)。errs 里每条都带码，与 check-rules.md 的 P 段一一对应。"""
     errs = []
 
@@ -490,6 +518,44 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=N
                             E("P18", f"方向卡 {did} 的{cell}引用了不存在的设计卡 {ref}")
             for did in sorted(set(cards) - dir_ids):
                 E("P18", f"方向卡里的 {did} 不在计划 §3：孤儿方向——要么补进计划，要么删掉卡")
+
+    # P20 链路（REQ-040）：系统视角的边——哪些环节串起来、接缝在哪、验过没有。
+    # 只判形式：串起 ≥2 个功能点、五格非空、走通验收带复核日、引用存在；
+    # 走没走通、接缝归谁仍人读（ADR-006）。缺表不报错（覆盖 / 链路都是加分项）。
+    if chains:
+        feat_ids = set(feats["feats"]) if feats else set()
+        design_ids = set(designs) if designs else set()
+        for lid in sorted(chains):
+            ch = chains[lid]
+            if not re.fullmatch(r"L\d+", lid):
+                E("P20", f"链路编号不合规：{lid}（应形如 L1）")
+                continue
+            frefs = sorted(set(re.findall(r"F-\d+", ch.get("涉及功能点", ""))))
+            if len(frefs) < 2:
+                E("P20", f"链路 {lid} 只涉及 {len(frefs)} 个功能点：链路是「线之间」的串联，"
+                         f"至少串起 2 个 F（REQ-039）")
+            for ref in frefs:
+                if ref not in feat_ids:
+                    E("P20", f"链路 {lid} 的涉及功能点引用了不存在的功能 {ref}")
+            miss = [c for c in CHAIN_CELLS if blank(ch.get(c))]
+            if miss:
+                E("P20", f"链路 {lid} 缺{'、'.join(miss)}：缺了这一格就说不清接缝在哪、怎么算走过")
+                continue
+            if not re.search(r"@\d{4}-\d{2}-\d{2}", ch.get("走通验收", "")):
+                E("P20", f"链路 {lid} 的走通验收缺复核日期（@YYYY-MM-DD）：到期提醒无从触发（REQ-040）")
+            walked = (ch.get("最近走通") or "").strip()
+            if walked and not walked.startswith(("—", "-")):
+                for c in ("结论", "证据"):
+                    if blank(ch.get(c)):
+                        E("P20", f"链路 {lid} 记了走通日期却缺「{c}」：记录要能被复核（REQ-040）")
+            for cell in ("关键接缝", "走通验收", "证据"):
+                text = ch.get(cell, "")
+                for ref in sorted(set(re.findall(r"W\d+\.\d+", text))):
+                    if ref not in work_ids:
+                        E("P20", f"链路 {lid} 的{cell}引用了不存在的工作 {ref}")
+                for ref in sorted(set(re.findall(r"K\d+", text))):
+                    if ref not in design_ids:
+                        E("P20", f"链路 {lid} 的{cell}引用了不存在的设计卡 {ref}")
 
     # P19 设计卡：设计是工作与任务之间的一步。还没做完的工作必须有卡，卡里至少写满
     # 接口 / 可替换点 / 失败边界；已经做完的工作不追溯（与 P18 的存量策略一致）。
@@ -1579,8 +1645,9 @@ def main():
     feats = load_features(features_path(docs, schema))
     cards = load_directions(directions_path(docs, schema))
     designs = load_designs(designs_path(docs, schema))
+    chains = load_chains(directions_path(docs, schema))
     errs, items, codes, done, work_ids = validate(weights, tasks, works, dirs, cfg,
-                                                  fragments, feats, cards, designs)
+                                                  fragments, feats, cards, designs, chains)
 
     if cmd == "check":
         views = compute(weights, items, codes, done, work_ids, cfg)
