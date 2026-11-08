@@ -2850,6 +2850,40 @@ def main():
         finally:
             shutil.rmtree(tmp67, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 68
+        print("\n68. 回复档位：默认强 / 可切换 / 非法值不落盘（REQ-042）")
+        tmp68 = tempfile.mkdtemp(prefix="ddd-selftest68-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp68)
+            tier68 = os.path.join(tmp68, ".dd", "reply-tier")
+
+            c, out = run("devlog.py", "reply-tier", cwd=tmp68)
+            check("无文件 → 默认「强」", c == 0 and "强" in out and "默认" in out, out[-300:])
+
+            c, out = run("devlog.py", "brief", cwd=tmp68)
+            check("brief 显示当前档位", c == 0 and "回复档位：强（默认）" in out, out[-300:])
+
+            c, out = run("devlog.py", "reply-tier", "--set", "标准", cwd=tmp68)
+            check("--set 标准 → 写入并生效",
+                  c == 0 and os.path.exists(tier68) and read(tier68).strip() == "标准",
+                  out[-300:])
+
+            c, out = run("devlog.py", "reply-tier", "--set", "超强", cwd=tmp68)
+            check("非法档位 → exit 1 且不写",
+                  c == 1 and read(tier68).strip() == "标准", out[-300:])
+
+            write(tier68, "乱写\n")
+            c, out = run("devlog.py", "reply-tier", cwd=tmp68)
+            check("文件值非法 → 回落「强」并提示",
+                  c == 0 and "强" in out and "非法" in out, out[-300:])
+
+            c, out = run("devlog.py", "brief", cwd=tmp68)
+            check("brief 在回落后仍显示强",
+                  c == 0 and "回复档位：强（值非法" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp68, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

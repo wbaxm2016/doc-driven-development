@@ -42,6 +42,12 @@ DEFAULT_SCHEMA = {
 BEGIN = "<!-- BEGIN:devlog-index -->"
 END = "<!-- END:devlog-index -->"
 
+# 回复档位：项目根 `.dd/reply-tier` 一行，不进版本库（这台机器上这个人的偏好）。
+# 三档语义写在 SKILL.md「回复形态」；这里只管存取与回落。
+REPLY_TIERS = ("强", "标准", "精简")
+REPLY_DEFAULT = "强"
+REPLY_FILE = "reply-tier"
+
 
 def die(msg, as_json=False, code=2):
     if as_json:
@@ -1468,6 +1474,48 @@ def coverage_gaps(ctx):
             if states and all(s in done for s in states) and d not in covered]
 
 
+def reply_tier_path(ctx):
+    return os.path.join(ctx.root, ".dd", REPLY_FILE)
+
+
+def read_reply_tier(ctx):
+    """返回（档位, 说明）。文件缺失 / 读不到 / 值非法都回落默认，不阻断开场。"""
+    path = reply_tier_path(ctx)
+    if not os.path.exists(path):
+        return REPLY_DEFAULT, "默认"
+    try:
+        raw = read(path).strip()
+    except OSError:
+        return REPLY_DEFAULT, "读不到，按默认"
+    if raw in REPLY_TIERS:
+        return raw, "已设"
+    return REPLY_DEFAULT, f"值非法（{raw or '空'}），按默认"
+
+
+def cmd_reply_tier(ctx, args, as_json=False):
+    tier, note = read_reply_tier(ctx)
+    if args.set is None:
+        if as_json:
+            print(json.dumps({"ok": True, "tier": tier, "note": note,
+                              "path": os.path.relpath(reply_tier_path(ctx), ctx.root)},
+                             ensure_ascii=False, indent=2))
+        else:
+            print(f"回复档位：{tier}（{note}）")
+            print("  切换：python scripts/devlog.py reply-tier --set 强|标准|精简")
+        return 0
+    if args.set not in REPLY_TIERS:
+        return die(f"档位只认 强 / 标准 / 精简：{args.set!r}（未写入）", as_json, 1)
+    path = reply_tier_path(ctx)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    write(path, args.set + "\n")
+    if as_json:
+        print(json.dumps({"ok": True, "tier": args.set, "path": os.path.relpath(path, ctx.root)},
+                         ensure_ascii=False, indent=2))
+    else:
+        print(f"回复档位已切到：{args.set}（下一轮回复生效）")
+    return 0
+
+
 def cmd_brief(ctx, as_json=False):
     """开场简报：上一场交接锚点 / 计划未完成 / 收件箱计数 / 最近三场。
 
@@ -1504,6 +1552,7 @@ def cmd_brief(ctx, as_json=False):
         recent.append(f"{fm.get('session_date', '')} {fm.get('session_no', '')} {title}")
 
     anchor = handoff_first_line(read(path)) if path else ""
+    tier, tier_note = read_reply_tier(ctx)
     if not plan_ok:
         plan_line = "计划：读不到计划任务表（§5 不可读）"
     elif not pending:
@@ -1527,6 +1576,8 @@ def cmd_brief(ctx, as_json=False):
             "coverage": cov,
             "coverage_gaps": gaps,
             "chains": ch,
+            "reply_tier": {"value": tier, "note": tier_note,
+                           "path": os.path.relpath(reply_tier_path(ctx), ctx.root)},
             "ideas_filled": ideas_filled(read(path)) if path else None,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
@@ -1539,6 +1590,8 @@ def cmd_brief(ctx, as_json=False):
         print(f"上一场：{os.path.basename(path)}")
         print("  " + (anchor or "（交接段为空，收尾时补首行「下一步：<任务编号>」）"))
     print(plan_line)
+    print(f"回复档位：{tier}（{tier_note}）"
+          "← devlog.py reply-tier --set 强|标准|精简")
     if p_open:
         print("待分诊：open %d · deferred %d  ← 未清完不许开工（devlog.py pending）"
               % (len(p_open), len(p_def)))
@@ -1897,6 +1950,9 @@ def main():
     sub.add_parser("check")
     sub.add_parser("decisions")
     sub.add_parser("cost")
+    p_tier = sub.add_parser("reply-tier")
+    p_tier.add_argument("--set", default=None,
+                        help="切换档位：强 | 标准 | 精简（缺省只看当前档位）")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
     args = ap.parse_args(argv)
@@ -1932,6 +1988,8 @@ def main():
         return cmd_decisions(ctx, as_json)
     if args.cmd == "cost":
         return cmd_cost(ctx, as_json)
+    if args.cmd == "reply-tier":
+        return cmd_reply_tier(ctx, args, as_json)
     return cmd_index(ctx, args.check)
 
 
