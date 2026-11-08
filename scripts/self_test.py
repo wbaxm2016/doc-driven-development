@@ -2250,8 +2250,8 @@ def main():
             c, out = run("devlog.py", "check", cwd=tmp56)
             check("依据引用本档原话 → 0 error", c == 0 and "S12" not in out, out[-400:])
 
-            write(a56, read(a56).replace("「确认后一律落到 L2」\n**撤销条件**",
-                                         "「确认后一律落到 L3」\n**撤销条件**"))
+            write(a56, read(a56).replace("**依据**：「确认后一律落到 L2」",
+                                         "**依据**：「确认后一律落到 L3」"))
             c, out = run("devlog.py", "check", cwd=tmp56)
             check("引用的原话在本档查不到 → S12", c == 1 and "S12" in out, out[-400:])
 

@@ -33,9 +33,13 @@ DEFAULT_SCHEMA = {
     "session_sections": ["本次范围", "用户侧记录", "AI 侧记录",
                          "决策与选项对比", "开放项", "本次产出", "交接"],
     "names": {"plan": "开发计划.md", "inbox": "问题收件箱.md",
+              "verification": "真机验收台账.md",
               "timeline": "时间线.md",
               "session_template": "会话档案模板.md", "sessions_dir": "会话"},
-    "ids": {"issue": "ISS", "digits": 3},
+    "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "verification": "RV", "digits": 3},
+    "verification": {"types": ["时长", "场景", "信号"],
+                     "states": ["观察中", "信号已足待拍板", "已定论"],
+                     "outcomes": ["保持", "改造", "撤销"]},
     "plan": {"done_states": ["已完成"], "task_pattern": r"^T\d+\.\d+\.\d+$"},
 }
 
@@ -240,6 +244,7 @@ class Ctx:
         n = schema["names"]
         self.sess = os.path.join(self.pdir, n["sessions_dir"])
         self.inbox = os.path.join(self.pdir, n["inbox"])
+        self.verify = os.path.join(self.pdir, n.get("verification", "真机验收台账.md"))
         self.timeline = os.path.join(self.pdir, n["timeline"])
         self.template = os.path.join(self.pdir, n["session_template"])
         self.plan = os.path.join(docs, fdir, n.get("plan", "开发计划.md"))
@@ -973,7 +978,7 @@ def check_decision_review(rel, text):
         if not quoted:
             errs.append({"file": rel, "code": "S12",
                          "message": f"决策「{title}」的「依据」要引用用户原话（「…」）——"
-                                    f"复述门：拍板前先让用户用自己的话核 2–4 个要点（SKILL 复述门）"})
+                                    f"复述门：拍板前只核两件事——要做什么 / 推翻代价（SKILL 复述门）"})
             continue
         for q in quoted:
             if q.strip() and q not in outside:
@@ -1219,6 +1224,7 @@ def cmd_check(ctx, as_json=False):
                        "message": f"{d} 编号重复（终态条目应移入归档表并从主表删除）"})
     check_inbox_rows(ctx, rows, errors, warns)
     check_issue_chains(ctx, rows, errors, warns)
+    check_verification(ctx, errors, warns)
 
     sessions = ctx.sessions()
     for i, path in enumerate(sessions):
@@ -1293,6 +1299,283 @@ def cmd_check(ctx, as_json=False):
         print(f"  ERROR [{e['code']}] {e['file']}: {e['message']}")
     print(f"errors={len(errors)}  warnings={len(warns)}")
     return 1 if errors else 0
+
+
+# ---------------------------------------------------------------- 真机验收台账
+RV_KINDS = ("时长", "场景", "信号")
+RV_STATES = ("观察中", "信号已足待拍板", "已定论")
+RV_OUTCOMES = ("保持", "改造", "撤销")
+RV_DAY = re.compile(r"^@?20\d{2}-\d{2}-\d{2}$")
+
+
+def verify_conf(schema):
+    cfg = schema.get("verification") or {}
+    return (cfg.get("types") or list(RV_KINDS),
+            cfg.get("states") or list(RV_STATES),
+            cfg.get("outcomes") or list(RV_OUTCOMES))
+
+
+def rv_id_re(schema):
+    pre = (schema.get("ids") or {}).get("verification") or "RV"
+    return re.compile(r"^%s-\d{3}$" % re.escape(pre)), pre
+
+
+def parse_verification(ctx):
+    """读真机验收台账 → 主表行、观察记录行、坏行。表在 = 启用，表不在 = 不判。"""
+    data = {"path": None, "items": [], "records": [], "bad": []}
+    p = getattr(ctx, "verify", None)
+    if not p or not os.path.exists(p):
+        return data
+    data["path"] = p
+    for header, rows in read_tables(read(p)):
+        heads = [strip_md(h) for h in header]
+        if len(heads) >= 2 and heads[0] == "ID" and heads[1] == "开单日":
+            for r in rows:
+                if len(r) != len(heads):
+                    data["bad"].append(("主表", r))
+                    continue
+                d = {k: strip_md(v) for k, v in zip(heads, r)}
+                if d.get("ID") not in ("—", "-", ""):
+                    data["items"].append(d)
+        elif len(heads) >= 3 and heads[0] == "ID" and "观察到什么" in heads:
+            for r in rows:
+                if len(r) != len(heads):
+                    data["bad"].append(("观察记录", r))
+                    continue
+                d = {k: strip_md(v) for k, v in zip(heads, r)}
+                if d.get("ID") not in ("—", "-", ""):
+                    data["records"].append(d)
+    return data
+
+
+def rv_criterion(s):
+    """「类型:门槛」→ (类型, 门槛)；格式不对返回 (None, 原文)。"""
+    m = re.match(r"^\s*([^:：]+)[:：]\s*(.+?)\s*$", s or "")
+    if not m:
+        return None, (s or "")
+    return m.group(1), m.group(2)
+
+
+def rv_progress(item, records):
+    """→ (已够, 门槛, 一句话进度)。只数记录，不判这些数据够不够代表。"""
+    kind, thr = rv_criterion(item.get("判据", ""))
+    mine = [r for r in records if r.get("ID") == item.get("ID")]
+    try:
+        need = int(thr)
+    except (TypeError, ValueError):
+        need = 0
+    if kind == "场景":
+        scenes = {r.get("场景", "") for r in mine if r.get("场景")}
+        return len(scenes), need, f"不同场景 {len(scenes)}/{need or '?'}"
+    if kind == "时长":
+        try:
+            start = datetime.date.fromisoformat(item.get("开单日", ""))
+            done = max((datetime.date.today() - start).days, 0)
+        except ValueError:
+            done = 0
+        return done, need, f"已过 {done}/{need or '?'} 天"
+    return len(mine), 0, f"记录 {len(mine)} 条（信号型不自动判）"
+
+
+def _append_table_row(text, want_header, row_line):
+    """把一行追加到指定表格的末行之后；找不到表返回 None（调用方报错，不静默丢数据）。"""
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        s = line.strip()
+        if s.startswith("|") and s.endswith("|"):
+            if start is None:
+                start = i
+            continue
+        if start is not None:
+            heads = [strip_md(c) for c in split_row(lines[start].strip()[1:-1])]
+            if want_header(heads):
+                lines.insert(i, row_line)
+                return "\n".join(lines) + "\n"
+            start = None
+    if start is not None:
+        heads = [strip_md(c) for c in split_row(lines[start].strip()[1:-1])]
+        if want_header(heads):
+            lines.append(row_line)
+            return "\n".join(lines) + "\n"
+    return None
+
+
+def _touch_first_row(text, rid, today):
+    """只改主表里该编号那一行的末列「更新」；观察记录里同编号的行不动。"""
+    out, hit = [], False
+    for line in text.splitlines():
+        s = line.strip()
+        if not hit and s.startswith("|") and s.endswith("|") and len(s) > 2:
+            cells = re.split(r"(?<!\\)\|", s[1:-1])
+            if len(cells) >= 6 and strip_md(cells[0]) == rid:
+                cells[-1] = " %s " % today
+                line = "|" + "|".join(cells) + "|"
+                hit = True
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
+def _req_exists(ctx, rid):
+    d = layer_dir(ctx.schema, "contract")
+    if not d:
+        return False
+    base = os.path.join(ctx.docs, d)
+    if not os.path.isdir(base):
+        return False
+    return any(rid in read(os.path.join(base, f))
+               for f in os.listdir(base) if f.endswith(".md"))
+
+
+def check_verification(ctx, errors, warns):
+    """V1–V6：只判形式。判不了「用够了没有」「这个场景算不算新」。"""
+    data = parse_verification(ctx)
+    if not data["path"]:
+        return
+    rel = os.path.relpath(data["path"], ctx.docs).replace(os.sep, "/")
+    kinds, states, outcomes = verify_conf(ctx.schema)
+    rid_re, _pre = rv_id_re(ctx.schema)
+    for table, row in data["bad"]:
+        errors.append({"file": rel, "code": "V1",
+                       "message": f"{table}有行列数与表头不符：{' | '.join(row)[:60]}"})
+    seen = set()
+    for it in data["items"]:
+        rid = it.get("ID", "")
+        if not rid_re.match(rid):
+            errors.append({"file": rel, "code": "V1",
+                           "message": f"{rid or '(空)'} 编号不合格式 {rid_re.pattern}"})
+        elif rid in seen:
+            errors.append({"file": rel, "code": "V1", "message": f"{rid} 编号重复（只增不复用）"})
+        seen.add(rid)
+        kind, thr = rv_criterion(it.get("判据", ""))
+        if kind not in kinds:
+            errors.append({"file": rel, "code": "V2",
+                           "message": f"{rid} 判据应为「{'/'.join(kinds)}:门槛」，现为「{it.get('判据','')}」"})
+        elif kind in ("时长", "场景") and not thr.isdigit():
+            errors.append({"file": rel, "code": "V2",
+                           "message": f"{rid} {kind}型门槛必须是正整数，现为「{thr}」"})
+        if it.get("状态") not in states:
+            errors.append({"file": rel, "code": "V3",
+                           "message": f"{rid} 状态「{it.get('状态','')}」不在 {'/'.join(states)}"})
+        concl = it.get("结论 · 出口", "") or it.get("结论·出口", "")
+        if it.get("状态") == "已定论":
+            if not any(concl.startswith(o) for o in outcomes):
+                errors.append({"file": rel, "code": "V4",
+                               "message": f"{rid} 已定论但结论不是 {'/'.join(outcomes)} 之一"})
+            elif concl.startswith("改造"):
+                ref = re.search(r"(T\d+\.\d+\.\d+|REQ-\d+)", concl)
+                if not ref:
+                    errors.append({"file": rel, "code": "V4",
+                                   "message": f"{rid} 改造必须带 T 任务号或 REQ 编号"})
+                elif ref.group(1).startswith("T") and ref.group(1) not in plan_tasks(ctx)[0]:
+                    errors.append({"file": rel, "code": "V4",
+                                   "message": f"{rid} 改造指向的 {ref.group(1)} 不在开发计划 §5"})
+                elif ref.group(1).startswith("REQ-") and not _req_exists(ctx, ref.group(1)):
+                    errors.append({"file": rel, "code": "V4",
+                                   "message": f"{rid} 改造指向的 {ref.group(1)} 不存在"})
+            elif concl.startswith("撤销") and not re.search(r"回滚\s*[:：]?\s*[0-9a-f]{7,40}", concl):
+                errors.append({"file": rel, "code": "V4",
+                               "message": f"{rid} 撤销要写「回滚 <commit 短号>」"})
+        if not RV_DAY.match(it.get("回看日", "")):
+            errors.append({"file": rel, "code": "V6",
+                           "message": f"{rid} 回看日应为 @YYYY-MM-DD"})
+        if not RV_DAY.match(it.get("开单日", "")):
+            errors.append({"file": rel, "code": "V6",
+                           "message": f"{rid} 开单日应为 YYYY-MM-DD"})
+    for r in data["records"]:
+        rid = r.get("ID", "")
+        if rid not in seen:
+            errors.append({"file": rel, "code": "V5",
+                           "message": f"观察记录指向不存在的 {rid or '(空)'}"})
+        if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", r.get("日期", "")):
+            errors.append({"file": rel, "code": "V5",
+                           "message": f"{rid} 观察记录日期应为 YYYY-MM-DD"})
+        if r.get("记录人") not in ("AI", "用户"):
+            errors.append({"file": rel, "code": "V5",
+                           "message": f"{rid} 记录人只能是 AI 或 用户，现为「{r.get('记录人','')}」"})
+
+
+def cmd_rv(ctx, args, as_json=False):
+    data = parse_verification(ctx)
+    if not data["path"]:
+        return die(f"缺少真机验收台账：{getattr(ctx, 'verify', '')}。"
+                   f"它是「实现不是最终版」的落点，新建项目由 doc_init 铺出", as_json)
+    today = datetime.date.today().isoformat()
+    kinds, _states, _outcomes = verify_conf(ctx.schema)
+
+    if args.action == "list":
+        items = data["items"]
+        if args.state:
+            items = [i for i in items if i.get("状态") == args.state]
+        if not items:
+            print("（没有待验收项）")
+            return 0
+        for it in items:
+            done, need, txt = rv_progress(it, data["records"])
+            flag = "到门槛·待拍板" if need and done >= need else it.get("状态", "")
+            print(f"{it.get('ID','')}  {flag}  {txt}  回看 {it.get('回看日','—')}  {it.get('观察对象','')}")
+            if args.records:
+                for r in data["records"]:
+                    if r.get("ID") == it.get("ID"):
+                        print(f"    {r.get('日期','')} {r.get('场景','')}：{r.get('观察到什么','')}")
+        return 0
+
+    if args.action == "new":
+        if args.kind not in kinds:
+            return die(f"判据类型只能是 {' / '.join(kinds)}", as_json)
+        thr = (args.threshold or "").strip()
+        if args.kind in ("时长", "场景") and not thr.isdigit():
+            return die("时长 / 场景型的门槛必须是正整数", as_json)
+        if args.kind == "信号" and not thr:
+            return die("信号型要写一句「什么信号算有结论」", as_json)
+        for k, v in (("--object", args.object), ("--why", args.why)):
+            if not (v or "").strip():
+                return die(f"{k} 必填：观察对象 / 为什么现在定不了", as_json)
+        review = args.review or (datetime.date.today() + datetime.timedelta(days=90)).isoformat()
+        if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", review):
+            return die("--review 要 YYYY-MM-DD", as_json)
+        _re, pre = rv_id_re(ctx.schema)
+        nums = [int(m.group(1)) for m in
+                (re.fullmatch(r".*-(\d{3})", i.get("ID", "")) for i in data["items"]) if m]
+        rid = f"{pre}-{max(nums + [0]) + 1:03d}"
+        line = "| **%s** | %s | %s | %s:%s | %s | 观察中 | — | @%s | %s |" % (
+            rid, today, cell(args.object), args.kind, cell(thr), cell(args.why), review, today)
+        text = _append_table_row(read(data["path"]),
+                                 lambda h: len(h) >= 2 and h[0] == "ID" and h[1] == "开单日",
+                                 line)
+        if text is None:
+            return die("台账里找不到主表（表头应为 ID / 开单日 …），先修表头", as_json)
+        write(data["path"], text)
+        print(f"{rid} 已开单：{args.kind}:{thr}，回看 @{review}")
+        return 0
+
+    item = next((i for i in data["items"] if i.get("ID") == args.id), None)
+    if not item:
+        return die(f"台账里没有 {args.id or '(没给编号)'}", as_json)
+    if not (args.scene or "").strip() or not (args.observed or "").strip():
+        return die("--scene 与 --observed 必填", as_json)
+    by = args.by or "AI"
+    if by not in ("AI", "用户"):
+        return die("--by 只能是 AI 或 用户", as_json)
+    kind, _thr = rv_criterion(item.get("判据", ""))
+    scenes = {r.get("场景", "") for r in data["records"] if r.get("ID") == args.id and r.get("场景")}
+    delta = "新场景" if (kind == "场景" and args.scene.strip() not in scenes) else \
+            ("重复场景" if kind == "场景" else "记录 +1")
+    line = "| %s | %s | %s | %s | %s | %s |" % (
+        args.id, today, cell(args.scene), cell(args.observed), delta, by)
+    text = _append_table_row(read(data["path"]),
+                             lambda h: len(h) >= 3 and h[0] == "ID" and "观察到什么" in h,
+                             line)
+    if text is None:
+        return die("台账里找不到观察记录表（表头应为 ID / 日期 / 场景 …），先补上附表", as_json)
+    write(data["path"], _touch_first_row(text, args.id, today))
+    fresh = parse_verification(ctx)
+    it = next((i for i in fresh["items"] if i.get("ID") == args.id), item)
+    done, need, txt = rv_progress(it, fresh["records"])
+    print(f"{args.id} 记了一条：{txt}")
+    if need and done >= need:
+        print("到门槛了：建议把状态改成「信号已足待拍板」，结论仍由你拍板")
+    return 0
 
 
 # ---------------------------------------------------------------- brief
@@ -1953,6 +2236,20 @@ def main():
     p_tier = sub.add_parser("reply-tier")
     p_tier.add_argument("--set", default=None,
                         help="切换档位：强 | 标准 | 精简（缺省只看当前档位）")
+    p_rv = sub.add_parser("rv")
+    p_rv.add_argument("action", choices=["list", "new", "add"],
+                      help="list 列出待验收项 / new 开单 / add 追加一条观察记录")
+    p_rv.add_argument("id", nargs="?", default=None, help="add 时的 RV 编号")
+    p_rv.add_argument("--state", default=None, help="list 只看某个状态")
+    p_rv.add_argument("--records", action="store_true", help="list 时展开观察记录")
+    p_rv.add_argument("--object", default=None, help="new：观察对象（挂到功能或任务）")
+    p_rv.add_argument("--kind", default=None, help="new：判据类型 时长 / 场景 / 信号")
+    p_rv.add_argument("--threshold", default=None, help="new：门槛（天数 / 场景数 / 一句信号）")
+    p_rv.add_argument("--why", default=None, help="new：为什么现在定不了")
+    p_rv.add_argument("--review", default=None, help="new：回看日 YYYY-MM-DD（缺省 90 天后）")
+    p_rv.add_argument("--scene", default=None, help="add：这次的场景")
+    p_rv.add_argument("--observed", default=None, help="add：观察到了什么")
+    p_rv.add_argument("--by", default=None, help="add：记录人 AI / 用户")
     p_idx = sub.add_parser("index")
     p_idx.add_argument("--check", action="store_true")
     args = ap.parse_args(argv)
@@ -1990,6 +2287,8 @@ def main():
         return cmd_cost(ctx, as_json)
     if args.cmd == "reply-tier":
         return cmd_reply_tier(ctx, args, as_json)
+    if args.cmd == "rv":
+        return cmd_rv(ctx, args, as_json)
     return cmd_index(ctx, args.check)
 
 

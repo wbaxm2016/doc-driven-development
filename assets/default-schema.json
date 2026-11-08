@@ -41,6 +41,7 @@
     "names": {
       "plan": "开发计划.md",
       "inbox": "问题收件箱.md",
+      "verification": "真机验收台账.md",
       "timeline": "时间线.md",
       "features": "FEATURES.md",
       "direction_card": "方向卡.md",
@@ -51,7 +52,12 @@
       "adr_index": "decisions.md",
       "alias_table": "别名表.md"
     },
-    "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "digits": 3},
+    "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "verification": "RV", "digits": 3},
+    "verification": {
+      "types": ["时长", "场景", "信号"],
+      "states": ["观察中", "信号已足待拍板", "已定论"],
+      "outcomes": ["保持", "改造", "撤销"]
+    },
     "issue": {
       "states": ["候选", "确立", "实施中", "实现关闭", "拒绝"],
       "active_states": ["确立", "实施中"],

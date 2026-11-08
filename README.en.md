@@ -6,13 +6,32 @@
 >
 > Translation notes: `方向线` direction track · `需求线` requirement track · `五道门` five gates · `走通验收` walkthrough acceptance · `接缝` seams · `问题收件箱` issue inbox. Status words and field names stay in Chinese because the scripts and templates use them.
 
-**A documentation workflow that keeps AI-assisted development on track**: every next goal and task has a source, every judgment has a home, and every completion has evidence—so a new session, a new person, or a return three months later still knows why, where we are, and what comes next.
+**The first question in AI-assisted development is not "can the AI write code?" but "where does the context live?"** If it lives only in the agent's window, that is a problem that disappears when the session closes; persist it in documents and it lasts; make documents the single source of truth and it can be handed over; once that foundation is solid, a skill has somewhere to grow capabilities.
 
-## What Problem It Solves
+## From Agent Context to a Project's Single Source of Truth
 
-Ideas live in a session and never become facts; implementations scatter across code and commits and no longer match the ideas—these are the two most common breaks in AI-assisted development.
+Four steps, each harder than the last:
 
-It does only two things: **what you want to do becomes directions and tasks with provenance and acceptance; what you have done becomes checkable facts**. One conclusion can be traced to a requirement, a code entry point, and that commit; documentation is the development process itself, and whatever a script can check is checked by a script.
+1. **Problem: context lives only in the agent**—close the session, and why, where we are, and what comes next are re-told from memory; another person cannot pick it up, and three months later it cannot be found.
+2. **Documents persist it—and classify, organize, condense, and sediment it**—this is not dumping chat logs into docs: your words are filed by type, the Agent's reasoning and trade-offs get their own columns, the process is compressed into a handoff anchor, and conclusions settle into requirements, decisions, and feature rows.
+3. **Documents become the single source of truth**—not "one copy in code, one in docs, guess which is newer when they conflict," but one definition per fact: defined once, references checkable, scripts verifiable, generated sections never hand-edited.
+4. **Capabilities grow on that foundation**—documentation is no longer overhead outside development but the executable skeleton of the development process itself; the capabilities below all stand on it.
+
+## What It Provides
+
+| Capability | In one line |
+|---|---|
+| Document skeleton | One command lays down 5 / 8 layers, `_schema.json`, and the checking scripts; directories, enums, and numbering rules are defined once. |
+| Process memory | One dual-sided record per session: words filed by type, reasoning and trade-offs in their own columns, the process compressed into a handoff anchor, conclusions settled into requirements, decisions, and feature rows; the timeline is rebuilt automatically. |
+| Decision memory | One ADR per decision, with a bidirectional supersede chain and revocation conditions; rejected options stay, with the signal that would bring them back. |
+| Requirements & features | Requirements as falsifiable EARS sentences with a `verify:` command; the feature ledger records entry points, evidence, and the completing commit. |
+| Plan & ranking | Three levels—direction / work / task—with six-dimension scores and multi-view ranking; one exit for "what next," and the order is computed. |
+| Issue inbox | Findings land immediately without interrupting; closable issues close, open ones carry a return condition. |
+| Five gates | Alignment, review, design, comparison, assessment; machines check form, humans judge meaning, irreversible actions are human-decided. |
+| Observability | Component level leaves a record, system level leaves a trace; four questions define content, four dimensions define acceptance. |
+| Self-check & delivery | Five wrap-up checks, full self-test, six-client install; whatever a script can check is not left to discipline. |
+
+> In one sentence: **what is said can be verified, what is verified can be reverted, and what is unfinished has somewhere to stay.**
 
 ## Four Promises
 

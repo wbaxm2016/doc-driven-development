@@ -148,6 +148,7 @@ def main():
     copy_tpl("dev-plan.md", os.path.join(docs, "00-门面", "开发计划.md"), date)
     copy_tpl("requirements.md", os.path.join(docs, "20-契约", "requirements.md"), date)
     copy_tpl("inbox.md", os.path.join(docs, "70-过程", "问题收件箱.md"), date)
+    copy_tpl("verification.md", os.path.join(docs, "70-过程", "真机验收台账.md"), date)
     copy_tpl("timeline.md", os.path.join(docs, "70-过程", "时间线.md"), date)
     copy_tpl("session-record.md", os.path.join(docs, "70-过程", "会话档案模板.md"), date)
     copy_tpl("process-readme.md", os.path.join(docs, "70-过程", "README.md"), date)
