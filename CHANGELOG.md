@@ -1,5 +1,19 @@
 # 变更记录
 
+## 2.16.1
+
+修 Python 3.8 兼容：`plan.py` 用了只有 3.12 才放开的 f-string 写法，3.8 上直接 `SyntaxError`。**不破安装**（只改写法，编号推导行为不变）。
+
+### 修复
+
+- **`scripts/plan.py`**：`new-feature` 的 REQ / F / K 编号推导把 `max_row_seq(req_t[2], r'REQ-(\d+)')` 这类正则直接嵌在 f-string 表达式里；PEP 701 之前（3.8–3.11）表达式内不允许反斜杠 → `SyntaxError: f-string expression part cannot include a backslash`。改为先把序号算进局部变量（`req_seq` / `feat_seq` / `card_seq`）再格式化。
+- **CI 回归**：`build-skill / build (3.8, ubuntu-22.04)` 自 2.10.0（`81e159b`）起在 `Verify contracts` 常红（3.12 同提交绿，所以本地看不出来）。修复后在 3.8.20 上 `self_test` 339/339、`plan.py check` / `doc_check --quiet` / `devlog check` 均 `errors=0`；推送后 run `42439037369` 双 job 全绿。
+
+### 兼容
+
+- 编号推导结果与 3.12 下完全一致，只改写法。
+- 3.8 环境从「`plan.py` 一调用就报错」恢复为可用。
+
 ## 2.16.0
 
 可改进：`observe.py` 新增 `trend`，把跨 run 的同一问题聚合成一条可回看的复发 / 趋势视图。**不破安装**（新增子命令，不改既有判据）。
