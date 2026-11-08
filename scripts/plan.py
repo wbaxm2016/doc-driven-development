@@ -1339,7 +1339,10 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
         if id_taken(req_all, req_id):
             return die(f"需求 {req_id} 已存在（编号只增不复用）", as_json, 1)
     else:
-        req_id = f"REQ-{max_row_seq(req_t[2], r'REQ-(\d+)') + 1:03d}"
+        # 3.8 里 f-string 的表达式部分不能含反斜杠（PEP 701 是 3.12 才放开），
+        # 所以正则先算出来再格式化；下面 feature_id / card_id 同理。
+        req_seq = max_row_seq(req_t[2], r"REQ-(\d+)")
+        req_id = f"REQ-{req_seq + 1:03d}"
 
     feature_id = opts["feature-id"].strip()
     if feature_id:
@@ -1348,7 +1351,8 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
         if id_taken(feats_text, feature_id):
             return die(f"功能 {feature_id} 已存在（编号只增不复用）", as_json, 1)
     else:
-        feature_id = f"F-{max_row_seq(feat_t[2], r'F-(\d+)') + 1:03d}"
+        feat_seq = max_row_seq(feat_t[2], r"F-(\d+)")
+        feature_id = f"F-{feat_seq + 1:03d}"
 
     card_id = opts["card-id"].strip()
     if existing_work:
@@ -1364,7 +1368,8 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
         if re.search(rf"^##\s*{re.escape(card_id)}\b", card_text, re.M):
             return die(f"设计卡 {card_id} 已存在（编号只增不复用）", as_json, 1)
     else:
-        card_id = f"K{max_seq(card_text, r'^##\s*K(\d+)') + 1}"
+        card_seq = max_seq(card_text, r"^##\s*K(\d+)")
+        card_id = f"K{card_seq + 1}"
 
     if not existing_work:
         lack = [n for n, v in (("--design-interface", opts["design-interface"].strip()),
