@@ -1496,10 +1496,12 @@ def check_verification(ctx, errors, warns):
 
 
 def cmd_rv(ctx, args, as_json=False):
+    def bad(msg):
+        return die(msg, as_json, 1)
     data = parse_verification(ctx)
     if not data["path"]:
-        return die(f"缺少真机验收台账：{getattr(ctx, 'verify', '')}。"
-                   f"它是「实现不是最终版」的落点，新建项目由 doc_init 铺出", as_json)
+        return bad(f"缺少真机验收台账：{getattr(ctx, 'verify', '')}。"
+                   f"它是「实现不是最终版」的落点，新建项目由 doc_init 铺出")
     today = datetime.date.today().isoformat()
     kinds, _states, _outcomes = verify_conf(ctx.schema)
 
@@ -1522,18 +1524,18 @@ def cmd_rv(ctx, args, as_json=False):
 
     if args.action == "new":
         if args.kind not in kinds:
-            return die(f"判据类型只能是 {' / '.join(kinds)}", as_json)
+            return bad(f"判据类型只能是 {' / '.join(kinds)}")
         thr = (args.threshold or "").strip()
         if args.kind in ("时长", "场景") and not thr.isdigit():
-            return die("时长 / 场景型的门槛必须是正整数", as_json)
+            return bad("时长 / 场景型的门槛必须是正整数")
         if args.kind == "信号" and not thr:
-            return die("信号型要写一句「什么信号算有结论」", as_json)
+            return bad("信号型要写一句「什么信号算有结论」")
         for k, v in (("--object", args.object), ("--why", args.why)):
             if not (v or "").strip():
-                return die(f"{k} 必填：观察对象 / 为什么现在定不了", as_json)
+                return bad(f"{k} 必填：观察对象 / 为什么现在定不了")
         review = args.review or (datetime.date.today() + datetime.timedelta(days=90)).isoformat()
         if not re.fullmatch(r"20\d{2}-\d{2}-\d{2}", review):
-            return die("--review 要 YYYY-MM-DD", as_json)
+            return bad("--review 要 YYYY-MM-DD")
         _re, pre = rv_id_re(ctx.schema)
         nums = [int(m.group(1)) for m in
                 (re.fullmatch(r".*-(\d{3})", i.get("ID", "")) for i in data["items"]) if m]
@@ -1544,19 +1546,19 @@ def cmd_rv(ctx, args, as_json=False):
                                  lambda h: len(h) >= 2 and h[0] == "ID" and h[1] == "开单日",
                                  line)
         if text is None:
-            return die("台账里找不到主表（表头应为 ID / 开单日 …），先修表头", as_json)
+            return bad("台账里找不到主表（表头应为 ID / 开单日 …），先修表头")
         write(data["path"], text)
         print(f"{rid} 已开单：{args.kind}:{thr}，回看 @{review}")
         return 0
 
     item = next((i for i in data["items"] if i.get("ID") == args.id), None)
     if not item:
-        return die(f"台账里没有 {args.id or '(没给编号)'}", as_json)
+        return bad(f"台账里没有 {args.id or '(没给编号)'}")
     if not (args.scene or "").strip() or not (args.observed or "").strip():
-        return die("--scene 与 --observed 必填", as_json)
+        return bad("--scene 与 --observed 必填")
     by = args.by or "AI"
     if by not in ("AI", "用户"):
-        return die("--by 只能是 AI 或 用户", as_json)
+        return bad("--by 只能是 AI 或 用户")
     kind, _thr = rv_criterion(item.get("判据", ""))
     scenes = {r.get("场景", "") for r in data["records"] if r.get("ID") == args.id and r.get("场景")}
     delta = "新场景" if (kind == "场景" and args.scene.strip() not in scenes) else \
@@ -1567,7 +1569,7 @@ def cmd_rv(ctx, args, as_json=False):
                              lambda h: len(h) >= 3 and h[0] == "ID" and "观察到什么" in h,
                              line)
     if text is None:
-        return die("台账里找不到观察记录表（表头应为 ID / 日期 / 场景 …），先补上附表", as_json)
+        return bad("台账里找不到观察记录表（表头应为 ID / 日期 / 场景 …），先补上附表")
     write(data["path"], _touch_first_row(text, args.id, today))
     fresh = parse_verification(ctx)
     it = next((i for i in fresh["items"] if i.get("ID") == args.id), item)

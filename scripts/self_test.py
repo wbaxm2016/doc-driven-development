@@ -2884,6 +2884,65 @@ def main():
         finally:
             shutil.rmtree(tmp68, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 69
+        print("\n69. 真机验收台账：开单 / 记录 / 形式校验（V1–V6）")
+        tmp69 = tempfile.mkdtemp(prefix="ddd-selftest69-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp69)
+            rv69 = os.path.join(tmp69, "docs", "70-过程", "真机验收台账.md")
+            check("doc_init 铺出真机验收台账", os.path.exists(rv69), rv69)
+            c, out = run("devlog.py", "check", cwd=tmp69)
+            check("模板示例行首跑 0 error", c == 0 and "[V" not in out, out[-400:])
+
+            c, out = run("devlog.py", "rv", "new", "--object", "F-001 / W1.1",
+                         "--kind", "场景", "--threshold", "2",
+                         "--why", "只有真用两个场景才知道行不行",
+                         "--review", "2027-01-01", cwd=tmp69)
+            check("开单分配下一个编号", c == 0 and "RV-002" in out, out[-300:])
+
+            c, out = run("devlog.py", "rv", "add", "RV-002", "--scene", "首次使用",
+                         "--observed", "没出事", cwd=tmp69)
+            check("第一条记录：不同场景 1/2", c == 0 and "1/2" in out, out[-300:])
+
+            c, out = run("devlog.py", "rv", "add", "RV-002", "--scene", "首次使用",
+                         "--observed", "还是没事", cwd=tmp69)
+            check("同一场景不重复计数", c == 0 and "1/2" in out, out[-300:])
+
+            c, out = run("devlog.py", "rv", "add", "RV-002", "--scene", "换个入口",
+                         "--observed", "也顺", cwd=tmp69)
+            check("到门槛会提示拍板", c == 0 and "到门槛" in out, out[-300:])
+
+            before69 = read(rv69)
+            c, out = run("devlog.py", "rv", "add", "RV-002", "--observed", "缺场景",
+                         cwd=tmp69)
+            check("add 缺 --scene → exit 1 且零写入",
+                  c == 1 and read(rv69) == before69, out[-300:])
+
+            write(rv69, read(rv69).replace("场景:2", "随便写", 1))
+            c, out = run("devlog.py", "check", cwd=tmp69)
+            check("判据格式坏 → V2", c == 1 and "[V2]" in out, out[-300:])
+
+            write(rv69, read(rv69).replace("随便写", "场景:2", 1)
+                  .replace("| 观察中 |", "| 看看 |", 1))
+            c, out = run("devlog.py", "check", cwd=tmp69)
+            check("状态词非法 → V3", c == 1 and "[V3]" in out, out[-300:])
+
+            write(rv69, read(rv69).replace("| 看看 |", "| 已定论 |", 1))
+            c, out = run("devlog.py", "check", cwd=tmp69)
+            check("已定论却没有合法出口 → V4", c == 1 and "[V4]" in out, out[-300:])
+
+            write(rv69, read(rv69).replace("| RV-002 |", "| RV-009 |", 1))
+            c, out = run("devlog.py", "check", cwd=tmp69)
+            check("观察记录指向不存在 → V5", c == 1 and "[V5]" in out, out[-300:])
+
+            write(rv69, read(rv69).replace("| RV-009 |", "| RV-002 |", 1)
+                  .replace("| @2027-01-01 |", "| 元旦 |", 1))
+            c, out = run("devlog.py", "check", cwd=tmp69)
+            check("回看日格式坏 → V6", c == 1 and "[V6]" in out, out[-300:])
+        finally:
+            shutil.rmtree(tmp69, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -27,6 +27,7 @@ Four steps, each harder than the last:
 | Requirements & features | Requirements as falsifiable EARS sentences with a `verify:` command; the feature ledger records entry points, evidence, and the completing commit. |
 | Plan & ranking | Three levels—direction / work / task—with six-dimension scores and multi-view ranking; one exit for "what next," and the order is computed. |
 | Issue inbox | Findings land immediately without interrupting; closable issues close, open ones carry a return condition. |
+| Real-machine acceptance | If it is not final, keep it replaceable and open an `RV` entry: three criterion types, an observation-record sub-table, three states and three outcomes; surfaced only when asked. |
 | Five gates | Alignment, review, design, comparison, assessment; machines check form, humans judge meaning, irreversible actions are human-decided. |
 | Observability | Component level leaves a record, system level leaves a trace; four questions define content, four dimensions define acceptance. |
 | Self-check & delivery | Five wrap-up checks, full self-test, six-client install; whatever a script can check is not left to discipline. |
