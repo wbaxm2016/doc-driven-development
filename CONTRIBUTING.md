@@ -72,6 +72,8 @@ python scripts/doc_check.py      # 全库字段与链接
 
 只有包内文件变了才要发版。只改 `docs/`、`README.md`、`README.en.md`、`CONTRIBUTING.md`、`CHANGELOG.md`、`build.py`、`install.py`、`install-targets.json` 不用发版，`dist/` 仍然有效。版本号规则：改规则 / 码表算 minor，破兼容算 major。
 
+**发版节奏建议**：纯技能文档 / 模板改动（不改脚本行为）不必每次都发，可在 `CHANGELOG.md` 的 `## Unreleased` 里攒 2–3 笔再一起打包；脚本行为变化或破兼容改动才立即发版。装机有成本（6 端逐字节核对），攒一批再发比每改一次就装一次划算。
+
 ### 顺序：先提交、后打包
 
 反过来会让产物来自脏工作区，说不清它对应哪个提交。
