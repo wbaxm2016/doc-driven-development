@@ -2827,6 +2827,9 @@ def main():
             c, out = run("plan.py", "check", cwd=tmp67)
             check("记了走通却缺结论与证据 → P20 各一条",
                   c == 1 and out.count("[P20]") == 2, out[-400:])
+            c, out = run("devlog.py", "brief", cwd=tmp67)
+            check("走通但缺结论/证据 → brief 计 1/1 且标「形式待修：L1」（ISS-105）",
+                  c == 0 and "链路覆盖：1/1" in out and "形式待修：L1" in out, out[-500:])
 
             write(card67, with_chain67(chain67(walk="2026-11-08", concl="走通：自测", ev="第 67 组")))
             c, out = run("plan.py", "check", cwd=tmp67)
@@ -2835,6 +2838,19 @@ def main():
 
             c, out = run("devlog.py", "brief", cwd=tmp67)
             check("brief 出「链路覆盖：1/1」", c == 0 and "链路覆盖：1/1" in out, out[-500:])
+            check("形式合格 → brief 不出「形式待修」", "形式待修" not in out, out[-500:])
+
+            # ISS-105 核心场景：只涉及 1 个 F 但记了走通——plan.py check 判 P20 红，
+            # brief 不再把它干干净净算进覆盖：计数照旧（1/1），单列「形式待修」，
+            # 退出码 0（brief 只读不判语义）。两条命令对同一张表同红同绿。
+            write(card67, with_chain67(chain67(f="F-001", walk="2026-11-08",
+                                               concl="走通：自测", ev="第 67 组")))
+            c, out = run("plan.py", "check", cwd=tmp67)
+            check("1 个 F 走通 → plan 仍红（口径唯一）",
+                  c == 1 and "[P20]" in out and "2 个 F" in out, out[-400:])
+            c, out = run("devlog.py", "brief", cwd=tmp67)
+            check("1 个 F 走通 → brief 计 1/1 且同标「形式待修：L1」（ISS-105 同红同绿）",
+                  c == 0 and "链路覆盖：1/1" in out and "形式待修：L1" in out, out[-500:])
 
             write(card67, with_chain67(chain67()))
             c, out = run("devlog.py", "brief", cwd=tmp67)

@@ -23,6 +23,11 @@ import os
 import re
 import sys
 
+try:
+    import plan as _plan   # ISS-105：brief 借 plan 的链路形式判据，两条命令同红同绿
+except ImportError:
+    _plan = None
+
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -1683,17 +1688,33 @@ def coverage_summary(ctx):
     return {"n": n, "m": len(dirs), "latest": latest, "covered": sorted(cov)}
 
 
+def _chain_formal_bad(ctx, lid, ch):
+    """借 plan.chain_formal_bad 判一条链路的形式（ISS-105）。
+
+    plan 不可导入时跳过：brief 保持只读、不因缺模块炸掉——口径问题留给
+    plan.py check 自己报，两边用的是同一份判据。
+    """
+    if _plan is None:
+        return []
+    feat_ids = {r["id"] for r in feature_rows(ctx)}
+    work_ids = {w[0] for w in plan_works(ctx)}
+    design_ids = set(_plan.load_designs(_plan.designs_path(ctx.docs, ctx.schema)) or {})
+    return _plan.chain_formal_bad(lid, ch, feat_ids, design_ids, work_ids)
+
+
 def chain_summary(ctx):
     """链路覆盖：方向卡「链路」表里有走通记录的链路数 / 链路总数（REQ-041）。
 
     与 `coverage_summary` 并列：那个数「每条方向线走过没有」，这个数「线之间串起来走过没有」。
     只统计记录，不判走通；缺表返回 None，不报错（加分项）。
+    计入了覆盖但 P20 形式不过的链路单列在 "bad"（ISS-105）：brief 只标不改数——
+    计数回答「有没有记录」，形式问题归 plan.py check，两边对同一张表同红同绿。
     """
     card = os.path.join(ctx.docs, layer_dir(ctx.schema, "facade") or "",
                         ctx.schema["names"].get("direction_card", "方向卡.md"))
     if not os.path.exists(card):
         return None
-    ids, cov, latest = [], {}, ""
+    ids, cov, latest, bad = [], {}, "", []
     for header, rows in read_tables(_read_text(card)):
         heads = [strip_md(h) for h in header]
         if not {"链路", "起点", "终点", "涉及功能点"} <= set(heads):
@@ -1716,9 +1737,14 @@ def chain_summary(ctx):
             m = re.search(r"\d{4}-\d{2}-\d{2}", val)
             if m and m.group(0) > latest:
                 latest = m.group(0)
+            cells = {h: strip_md(c) for h, c in zip(heads, r)}
+            cells["最近走通"] = val
+            if _chain_formal_bad(ctx, key, cells):
+                bad.append(key)
     n = sum(1 for x in ids if x in cov)
     return {"n": n, "m": len(ids), "latest": latest,
-            "covered": sorted(cov), "open": [x for x in ids if x not in cov]}
+            "covered": sorted(cov), "open": [x for x in ids if x not in cov],
+            "bad": sorted(bad)}
 
 
 def plan_works(ctx):
@@ -1907,6 +1933,9 @@ def cmd_brief(ctx, as_json=False):
     if ch and ch["m"]:
         print(f"链路覆盖：{ch['n']}/{ch['m']}（最近走通 {ch['latest'] or '—'}）"
               "← 链路 = 串起 ≥2 个功能点的串联；这个数看「线之间走过没有」（REQ-041）")
+    if ch and ch.get("bad"):
+        print(f"形式待修：{'、'.join(ch['bad'])}（已计入覆盖但形式不过 P20）"
+              "← 红着覆盖也会涨，别把计数当通过；跑 plan.py check 看缺哪格（ISS-105）")
     if ch and ch["open"]:
         print(f"接缝待验：{'、'.join(ch['open'])}（链路表里没有走通记录）"
               "← 跨组件的串联最容易断，挑一条走一遍")

@@ -385,6 +385,44 @@ def load_chains(path):
     return None
 
 
+def chain_formal_bad(lid, ch, feat_ids=(), design_ids=(), work_ids=()):
+    """一条链路的形式判据（P20 的单链版）：返回错误列表，空 = 形式过。
+
+    brief 借这份判据标「形式待修」（ISS-105）：两条命令对同一张表同红同绿，
+    brief 才不会把 P20 判红的链路算进「链路覆盖」里当走过。
+    """
+    errs = []
+    if not re.fullmatch(r"L\d+", lid):
+        return [f"链路编号不合规：{lid}（应形如 L1）"]
+    frefs = sorted(set(re.findall(r"F-\d+", ch.get("涉及功能点", ""))))
+    if len(frefs) < 2:
+        errs.append(f"链路 {lid} 只涉及 {len(frefs)} 个功能点：链路是「线之间」的串联，"
+                    f"至少串起 2 个 F（REQ-039）")
+    for ref in frefs:
+        if ref not in feat_ids:
+            errs.append(f"链路 {lid} 的涉及功能点引用了不存在的功能 {ref}")
+    miss = [c for c in CHAIN_CELLS if blank(ch.get(c))]
+    if miss:
+        errs.append(f"链路 {lid} 缺{'、'.join(miss)}：缺了这一格就说不清接缝在哪、怎么算走过")
+        return errs
+    if not re.search(r"@\d{4}-\d{2}-\d{2}", ch.get("走通验收", "")):
+        errs.append(f"链路 {lid} 的走通验收缺复核日期（@YYYY-MM-DD）：到期提醒无从触发（REQ-040）")
+    walked = (ch.get("最近走通") or "").strip()
+    if walked and not walked.startswith(("—", "-")):
+        for c in ("结论", "证据"):
+            if blank(ch.get(c)):
+                errs.append(f"链路 {lid} 记了走通日期却缺「{c}」：记录要能被复核（REQ-040）")
+    for cell in ("关键接缝", "走通验收", "证据"):
+        text = ch.get(cell, "")
+        for ref in sorted(set(re.findall(r"W\d+\.\d+", text))):
+            if ref not in work_ids:
+                errs.append(f"链路 {lid} 的{cell}引用了不存在的工作 {ref}")
+        for ref in sorted(set(re.findall(r"K\d+", text))):
+            if ref not in design_ids:
+                errs.append(f"链路 {lid} 的{cell}引用了不存在的设计卡 {ref}")
+    return errs
+
+
 # ---------------------------------------------------------------- 设计卡（P19）
 def designs_path(docs, schema):
     """设计卡的位置：门面层目录 + `names.design_card`（缺省 设计卡.md）。
@@ -526,36 +564,8 @@ def validate(weights, tasks, works, dirs, cfg, fragments=(), feats=None, cards=N
         feat_ids = set(feats["feats"]) if feats else set()
         design_ids = set(designs) if designs else set()
         for lid in sorted(chains):
-            ch = chains[lid]
-            if not re.fullmatch(r"L\d+", lid):
-                E("P20", f"链路编号不合规：{lid}（应形如 L1）")
-                continue
-            frefs = sorted(set(re.findall(r"F-\d+", ch.get("涉及功能点", ""))))
-            if len(frefs) < 2:
-                E("P20", f"链路 {lid} 只涉及 {len(frefs)} 个功能点：链路是「线之间」的串联，"
-                         f"至少串起 2 个 F（REQ-039）")
-            for ref in frefs:
-                if ref not in feat_ids:
-                    E("P20", f"链路 {lid} 的涉及功能点引用了不存在的功能 {ref}")
-            miss = [c for c in CHAIN_CELLS if blank(ch.get(c))]
-            if miss:
-                E("P20", f"链路 {lid} 缺{'、'.join(miss)}：缺了这一格就说不清接缝在哪、怎么算走过")
-                continue
-            if not re.search(r"@\d{4}-\d{2}-\d{2}", ch.get("走通验收", "")):
-                E("P20", f"链路 {lid} 的走通验收缺复核日期（@YYYY-MM-DD）：到期提醒无从触发（REQ-040）")
-            walked = (ch.get("最近走通") or "").strip()
-            if walked and not walked.startswith(("—", "-")):
-                for c in ("结论", "证据"):
-                    if blank(ch.get(c)):
-                        E("P20", f"链路 {lid} 记了走通日期却缺「{c}」：记录要能被复核（REQ-040）")
-            for cell in ("关键接缝", "走通验收", "证据"):
-                text = ch.get(cell, "")
-                for ref in sorted(set(re.findall(r"W\d+\.\d+", text))):
-                    if ref not in work_ids:
-                        E("P20", f"链路 {lid} 的{cell}引用了不存在的工作 {ref}")
-                for ref in sorted(set(re.findall(r"K\d+", text))):
-                    if ref not in design_ids:
-                        E("P20", f"链路 {lid} 的{cell}引用了不存在的设计卡 {ref}")
+            for msg in chain_formal_bad(lid, chains[lid], feat_ids, design_ids, work_ids):
+                E("P20", msg)
 
     # P19 设计卡：设计是工作与任务之间的一步。还没做完的工作必须有卡，卡里至少写满
     # 接口 / 可替换点 / 失败边界；已经做完的工作不追溯（与 P18 的存量策略一致）。
