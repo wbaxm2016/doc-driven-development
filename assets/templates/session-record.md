@@ -10,6 +10,11 @@ session_no: {{NO}}
 scope: {{SCOPE}}
 decisions: 待填
 open_items: 0
+# 成本自报（可选，收尾时填；`devlog.py cost` 会汇总成成本台账）
+# cost_minutes: 90
+# cost_tool_minutes: 15
+# cost_note: "卡在哪里、比上一场省力还是更费"
+# summary ≤ 80 字（E5）；超了 doc_check 首跑会报错
 summary: "{{DATE}} 会话档案：{{SLUG}}。"
 tags: [过程, 会话]
 ---
