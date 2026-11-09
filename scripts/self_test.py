@@ -2429,7 +2429,7 @@ def main():
                   c == 1 and hashes() == h2, out[-400:])
 
             c, out = run("plan.py", *base, "--work-id", "W9.1", cwd=tmp60)
-            check("工作号与方向不一致 → exit 1 且零写入",
+            check("--work-id 指向不存在的工作 → exit 1 且零写入",
                   c == 1 and hashes() == h2, out[-400:])
 
             # 只替换 --title 的值；--work 的值保持无竖线，避免把标题的转义算进工作名
@@ -2451,6 +2451,48 @@ def main():
             check("--work-id 指向已有工作：不新建卡、任务落 T1.1.2",
                   c == 0 and "T1.1.2" in out and "K1" in out
                   and hashes()[3] == h3[3], out[-500:])
+
+            # ISS-098：--work-id 的判据是「工作存在且方向一致」，不要求前缀数字 == 方向号
+            pl60 = read(plan60).replace(
+                "| **D1** | （示例）核心链路打通 | 方向卡.md | |",
+                "| **D1** | （示例）核心链路打通 | 方向卡.md | |\n"
+                "| **D2** | （测试）全局序号工作所在方向 | 方向卡.md | |", 1)
+            pl60 = pl60.replace(
+                "| **W1.1** | （示例）端到端跑通一次 | D1 | 待开工 | "
+                "一次真实记录 + 落库行 | — | — |",
+                "| **W1.1** | （示例）端到端跑通一次 | D1 | 待开工 | "
+                "一次真实记录 + 落库行 | — | — |\n"
+                "| **W26.3** | （测试）全局序号工作 | D2 | 进行中 | — | — | — |", 1)
+            write(plan60, pl60)
+            write(card60, read(card60).rstrip("\n") +
+                  "\n\n## K99 · W26.3 · 全局序号工作\n\n"
+                  "- **接口**：测试桩，只用来验证 --work-id 判据\n"
+                  "- **可替换点**：无（测试桩，不替换）\n"
+                  "- **失败边界**：无（测试桩，不判边界）\n")
+
+            def work_args(wid, direction):
+                args = list(base)
+                args[args.index("--direction") + 1] = direction
+                args[args.index("--work")] = "--work-id"
+                args[args.index("--work-id") + 1] = wid
+                args[args.index("--title") + 1] = f"挂 {wid}"
+                return args
+
+            h4 = hashes()
+            c, out = run("plan.py", *work_args("W26.3", "D2"), cwd=tmp60)
+            check("ISS-098：--work-id W26.3（全局序号）可给已有工作挂 REQ/F/T，"
+                  "任务落 T26.3.1 且设计卡不动",
+                  c == 0 and "T26.3.1" in out and hashes()[3] == h4[3], out[-500:])
+
+            h5 = hashes()
+            c, out = run("plan.py", *work_args("W26.3", "D1"), cwd=tmp60)
+            check("已有工作方向与 --direction 不一致 → exit 1 且零写入",
+                  c == 1 and hashes() == h5, out[-400:])
+
+            h6 = hashes()
+            c, out = run("plan.py", *work_args("W99.9", "D1"), cwd=tmp60)
+            check("--work-id 指向不存在的工作 → exit 1 且零写入（不新建）",
+                  c == 1 and hashes() == h6, out[-400:])
 
             c, out = run("plan.py", "--help", cwd=tmp60)
             check("--help 列出 new-feature（只读，不写盘）",

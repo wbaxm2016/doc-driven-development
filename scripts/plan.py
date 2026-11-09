@@ -1376,14 +1376,19 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
 
     dn = int(direction[1:])
     work_id = opts["work-id"].strip()
-    w_ids = {strip_md(c[0]) for _, c in work_t[2]}
-    existing_work = bool(work_id) and work_id in w_ids
+    work_rows = {strip_md(c[0]): c for _, c in work_t[2]}
+    existing_work = bool(work_id) and work_id in work_rows
     if work_id:
         m = re.fullmatch(r"W(\d+)\.(\d+)", work_id)
         if not m:
             return die(f"--work-id 形态不对：{work_id!r}（应为 W1.2 这种）", as_json, 1)
-        if int(m.group(1)) != dn:
-            return die(f"工作号 {work_id} 与方向 {direction} 不一致", as_json, 1)
+        if not existing_work:
+            return die(f"工作 {work_id} 不在计划 §4：--work-id 只挂已有工作"
+                       "（新建工作请省略 --work-id，用 --work 命名）", as_json, 1)
+        wdir = strip_md(work_rows[work_id][2])
+        if wdir != direction:
+            return die(f"工作号 {work_id} 挂在 {wdir} 上，与 --direction {direction} "
+                       "不一致", as_json, 1)
         tn, tm = int(m.group(1)), int(m.group(2))
     else:
         wm = 0
