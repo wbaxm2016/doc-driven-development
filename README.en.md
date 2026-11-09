@@ -4,7 +4,7 @@
 
 > This is the English translation. The Chinese [README.md](./README.md) is the source of truth; if the two differ, the Chinese version wins. Status words stay in Chinese because the scripts and templates use them.
 
-This is a skill (Agent Skill) for AI coding assistants. It moves development context from the chat window into project documents and makes the documents the project's single source of truth, so when the AI says it is done, it can point to evidence. On that foundation runs an AI-heavy, human-light development workflow.
+This is a skill (Agent Skill) for AI coding assistants, intended for people who write code with AI, especially developers with limited experience. It moves development context from the chat window into project documents and makes those documents the project's single source of truth. On that foundation, it establishes an AI-heavy, human-light development workflow: the AI handles implementation and checks, while humans make judgments only at key gates. The workflow is agile-first: build a minimum viable product and refine it through use; keep the system easy to replace, adjust, and optimize from the start; and prioritize a complete, working system over piling on features.
 
 ## What This Is
 
