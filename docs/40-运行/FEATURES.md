@@ -62,7 +62,7 @@ tags: [功能, 台账, 追溯]
 | **F-025** | 过程效率可量化（闭环周期） | REQ-014 | 已闭环表保留发现日；模板与实例同表头；54 条历史已补齐 | `python scripts/self_test.py -v`（第 42 组） | S | 已验收 | 满足✓ 可做✓ 代价S｜T11.1.4｜2026-11-03（用户「做」） | assets/templates/inbox.md、docs/70-过程/问题收件箱.md | `self_test` 第 42 组 2 条（219→221）；2.4.8 装机逐字节 缺 0 / 不等 0（2026-11-03；ISS-062 复测：本机只探到 2 处技能目录） | 各任务考核见 T11.1.4｜整体一致：全｜代价：S（同估）｜结论：保留 | 3c60bdb |
 | **F-002** | 契约 `verify:` 回检 | REQ-003 | 缺 `verify:` 即报 E18；`verify.py` 按命令真跑，失败/超时 exit 1 | `python scripts/verify.py` | M | 已验收 | 满足✓ 可做✓ 代价M｜T1.2.2｜2026-10-29 | scripts/verify.py、scripts/doc_check.py | `verify` 3 条契约 3/3 通过（2026-10-31） | 各任务考核见 T1.2.1–T1.2.3、T4.1.3｜整体一致：全｜代价：M（同估）｜结论：保留 | 276f235 |
 | **F-003** | 契约增量（delta） | REQ-003 | 根目录只放 `proposed`；已合并进 `_archive/` 且 `after` 仍在目标（E19–E21） | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T1.1.2｜2026-10-30 | scripts/doc_check.py、docs/20-契约/_delta/README.md | `self_test` 第 15 组 | 各任务考核见 T1.1.1、T1.1.2｜整体一致：全｜代价：M（同估）｜结论：保留 | 276f235 |
-| **F-004** | 过程档案与七段校验 | REQ-001 | `new` 编号与文件名正确；七段顺序与引用可判（S1–S7）；正文 H1 识别跳过 front-matter | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T2.2.1｜2026-10-30 | scripts/devlog.py | `self_test` 第 2、9、61 组 | 各任务考核见 T4.1.1、T4.5.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 24961bd |
+| **F-004** | 过程档案与七段校验 | REQ-001 | `new` 编号与文件名正确；七段顺序与引用可判（S1–S7）；正文 H1 识别跳过 front-matter | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T2.2.1｜2026-10-30 | scripts/devlog.py、assets/templates/session-record.md | `self_test` 第 2、9、61 组；T30.1.1：包内模板补成本自报三行注释、两份模板加 summary ≤ 80 字提示（`4f92213`，2026-11-09） | 各任务考核见 T4.1.1、T4.5.1、T30.1.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 4f92213 |
 | **F-005** | 交接锚点与开场简报 | REQ-001 | §7 首行「下一步：<任务编号>」必须存在于计划（S8/S9）；`brief` 只读给一屏 | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T2.2.1 / T2.3.1｜2026-10-30 | scripts/devlog.py | `self_test` 第 17、18 组 | 各任务考核见 T2.2.1、T2.3.1｜整体一致：全｜代价：M（同估）｜结论：保留 | 24961bd |
 | **F-006** | 用户侧落点与时间线 | REQ-001 | §2 已填类型的行必须有落点（S10）；时间线行数 ≠ 档案数即提醒（S11） | `python scripts/self_test.py -v` | M | 已验收 | 满足✓ 可做✓ 代价M｜T2.4.1 / T4.1.2｜2026-10-31 | scripts/devlog.py | `self_test` 第 19、21 组 | 各任务考核见 T2.4.1、T4.1.2｜整体一致：全｜代价：M（同估）｜结论：保留 | 24961bd |
 | **F-007** | 待分诊与开工门禁 | —（历史） | `ask` 记问题不占 ISS 号；未清完 `new` 拒绝；延期 >5 条也拒 | `python scripts/self_test.py -v` | M | 已验收 | —（历史） | scripts/devlog.py | `self_test` 第 20 组 | —（历史） | —（历史） |
@@ -196,6 +196,7 @@ tags: [功能, 台账, 追溯]
 | **T31.1.1** | SKILL 加「分工边界」一节（总则 + 14 动作 × 三栏：AI 定什么 / 人必须核什么 / 谁签字），vision / README 中英改指针句 | 全：三栏逐条可查、指针唯一；抽 3 个动作（方向确立 / 对照 / 发版与回滚）各答得出三栏（004 档 §3.2）；复述门过（004 档 §4 D2） | M（同估：一节 + 三处指针，未改脚本） | 保留 | bf6895e |
 | **T29.1.1** | plan 抽 chain_formal_bad 供 P20 与 brief 共用；devlog try-import plan，链路覆盖行后单列「形式待修」（计数照旧、exit 0） | ISS-105 处理方案选项 A；K37 接口=brief 链路行；self_test 第 67 组补 4 条（385/385） | S（同估：三脚本共约 90 行） | 保留 | 0d14d04 |
 | **T29.1.2** | 按链路表五连按序实跑，临时在 requirements.md 造断链验证 E7 能红，恢复后复跑全绿 | 与 K37 走通验收一致：全 0 error + 坏引用 exit 1 + 覆盖 3/3 | S（同估） | 保留（L2 接缝成立：index 在 doc_check 之前） | 91239e9 |
+| **T30.1.1** | 包内模板补成本自报三行注释、两份模板 summary 行加 ≤80 字提示、§3.1 占位逐字核对 | 临时项目 doc_init 首跑 0 error，devlog new + doc_check 0 error，新档 §3.1 与新版模板一致，脚本判据未动 | S（同估） | 保留，ISS-095/ISS-100 实现关闭，三处额外漂移登记 ISS-114 | 4f92213 |
 
 ## 已评审提案
 
