@@ -4,7 +4,7 @@
 
 > This is the English translation. The Chinese [README.md](./README.md) is the source of truth; if the two differ, the Chinese version wins. Status words stay in Chinese because the scripts and templates use them.
 
-This is a skill (Agent Skill) for AI coding assistants. It moves development context from the chat window into project documents and makes the documents the project's single source of truth. Change sessions, change people, come back after three months: no need to retell the background; when the AI says it is done, it can point to evidence.
+This is a skill (Agent Skill) for AI coding assistants. It moves development context from the chat window into project documents and makes the documents the project's single source of truth, so when the AI says it is done, it can point to evidence. On that foundation runs an AI-heavy, human-light development workflow.
 
 ## What This Is
 
@@ -25,7 +25,7 @@ People who write code with AI, especially developers with little development exp
 
 The division of labor is fixed: the AI does the implementation, reading documents, changing code, running checks; humans hold the few critical gates. A gate is a checkpoint where a human decides: is the requirement this sentence, is the direction worth walking, is the behavior that was built the right one? A human answers these questions; the AI does the rest directly and hands over evidence.
 
-No need to watch the AI step by step or approve every action; judgment happens only at the gates. This division suits less experienced developers especially: the AI covers the code-writing part, the human practices the judgment part.
+No need to watch the AI step by step or approve every action; judgment happens only at the gates. This division suits less experienced developers especially: the AI covers the code-writing part, the human practices the judgment part. The action-by-action division (who decides what, what a human must verify, who signs off) is in the "Division of Labor" section of [SKILL.md](SKILL.md).
 
 ## What It Solves
 
