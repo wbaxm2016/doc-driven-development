@@ -57,6 +57,9 @@ REPLY_TIERS = ("强", "标准", "精简")
 REPLY_DEFAULT = "强"
 REPLY_FILE = "reply-tier"
 
+# 定期减法的周期（场）。到点由 brief 提醒，判定仍归人（SKILL.md 硬规则 16）。
+PRUNE_EVERY = 4
+
 
 def die(msg, as_json=False, code=2):
     if as_json:
@@ -878,6 +881,36 @@ def ideas_filled(text):
             if len(row) >= 2 and row[1].strip().strip("`*") in IDEA_KINDS and row[2].strip():
                 return True
     return False
+
+
+def prune_filled(text):
+    """§3.10 是否真的填过一行减法结论：对象列非空。
+
+    只判「填没填」，判不了「这条规则该不该删」——判定归人，脚本只数场次（SKILL.md 硬规则 16）。
+    """
+    m = re.search(r"(?ms)^###\s*3\.10\b[^\n]*\n(.*?)(?=^#{1,3}\s|\Z)", text)
+    if not m:
+        return False
+    for _header, rows in read_tables(m.group(1)):
+        for row in rows:
+            if row and row[0].strip().strip("`*"):
+                return True
+    return False
+
+
+def prune_state(ctx):
+    """返回 (距上次减法的场数, 上次减法的档案名或 None)。
+
+    上次位置从档案里算，不另存状态文件：档案被删就从更早的那篇起算，不会因为丢了一个标记就永远不提醒。
+    """
+    files = ctx.sessions()
+    last = None
+    for path in files:
+        if prune_filled(read(path)):
+            last = path
+    if last is None:
+        return len(files), None
+    return len([p for p in files if p > last]), os.path.basename(last)
 
 
 def check_user_side(rel, text):
@@ -1864,6 +1897,7 @@ def cmd_brief(ctx, as_json=False):
 
     anchor = handoff_first_line(read(path)) if path else ""
     tier, tier_note = read_reply_tier(ctx)
+    since_prune, last_prune = prune_state(ctx)
     if not plan_ok:
         plan_line = "计划：读不到计划任务表（§5 不可读）"
     elif not pending:
@@ -1889,6 +1923,8 @@ def cmd_brief(ctx, as_json=False):
             "chains": ch,
             "reply_tier": {"value": tier, "note": tier_note,
                            "path": os.path.relpath(reply_tier_path(ctx), ctx.root)},
+            "prune": {"since": since_prune, "last": last_prune,
+                      "every": PRUNE_EVERY, "due": since_prune >= PRUNE_EVERY},
             "ideas_filled": ideas_filled(read(path)) if path else None,
             "recent": recent,
         }, ensure_ascii=False, indent=2))
@@ -1903,6 +1939,11 @@ def cmd_brief(ctx, as_json=False):
     print(plan_line)
     print(f"回复档位：{tier}（{tier_note}）"
           "← devlog.py reply-tier --set 强|标准|精简")
+    if since_prune >= PRUNE_EVERY:
+        print(f"减法：距上次 {since_prune} 场（上次 {last_prune or '从未'}）"
+              "← 到点了：本轮收尾扫一遍规则资产，结论写进 §3.10")
+    else:
+        print(f"减法：距上次 {since_prune} 场 / {PRUNE_EVERY}")
     if p_open:
         print("待分诊：open %d · deferred %d  ← 未清完不许开工（devlog.py pending）"
               % (len(p_open), len(p_def)))

@@ -3002,6 +3002,49 @@ def main():
         finally:
             shutil.rmtree(tmp69, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 70
+        print("\n70. 定期减法：brief 数场次，§3.10 填了才复位（SKILL 硬规则 16）")
+        tmp70 = tempfile.mkdtemp(prefix="ddd-selftest70-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp70)
+            tpl70 = os.path.join(tmp70, "docs", "70-过程", "会话档案模板.md")
+            check("模板含 §3.10 本轮减法", "### 3.10 本轮减法" in read(tpl70))
+
+            c, out = run("devlog.py", "brief", cwd=tmp70)
+            check("空项目：距上次 0 场、不报到点",
+                  c == 0 and "减法：距上次 0 场 / 4" in out, out[-300:])
+
+            for i in range(4):
+                run("devlog.py", "new", "--title", f"第{i + 1}场", "--scope", "自测",
+                    cwd=tmp70)
+            c, out = run("devlog.py", "brief", cwd=tmp70)
+            check("满 4 场报到点",
+                  c == 0 and "减法：距上次 4 场" in out and "到点了" in out, out[-400:])
+
+            sess70 = os.path.join(tmp70, "docs", "70-过程", "会话")
+            last70 = sorted(os.listdir(sess70))[-1]
+            last70 = os.path.join(sess70, last70)
+            write(last70, read(last70) + "\n### 3.10 本轮减法（每 4 场一次）\n\n"
+                  "| 对象 | 判据（哪条不成立 / 多久没用） | 结论 | 依据 |\n"
+                  "|---|---|---|---|\n| | | 保持 / 合并 / 降为 reference / 删除 | |\n")
+            c, out = run("devlog.py", "brief", cwd=tmp70)
+            check("只有空占位行不算做过减法",
+                  c == 0 and "减法：距上次 4 场" in out, out[-400:])
+
+            write(last70, read(last70).replace(
+                "| | | 保持 / 合并 / 降为 reference / 删除 | |",
+                "| 硬规则 16 | 本轮首次建立，还没用过 | 保持 | — |"))
+            c, out = run("devlog.py", "brief", cwd=tmp70)
+            check("填了一行就复位到 0 场",
+                  c == 0 and "减法：距上次 0 场 / 4" in out, out[-400:])
+
+            c, out = run("devlog.py", "brief", "--json", cwd=tmp70)
+            check("JSON 带 prune 状态（since / every / due）",
+                  '"due": false' in out and '"every": 4' in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp70, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
