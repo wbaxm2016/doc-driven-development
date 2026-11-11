@@ -4,18 +4,20 @@
 
 > This is the English translation. The Chinese [README.md](./README.md) is the source of truth; if the two differ, the Chinese version wins. Status words stay in Chinese because the scripts and templates use them.
 
-This is a skill (Agent Skill) for AI coding assistants, intended for people who write code with AI, especially developers with limited experience. It moves development context from the chat window into project documents and makes those documents the project's single source of truth. On that foundation, it establishes an AI-heavy, human-light development workflow: the AI handles implementation and checks, while humans make judgments only at key gates. The workflow is agile-first: build a minimum viable product and refine it through use; keep the system easy to replace, adjust, and optimize from the start; and prioritize a complete, working system over piling on features.
+This is a skill (Agent Skill) for AI coding assistants, intended for people who write code with AI, especially developers with limited experience. It moves development context from the chat window into project documents and makes those documents the project's single source of truth. On that foundation, it establishes an AI-heavy, timely-feedback, human-light development workflow: the AI handles implementation and checks while you mainly judge; timely feedback is the key seam between the AI's work and your understanding — after every change the AI self-checks first and you verify on the spot, so right-or-wrong is judged on the spot; replies stay short and a diagram beats words, keeping your cognitive load low. The workflow is agile-first: build a minimum viable product and refine it through use; keep the system easy to replace, adjust, and optimize from the start; and prioritize a complete, working system over piling on features.
 
 ## What This Is
 
 When developing with AI, context (what the AI knows about this project: requirements, progress, reasons for decisions, next steps) usually lives only in the chat window and disappears when the window closes.
 
-This skill does four things in order:
+This skill does three things in order:
 
-1. Move context from the chat window into project documents.
+1. Lay the foundation — move context from the chat window into project documents and make them the single source of truth: each fact has exactly one definition place, rules carry codes, scripts can check them, and generated sections are rebuilt by scripts, never hand-edited.
 2. Classify and organize what comes in: the user's words are filed by type, the AI's reasoning and trade-offs get their own column, the process is compressed into a handoff anchor, and conclusions settle into requirements, decisions, and feature entries.
-3. Make the documents the single source of truth: each fact has exactly one definition place, rules carry codes, scripts can check them, and generated sections are rebuilt by scripts, never hand-edited.
-4. Grow development capabilities on that foundation: process memory, decision memory, planning and ranking, an issue inbox, gates, and observability.
+3. On the foundation, raise the core skeleton — status advances only on evidence, and the five gates have machines check form while humans judge meaning; then run two lines:
+
+   - For the system's design and development process: build the minimum viable system first, then on that working base settle the system's necessary components, keep extending the system, and adjust and optimize its components.
+   - For the developer: lower cognitive load — prefer diagrams for explanations, keep text replies short and to the point.
 
 Context in the window disappears with the session; context in documents can be handed over.
 
