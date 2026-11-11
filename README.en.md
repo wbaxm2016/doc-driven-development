@@ -32,7 +32,7 @@ No need to watch the AI step by step or approve every action; judgment happens o
 AI-assisted development has four collaboration costs; this skill is designed to reduce them:
 
 1. Background retold again and again: every session change, person change, or three-month gap forces a retelling of requirements and progress. The handoff anchor plus the opening brief let the next session read the current state before starting.
-2. Fake completion by the AI: the AI says it is done, but it only changed code without verifying. Here a done item must point to a requirement, a code entry point, an acceptance command, and a commit; status advances only on evidence. Acceptance means judging whether what was built is right, not merely that the code runs.
+2. Fake completion by the AI: the AI says it is done, but it only changed code without verifying. The first gate is timely feedback after every change: the AI self-checks first and you respond on the spot, not at wrap-up. A done item must then point to a requirement, a code entry point, an acceptance command, and a commit; status advances only on evidence. Acceptance means judging whether what was built is right, not merely that the code runs.
 3. Discovered issues get lost: findings during the process either derail the main thread or disappear silently. The issue inbox lands them immediately without interrupting; closable ones close through a loop, open ones carry a return condition.
 4. Daily struggle over what to do first: re-deciding what to do every day, or pushing five things at once. The plan has one exit for the next step; order is computed from scores, never hand-arranged.
 
@@ -42,7 +42,7 @@ The goal is system-level coverage: from any entry point in the system, walk thro
 
 The approach in two sentences:
 
-- Agile first: build the minimum viable version first, use it right away, and adjust while using it. Many trade-offs can only be judged after the product is built and used on a real machine.
+- Agile first: build the minimum viable version first, use it right away, and adjust while using it. Many trade-offs can only be judged after the product is built and used on a real machine. Timely feedback is the premise of agility: after every change the AI self-checks first and you verify on the spot — what your idea became is visible, so right-or-wrong is judged on the spot and the next adjustment is decided on the spot. Feedback ranks above implementation: implementation is the means, feedback is the end.
 - AI-heavy: reversible things are done directly by the AI; humans hold only the irreversible gates. The AI makes the build-it-and-see cycle very short.
 
 Before adding any step, answer one question: how do you tell true from false, and when can it be removed? If you cannot answer, do not add it. So there are only five gates, and each gate has either a machine criterion or an explicit human judgment action. Work hours, Gantt charts, and kanban sync are explicitly not done.
