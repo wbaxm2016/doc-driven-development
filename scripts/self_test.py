@@ -3045,6 +3045,77 @@ def main():
         finally:
             shutil.rmtree(tmp70, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 71
+        print("\n71. 只读漏步检查：devlog.py flow 聚合本场欠项（REQ-055）")
+        tmp71 = tempfile.mkdtemp(prefix="ddd-selftest71-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp71)
+            docs71 = os.path.join(tmp71, "docs")
+
+            c, out = run("devlog.py", "flow", cwd=tmp71)
+            check("无档案：提示先 new 且 exit 0",
+                  c == 0 and "devlog.py new" in out, out[-400:])
+
+            run("devlog.py", "new", "--title", "漏步检查", "--scope", "自测", cwd=tmp71)
+            sess71 = os.path.join(docs71, "70-过程", "会话")
+            f71 = os.path.join(sess71, sorted(os.listdir(sess71))[-1])
+
+            c, out = run("devlog.py", "flow", cwd=tmp71)
+            check("模板档案：指出 §7 缺锚点",
+                  c == 0 and "§7" in out and "锚点" in out, out[-400:])
+
+            def snap71():
+                d = {}
+                for base, _, files in os.walk(docs71):
+                    for f in files:
+                        p = os.path.join(base, f)
+                        with open(p, "rb") as fh:
+                            d[p] = hashlib.sha256(fh.read()).hexdigest()
+                return d
+
+            before71 = snap71()
+            c, out = run("devlog.py", "flow", cwd=tmp71)
+            after71 = snap71()
+            check("flow 只读：跑前跑后文档字节不变",
+                  c == 0 and before71 == after71, "flow 改动了文件")
+
+            anchor71 = re.sub(r"(?m)^- \*\*下一步\*\*[^\n]*$",
+                              "- **下一步**：T1.1.1", read(f71), count=1)
+            write(f71, anchor71)
+            c, out = run("devlog.py", "flow", cwd=tmp71)
+            check("锚点齐了：改报 §3.7 未填",
+                  c == 0 and "§3.7" in out and "未填" in out, out[-400:])
+
+            write(f71, read(f71).replace(
+                "| | 目标 / 愿景 / 功能 / 需求 | | 本档 §2 | "
+                "vision / D-n / REQ-nnn / F-nnn / 新建 | 待裁 / 已落位：<编号> / 丢弃 |",
+                "| 1 | 需求 | 想要一个遵循技能的 agent | 本档 §2 | 新建 | 待裁 |", 1))
+            c, out = run("devlog.py", "flow", cwd=tmp71)
+            check("§3.7 填了就不再提醒",
+                  c == 0 and "§3.7 想法候选：已填" in out, out[-400:])
+
+            run("devlog.py", "ask", "要不要拆任务？", "--if", "计划只有一个任务",
+                cwd=tmp71)
+            c, out = run("devlog.py", "flow", cwd=tmp71)
+            check("有待分诊 → 指出先分诊",
+                  c == 0 and "待分诊" in out and "open 1" in out, out[-400:])
+
+            c, out = run("devlog.py", "flow", "--json", cwd=tmp71)
+            data71 = json.loads(out[out.index("{"):out.rindex("}") + 1])
+            check("--json 给同一份数据（含 next_action）",
+                  c == 0 and data71.get("next_action")
+                  and data71.get("awaiting", {}).get("open") == 1, out[-400:])
+
+            c, out = run("devlog.py", "flow", "--seen", "3", cwd=tmp71)
+            check("--seen 3 而 §2 一行没落 → 报漏记",
+                  c == 0 and "漏记" in out, out[-400:])
+
+            c, out = run("devlog.py", "flow", "--seen", "0", cwd=tmp71)
+            check("--seen 0 → 不报漏记", c == 0 and "可能漏记" not in out, out[-400:])
+        finally:
+            shutil.rmtree(tmp71, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

@@ -913,6 +913,138 @@ def prune_state(ctx):
     return len([p for p in files if p > last]), os.path.basename(last)
 
 
+def user_side_rows(text):
+    """§2 里真正落下的任务记录行数：第二列（类型）非空才算一行。
+
+    模板占位行（`| 1 | | | | | |`）第一列是编号、其余全空，不算记录——否则空档案会被
+    当成「已经记了一条」，漏记就查不出来。只判「记没记」，判不了「有没有漏记」：
+    漏记要靠 agent 传入的 --seen（本场收到的用户消息条数）比对。
+    """
+    m = re.search(r"(?ms)^##\s*2\.[^\n]*\n(.*?)(?=^##\s|\Z)", text)
+    if not m:
+        return 0
+    n = 0
+    for _header, rows in read_tables(m.group(1)):
+        n += sum(1 for row in rows
+                 if len(row) >= 2 and row[1].strip().strip("`*").strip())
+    return n
+
+
+def friction_filled(text):
+    """§3.6 是否填过一行摩擦：第一列非空（空占位行不算）。"""
+    m = re.search(r"(?ms)^###\s*3\.6\b[^\n]*\n(.*?)(?=^#{1,3}\s|\Z)", text)
+    if not m:
+        return False
+    for _header, rows in read_tables(m.group(1)):
+        for row in rows:
+            if row and row[0].strip().strip("`*").strip():
+                return True
+    return False
+
+
+def cmd_flow(ctx, args, as_json=False):
+    """只读漏步检查（REQ-055）：把本场欠的流程动作排成几行，并给出下一个动作。
+
+    它补的是 `brief` 只给「开场一屏」的缺口——agent 不必记住自己走到哪一步，
+    一条命令就能看见欠什么。只读：不写文件、不产生码、不参与门禁；判据全部复用
+    既有函数（ideas_filled / prune_state / plan_tasks / pending_rows），不新增码号。
+    """
+    path = latest_session(ctx)
+    ids, pending, plan_ok = plan_tasks(ctx)
+    wait = pending_rows(ctx)
+    p_open = [r for r in wait if r["state"] == "open"]
+    p_def = [r for r in wait if r["state"] == "deferred"]
+    since_prune, last_prune = prune_state(ctx)
+
+    text = read(path) if path else ""
+    anchor = handoff_first_line(text) if text else ""
+    # 与 S8 同一判据：有「下一步：」，且冒号后面不是空的（`**下一步**：T1.1.1` 也算）。
+    anchor_ok = bool(re.search(r"下一步[^：:\n]*[：:]\s*[^\s*_`]", anchor)) if anchor else False
+    ideas_ok = ideas_filled(text) if text else False
+    friction_ok = friction_filled(text) if text else False
+    rows = user_side_rows(text) if text else 0
+    seen = getattr(args, "seen", None)
+    missing = max(0, seen - rows) if seen is not None else None
+
+    gaps = []
+    if not path:
+        gaps.append("尚无会话档案")
+    else:
+        if not anchor_ok:
+            gaps.append("§7 交接首行不是「下一步：<任务编号>」")
+        if not ideas_ok:
+            gaps.append("§3.7 想法候选未填")
+        if not friction_ok:
+            gaps.append("§3.6 本轮摩擦未填")
+        if missing:
+            gaps.append("§2 任务记录 %d 行 / 本场消息 %d 条——可能漏记 %d 条"
+                        % (rows, seen, missing))
+
+    if not path:
+        nxt = "先 devlog.py new 建档（开场第一动作）"
+    elif p_open:
+        nxt = "先分诊待办：devlog.py pending（未清完不许开工）"
+    elif not anchor_ok:
+        nxt = "补 §7 首行「下一步：<任务编号>」"
+    elif not ideas_ok:
+        nxt = "回填 §3.7 想法候选（原话逐字，E29 会核）"
+    elif missing:
+        nxt = "把漏记的 %d 条消息补进 §2（类型 / 原话 / 入口 / 状态）" % missing
+    elif plan_ok and pending:
+        nxt = "按计划继续：" + "、".join(sorted(pending)[:3])
+    else:
+        nxt = ("可以收尾：跑五连跑"
+               "（devlog check → index → plan check → index → doc_check）")
+
+    if as_json:
+        print(json.dumps({
+            "ok": True,
+            "session": os.path.basename(path) if path else None,
+            "anchor": anchor,
+            "anchor_ok": anchor_ok,
+            "sections": {"user_side_rows": rows,
+                         "ideas": ideas_ok,
+                         "friction": friction_ok,
+                         "prune": {"since": since_prune,
+                                   "last": last_prune,
+                                   "every": PRUNE_EVERY,
+                                   "due": since_prune >= PRUNE_EVERY}},
+            "awaiting": {"open": len(p_open), "deferred": len(p_def)},
+            "plan": {"ok": plan_ok, "pending": sorted(pending)},
+            "seen": seen,
+            "missing": missing,
+            "gaps": gaps,
+            "next_action": nxt,
+        }, ensure_ascii=False, indent=2))
+        return 0
+
+    print("=== 流程检查（只读） ===")
+    print("档案：" + (os.path.basename(path) if path else "无（先 devlog.py new）"))
+    if path:
+        print("§7 锚点：" + (anchor if anchor_ok else "缺锚点——首行要写「下一步：<任务编号>」"))
+        if seen is not None:
+            print("§2 任务记录：%d 行（本场消息 %d 条%s）"
+                  % (rows, seen, "，可能漏记 %d 条" % missing if missing else "，没有漏记"))
+        else:
+            print("§2 任务记录：%d 行（--seen 未给，漏记判不了）" % rows)
+        print("§3.7 想法候选：" + ("已填" if ideas_ok else "未填"))
+        print("§3.6 本轮摩擦：" + ("已填" if friction_ok else "未填"))
+        print("§3.10 减法：" + ("到点了（距上次 %d 场 ≥ %d）" % (since_prune, PRUNE_EVERY)
+                               if since_prune >= PRUNE_EVERY
+                               else "未到点（距上次 %d 场 / %d）" % (since_prune, PRUNE_EVERY)))
+    print("待分诊：open %d · deferred %d" % (len(p_open), len(p_def)))
+    if not plan_ok:
+        print("计划：读不到计划任务表（§5 不可读）")
+    elif not pending:
+        print("计划：未完成 0 / %d（计划表全部已完成）" % len(ids))
+    else:
+        print("计划：未完成 %d / %d（%s）"
+              % (len(pending), len(ids), "、".join(sorted(pending)[:5])))
+    print("缺口：" + ("、".join(gaps) if gaps else "无"))
+    print("下一个动作：" + nxt)
+    return 0
+
+
 def check_user_side(rel, text):
     """S10：§2 用户侧记录里**已填类型**的行必须给出落点。
 
@@ -2280,6 +2412,9 @@ def main():
     p_new.add_argument("--date", default=None)
     p_new.add_argument("--scope", default="待填")
     sub.add_parser("brief")
+    p_flow = sub.add_parser("flow")
+    p_flow.add_argument("--seen", type=int, default=None,
+                        help="本场已收到的用户消息条数（agent 传入；给了才判漏记）")
     p_ask = sub.add_parser("ask")
     p_ask.add_argument("question")
     p_ask.add_argument("--if", dest="premise", default="")
@@ -2343,6 +2478,8 @@ def main():
         return cmd_new(ctx, args)
     if args.cmd == "brief":
         return cmd_brief(ctx, as_json)
+    if args.cmd == "flow":
+        return cmd_flow(ctx, args, as_json)
     if args.cmd == "ask":
         return cmd_ask(ctx, args)
     if args.cmd == "pending":
