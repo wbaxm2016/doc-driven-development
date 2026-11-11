@@ -1876,6 +1876,26 @@ def main():
             c, out = run("devlog.py", "check", cwd=tmp39)
             check("填过一行后 check 不再报 S13", c == 0 and "[S13]" not in out, out[-200:])
 
+            # ISS-118：模板允许「没有就写『无』」的散文式填法，S13 / brief 必须认它；
+            # 但「散文里只是含无」不算——否则提醒会从「总响」变成「总不响」。
+            def section37(body):
+                return re.sub(r"(?ms)(^### 3\.7[^\n]*\n).*?(?=^### 3\.8)",
+                              lambda m: m.group(1) + "\n" + body + "\n\n", read(a))
+
+            write(a, section37("无"))
+            c, out = run("devlog.py", "brief", cwd=tmp39)
+            check("§3.7 写散文「无」→ brief 不再提醒", c == 0 and "整理：" not in out, out[-200:])
+            c, out = run("devlog.py", "check", cwd=tmp39)
+            check("§3.7 写散文「无」→ check 不报 S13", c == 0 and "[S13]" not in out, out[-200:])
+
+            write(a, section37("无。"))
+            c, out = run("devlog.py", "brief", cwd=tmp39)
+            check("散文「无。」（带句号）仍算已填", c == 0 and "整理：" not in out, out[-200:])
+
+            write(a, section37("本场没有要整理的想法"))
+            c, out = run("devlog.py", "brief", cwd=tmp39)
+            check("散文只是含「无」不算已填（反例）", c == 0 and "整理：" in out, out[-200:])
+
             skill_md = read(os.path.join(SKILL, "SKILL.md"))
             check("SKILL 硬规则含「开场先跑 brief + 收尾回填 §3.7」",
                   "开场先跑 `brief`" in skill_md and "§3.7" in skill_md, "")

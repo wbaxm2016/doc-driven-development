@@ -869,18 +869,24 @@ IDEA_KINDS = ("目标", "愿景", "功能", "需求")
 
 
 def ideas_filled(text):
-    """§3.7 是否真的填过一行想法：类别是四类之一且原话非空。
+    """§3.7 是否真的填过想法：表格行（类别是四类之一且原话非空）或散文式「无」。
 
+    模板允许「没有就写『无』」，所以一段只有「无」（可带句号 / 括号）的散文也算填过（ISS-118）；
+    去掉引用说明与表格后整段仍多出别的字，就不算——提醒不能从「总响」变成「总不响」。
     只判「填没填」，判不了「这条算不算想法」——所以它只做提醒（S13 / brief），不阻断收尾。
     """
     m = re.search(r"(?ms)^###\s*3\.7\b[^\n]*\n(.*?)(?=^#{1,3}\s|\Z)", text)
     if not m:
         return False
-    for _header, rows in read_tables(m.group(1)):
+    seg = m.group(1)
+    for _header, rows in read_tables(seg):
         for row in rows:
             if len(row) >= 2 and row[1].strip().strip("`*") in IDEA_KINDS and row[2].strip():
                 return True
-    return False
+    prose = "\n".join(
+        line.strip() for line in seg.splitlines()
+        if line.strip() and not line.strip().startswith((">", "|")))
+    return prose.strip().strip("。.．；;，,（）()【】[] ") == "无"
 
 
 def prune_filled(text):
