@@ -1164,6 +1164,38 @@ def check_decision_review(rel, text):
     return errs
 
 
+RUN_ID_RE = re.compile(r"r-\d{8}-\d{6}-[0-9a-f]{6}")
+
+
+def check_run_record_refs(rel, text, ctx, is_latest):
+    """S15 / W14：§6 引用的运行记录必须真实存在；最新一篇没写只提醒。
+
+    运行记录由 `observe.py five-run` 写进 `.dd/observe/runs/<run_id>.jsonl`。
+    只判「引用 → 文件存在」；run id 是否属于本场、记录内容对不对，仍需人读。
+    只判最新一篇（与 S12 / S13 同法，ISS-032）：更早的档案没写 run id 不追溯。
+    写「无（分开跑）」表示本次照旧分开跑五条，不提醒。
+    """
+    errs, warns = [], []
+    if not is_latest:
+        return errs, warns
+    sec = re.search(r"(?ms)^##\s+6[\.、\s][^\n]*\n(.*?)(?=^##\s|\Z)", text)
+    body = sec.group(1) if sec else ""
+    ids = sorted(set(RUN_ID_RE.findall(body)))
+    for rid in ids:
+        path = os.path.join(ctx.root, ".dd", "observe", "runs", rid + ".jsonl")
+        if not os.path.isfile(path):
+            errs.append({"file": rel, "code": "S15",
+                         "message": f"§6 引用的运行记录不存在：{rid}"
+                                    f"（.dd/observe/runs/{rid}.jsonl）——"
+                                    f"先跑 observe.py five-run，或改成真实 run id"})
+    separate = re.search(r"(?m)^\s*>?\s*运行记录\s*[：:]\s*无（分开跑）", body)
+    if not ids and not separate:
+        warns.append({"file": rel, "code": "W14",
+                      "message": "§6 没写运行记录（run id）——若本次用 observe.py five-run"
+                                 " 收尾，把 run id 写进 §6；分开跑五条时写「无（分开跑）」"})
+    return errs, warns
+
+
 def check_handoff_anchor(rel, m, plan_ids, pending, plan_ok, cfg, is_latest=True):
     """S8/S9：交接段首行必须是「下一步：<任务编号>」，并与计划任务表互校。
 
@@ -1441,6 +1473,9 @@ def cmd_check(ctx, as_json=False):
                 warns.append({"file": rel, "code": "S13",
                               "message": "想法候选（§3.7）还没填：收尾时把本场用户原话里的"
                                          " 目标 / 愿景 / 功能 / 需求 抽一次"})
+            e3, w3 = check_run_record_refs(rel, text, ctx, True)
+            errors.extend(e3)
+            warns.extend(w3)
 
         m = re.search(r"(?ms)^##\s+[^\n]*交接[^\n]*\n(.*)$", text)
         if m and len(re.sub(r"[>\-*#\s]", "", m.group(1))) < 40:

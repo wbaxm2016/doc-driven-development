@@ -3180,6 +3180,50 @@ def main():
         finally:
             shutil.rmtree(tmp72, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 73
+        print("\n73. 档案引用运行记录：S15 存在性 / W14 提醒（T13.3.2）")
+        tmp73 = tempfile.mkdtemp(prefix="ddd-selftest73-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp73)
+            run("devlog.py", "new", "--title", "引用运行记录", "--scope", "自测", cwd=tmp73)
+            sess73 = os.path.join(tmp73, "docs", "70-过程", "会话")
+            f73 = os.path.join(sess73, sorted(os.listdir(sess73))[-1])
+            runs73 = os.path.join(tmp73, ".dd", "observe", "runs")
+            os.makedirs(runs73, exist_ok=True)
+            rid73 = "r-20260101-000000-abcdef"
+            write(os.path.join(runs73, rid73 + ".jsonl"), "{}\n")
+
+            with_id = read(f73).replace(
+                "## 6. 本次产出\n",
+                "## 6. 本次产出\n\n运行记录：" + rid73 + "\n", 1)
+            write(f73, with_id)
+            c, out = run("devlog.py", "check", cwd=tmp73)
+            check("§6 引用的运行记录存在 → 无 S15 / W14",
+                  c == 0 and "S15" not in out and "W14" not in out, out[-400:])
+
+            write(f73, with_id.replace(rid73, "r-20260101-000000-badbad"))
+            c, out = run("devlog.py", "check", cwd=tmp73)
+            check("引用不存在的 run id → S15 且 exit 1",
+                  c == 1 and "S15" in out, out[-400:])
+
+            write(f73, with_id.replace("\n运行记录：" + rid73 + "\n", "\n"))
+            c, out = run("devlog.py", "check", cwd=tmp73)
+            check("最新一篇没写 run id → W14 提醒、不阻断",
+                  c == 0 and "W14" in out and "S15" not in out, out[-400:])
+
+            write(f73, read(f73).replace(
+                "## 6. 本次产出\n", "## 6. 本次产出\n\n运行记录：无（分开跑）\n", 1))
+            c, out = run("devlog.py", "check", cwd=tmp73)
+            check("写「无（分开跑）」→ 不提醒",
+                  c == 0 and "W14" not in out, out[-400:])
+
+            run("devlog.py", "new", "--title", "更晚一篇", "--scope", "自测", cwd=tmp73)
+            c, out = run("devlog.py", "check", cwd=tmp73)
+            check("旧档没写 run id 不追溯（W14 只出现一次）",
+                  c == 0 and out.count("[W14]") == 1, out[-500:])
+        finally:
+            shutil.rmtree(tmp73, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
