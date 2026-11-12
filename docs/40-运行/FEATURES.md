@@ -221,6 +221,7 @@ tags: [功能, 台账, 追溯]
 | **T2.1.5** | agents-snippet 收尾五条命令改为与 SKILL 同序（doc_check 最后），收件箱 ISS-120 移入已闭环 | 与 SKILL / AGENTS 逐字同序；只改片段，未动 SKILL 与脚本 | S（同估：一处文本 + 台账回写） | 保留；发版时随包发出（发版另议） | 65d7ae2 |
 | **T19.2.1** | 抄标准 preset 的插件清单、只换 persona（触发一句 + 边界一句），装到本机 profile 并用 cordis_inspect 核 preset-doc-driven active | 全（载体与装机一致；新会话行为待 RV-004） | S（同估） | 保留 | 83f8f1e |
 | **T2.1.6** | 编辑规则收紧：精确编辑清单的「位置」改为原文锚点（逐字、唯一命中，不用行号）；`SKILL.md` 与 `assets/agents-snippet.md` 同口径 | 与「编辑锚点用原文」一致，与 `_delta` 的 `before` 同口径；两处同款，未动脚本与校验码 | S（同估：两处文本 + 台账回写） | 保留 | dd034b6 |
+| **T2.1.7** | 落分支管理规则：`dsh-modal` 独立前进，`main` 有变化即合入 `dsh-modal`；写进 `AGENTS.md`「Git 提交与任务」 | 与用户原话一致（独立前进 + 单向同步）；只加一条规则，未动脚本与分支模型 | S（同估：一条规则 + 一次合并） | 保留 | cc0260e |
 
 ## 已评审提案
 
