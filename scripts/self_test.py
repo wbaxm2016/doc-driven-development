@@ -3136,6 +3136,50 @@ def main():
         finally:
             shutil.rmtree(tmp71, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 72
+        print("\n72. 收尾有痕：five-run 与收尾五连跑同序、失败非零、留记录（REQ-057）")
+        tmp72 = tempfile.mkdtemp(prefix="ddd-selftest72-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=tmp72)
+            shutil.copy(os.path.join(SKILL, "scripts", "observe.py"),
+                        os.path.join(tmp72, "scripts", "observe.py"))
+            canonical72 = ["devlog.check", "devlog.index", "plan.check",
+                           "plan.index", "doc_check"]
+            runs72 = os.path.join(tmp72, ".dd", "observe", "runs")
+
+            def record72(out_text):
+                m = re.search(r"run_id=(\S+)", out_text)
+                if not m:
+                    return None, []
+                path = os.path.join(runs72, m.group(1) + ".jsonl")
+                if not os.path.isfile(path):
+                    return m.group(1), []
+                recs = [json.loads(line) for line in read(path).splitlines() if line.strip()]
+                return m.group(1), recs
+
+            c, out = run("observe.py", "five-run", cwd=tmp72)
+            rid72, recs72 = record72(out)
+            check("five-run 干净骨架 5/5 且 exit 0", c == 0 and "5/5" in out, out[-400:])
+            check("five-run 按收尾口径同序（doc_check 最后）",
+                  [r.get("component") for r in recs72] == canonical72,
+                  f"{rid72}: {[r.get('component') for r in recs72]}")
+
+            write(os.path.join(tmp72, "docs", "00-门面", "bad.md"),
+                  "# 坏档\n\n没有 front-matter。\n")
+            c, out = run("observe.py", "five-run", cwd=tmp72)
+            rid72b, recs72b = record72(out)
+            check("任一步失败 → exit 1 且打印失败步",
+                  c == 1 and "doc_check FAIL" in out, out[-400:])
+            check("失败时仍按同序记录五步",
+                  [r.get("component") for r in recs72b] == canonical72,
+                  f"{rid72b}: {[r.get('component') for r in recs72b]}")
+            check("失败落在最后一步 doc_check",
+                  bool(recs72b) and recs72b[-1].get("component") == "doc_check"
+                  and recs72b[-1].get("actual", {}).get("exit_code") == 1,
+                  json.dumps(recs72b[-1] if recs72b else {}, ensure_ascii=False)[:300])
+        finally:
+            shutil.rmtree(tmp72, ignore_errors=True)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

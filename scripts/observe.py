@@ -4,7 +4,7 @@
 
 用法：
     python scripts/observe.py run [--name N] [--run-id R] [--expected T] -- <命令...>
-    python scripts/observe.py five-run [--run-id R]
+    python scripts/observe.py five-run [--run-id R]   # 与收尾五连跑同序：先重建生成区，最后全库校验
     python scripts/observe.py show <run_id> [--json]
     python scripts/observe.py status [--limit N] [--check]
     python scripts/observe.py trend [--limit N] [--since DATE] [--json]
@@ -198,12 +198,14 @@ def cmd_five_run(args):
     cwd = os.path.abspath(args.cwd or os.getcwd())
     run_id = args.run_id or ("r-" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
                              + "-" + uuid.uuid4().hex[:6])
+    # 顺序必须与 SKILL「日常三动作 · 收尾」一致：先重建生成区，最后全库校验
+    # （ISS-122；self_test 第 72 组用独立期望序列盯住）。
     steps = [
-        ("doc_check", ["doc_check.py"], "errors=0"),
         ("devlog.check", ["devlog.py", "check"], "errors=0"),
         ("devlog.index", ["devlog.py", "index"], "index 写出"),
         ("plan.check", ["plan.py", "check"], "errors=0"),
         ("plan.index", ["plan.py", "index"], "index 写出"),
+        ("doc_check", ["doc_check.py"], "errors=0"),
     ]
     bad = 0
     for i, (span, cmd, expected) in enumerate(steps, 1):
