@@ -374,7 +374,7 @@ python "<技能目录>/scripts/doc_init.py" --target . --full --ci  # 另写 pre
 
 ## 模板与脚本
 
-详细清单见 `references/reference.md`。这里只列目录级入口：模板在 `assets/templates/`（含 `docs-README`、`session-record`、`inbox`、`verification`、`timeline`、`dev-plan`、`adr`、`requirements`、`features`、`direction`、`design`、`observability`、`feature-check`、`alias-table`、`process-readme`），CI 样例在 `assets/ci/`，`AGENTS.md` 片段在 `assets/agents-snippet.md`；脚本在 `scripts/`（`doc_init` / `doc_check` / `devlog` / `plan` / `verify` / `self_test` / `observe` / `yaml_rules`）。
+详细清单见 `references/reference.md`。这里只列目录级入口：模板在 `assets/templates/`（含 `docs-README`、`session-record`、`inbox`、`verification`、`timeline`、`dev-plan`、`adr`、`requirements`、`features`、`direction`、`design`、`observability`、`feature-check`、`alias-table`、`process-readme`），CI 样例在 `assets/ci/`，`AGENTS.md` 片段在 `assets/agents-snippet.md`，DSH 薄模式样例在 `assets/dsh-preset/`；脚本在 `scripts/`（`doc_init` / `doc_check` / `devlog` / `plan` / `verify` / `self_test` / `observe` / `yaml_rules`）。
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。
 
