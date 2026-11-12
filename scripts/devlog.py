@@ -1174,9 +1174,13 @@ def check_run_record_refs(rel, text, ctx, is_latest):
     只判「引用 → 文件存在」；run id 是否属于本场、记录内容对不对，仍需人读。
     只判最新一篇（与 S12 / S13 同法，ISS-032）：更早的档案没写 run id 不追溯。
     写「无（分开跑）」表示本次照旧分开跑五条，不提醒。
+    运行记录是本机产物（`.dd/` 不进版本库）：记录库整个不存在（新检出 / 未用过
+    observe）时跳过，不把「这里没有记录」报成「引用了假记录」。
     """
     errs, warns = [], []
     if not is_latest:
+        return errs, warns
+    if not os.path.isdir(os.path.join(ctx.root, ".dd")):
         return errs, warns
     sec = re.search(r"(?ms)^##\s+6[\.、\s][^\n]*\n(.*?)(?=^##\s|\Z)", text)
     body = sec.group(1) if sec else ""

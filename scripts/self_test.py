@@ -3221,6 +3221,11 @@ def main():
             c, out = run("devlog.py", "check", cwd=tmp73)
             check("旧档没写 run id 不追溯（W14 只出现一次）",
                   c == 0 and out.count("[W14]") == 1, out[-500:])
+
+            shutil.rmtree(os.path.join(tmp73, ".dd"), ignore_errors=True)
+            c, out = run("devlog.py", "check", cwd=tmp73)
+            check("没有记录库（新检出）→ 跳过 S15 / W14",
+                  c == 0 and "S15" not in out and "W14" not in out, out[-400:])
         finally:
             shutil.rmtree(tmp73, ignore_errors=True)
 
