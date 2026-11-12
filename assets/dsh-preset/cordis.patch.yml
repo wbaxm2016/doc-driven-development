@@ -9,7 +9,7 @@
       name: '@deepseek-ai/dsh-agent-preset'
       config:
         id: doc-driven
-        name: Doc-Driven
+        name: 文档驱动开发
         description: 文档驱动开发：开场先加载 doc-driven-development 技能，规则仍只在技能里。
         order: 10
         plugins:
