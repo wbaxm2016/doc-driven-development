@@ -199,7 +199,9 @@ def split_row(s):
 
 
 def table_width_errors(text):
-    """[(行号, 表头格数, 本行格数)]：行内未转义竖线会让整行错位（E28）。"""
+    """[(行号, 表头格数, 本行格数)]：行内未转义竖线会让整行错位（E28）。
+    本行格数为 None 表示「表尾截断」：在表格里，行首有竖线但行尾没有。
+    """
     out, head = [], None
     for no, line in enumerate(text.splitlines(), 1):
         s = line.strip()
@@ -210,6 +212,8 @@ def table_width_errors(text):
             elif n != head:
                 out.append((no, head, n))
         else:
+            if head is not None and s.startswith("|") and len(s) > 2:
+                out.append((no, head, None))
             head = None
     return out
 
@@ -931,10 +935,16 @@ def main():
                 add(errors, rel, "E14", f"文件名带版本号：{base}（版本走 front-matter 或 Git）")
 
         # ---- E28 表格行格数 ≠ 表头：cell 里未转义的竖线会让整行错位（ISS-070）
+        #      扩判：表格里行首有竖线、行尾没有 → 表尾截断，该行与其后行不被解析（ISS-124）
         for no, hn, rn in table_width_errors(strip_fences(body)):
-            add(errors, rel, "E28",
-                f"第 {no} 行有 {rn} 格、表头 {hn} 格：cell 里出现了未转义的竖线，整行会错位"
-                f"（写成「A / B / C 三列」，或用 `\\|` 转义）")
+            if rn is None:
+                add(errors, rel, "E28",
+                    f"第 {no} 行表尾截断（行首有竖线、行尾没有）：该行与其后行可能不被解析，"
+                    f"补上末尾的 `|`")
+            else:
+                add(errors, rel, "E28",
+                    f"第 {no} 行有 {rn} 格、表头 {hn} 格：cell 里出现了未转义的竖线，整行会错位"
+                    f"（写成「A / B / C 三列」，或用 `\\|` 转义）")
 
         # ---- E29 想法候选：类别 / 原话逐字 / 落点编号（ISS-073、REQ-016）
         idea_seg, idea_scope = ideas_parts(body)

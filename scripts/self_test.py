@@ -207,6 +207,14 @@ def main():
             _, out = run("doc_check.py", cwd=tmp28)
             check("转义后的竖线不再报 E28（切表与校验同口径）",
                   "E28" not in codes(out), out[-300:])
+            write(req28, insert_after(base28, "| **REQ-001** |",
+                  "| **REQ-098** | WHEN 甲 THE SYSTEM SHALL 乙 | 验收句 | `echo 1` | 已实现 | 甲 | 采纳✓ 2026-11-03｜自测"))
+            _, out = run("doc_check.py", cwd=tmp28)
+            check("E28 表尾截断（行首有竖线、行尾没有）报出且文案含「截断」",
+                  "E28" in codes(out) and "截断" in out, out[-300:])
+            write(req28, base28)
+            _, out = run("doc_check.py", cwd=tmp28)
+            check("补回行尾竖线后不再报 E28", "E28" not in codes(out), out[-300:])
         finally:
             shutil.rmtree(tmp28, ignore_errors=True)
 
