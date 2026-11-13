@@ -86,6 +86,17 @@ python scripts/doc_check.py      # 全库字段与链接
 6. `python install.py --from dist`：按 `install-targets.json` 装各宿主，装完逐字节核对并打印「缺 0 / 不等 0」；各端 `.install.json` 记 `source=dist`、commit 与产物路径。
 7. 提交 `dist/`，推远端。
 
+### 一条命令（推荐）
+
+上面第 4–6 步的顺序与核对已经收进 `release.py`。包内改动提交之后：
+
+```bash
+python release.py --dry-run     # 先看它认不认：版本 / CHANGELOG 段 / 包内是否已提交 / 几端
+python release.py               # 预检 → 体检 → 源目录自测 ∥ 打包 + 解包后自测 → 验包 → 装各端并逐端核对
+```
+
+它**只编排** `build.py` 与 `install.py`：不改版本号、不改 `CHANGELOG`、不 `commit`、不 `push`、不打 tag——上面的第 1–3 步与最后提交 `dist/` 仍由人做。任一步失败就停：`dist/` 保持上一版、宿主没动，修好后重跑即可（幂等）。`--skip-install` 只到验包；`--jobs 1` 让两个自测串行，排障时看完整输出。
+
 ### 发 GitHub Release
 
 tag 不发满每个版本，只给「以后可能要回滚到这里」的打：现在是 `v2.3.2`、`v2.4.0`、`v2.4.8`、`v2.4.10`、`v2.5.3`；其余补丁只出产物、不打 tag。

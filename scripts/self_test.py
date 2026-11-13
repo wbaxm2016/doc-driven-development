@@ -3260,6 +3260,62 @@ def main():
         finally:
             shutil.rmtree(tmp73, ignore_errors=True)
 
+        # ---------------------------------------------------------------- 74
+        print("\n第 74 组：发版一条命令（release.py）")
+        rel = os.path.join(SKILL, "release.py")
+        if not os.path.exists(rel):
+            print("  SKIP  这里没有 release.py（维护者工具，不进包；包内跑不到它）")
+        else:
+            def sha_tree(base):
+                h = hashlib.sha256()
+                for cur, dirs, names in os.walk(base):
+                    dirs.sort()
+                    for n in sorted(names):
+                        p = os.path.join(cur, n)
+                        h.update(os.path.relpath(p, base).replace("\\", "/").encode("utf-8"))
+                        with open(p, "rb") as fh:
+                            h.update(fh.read())
+                return h.hexdigest()
+
+            def run_release(*args):
+                env = dict(os.environ, PYTHONIOENCODING="utf-8")
+                p = subprocess.run([PY, rel, *args], cwd=SKILL, capture_output=True,
+                                   text=True, encoding="utf-8", errors="replace",
+                                   env=env, timeout=120)
+                return p.returncode, (p.stdout or "") + (p.stderr or "")
+
+            before = sha_tree(os.path.join(SKILL, "docs"))
+            c, out = run_release("--dry-run")
+            after = sha_tree(os.path.join(SKILL, "docs"))
+            check("--dry-run 零写入（docs/ 字节不变）", before == after,
+                  "docs/ 被改写了——只读命令不该落盘")
+            check("--dry-run 给出预检 / 步骤 / 目标三块",
+                  "预检" in out and "步骤" in out and "目标" in out, out[-300:])
+            clean_tree = "包内改动已提交" in out
+
+            c, out = run_release("--help")
+            check("--help 写明不改版本、不提交、不推送",
+                  c == 0 and "不提交" in out, out[-300:])
+            c, out = run_release("--dry-run", "--jobs", "0")
+            check("--jobs 0 → exit 2（参数问题，不是发版失败）", c == 2, f"exit {c}")
+
+            probe = os.path.join(SKILL, "scripts", "_release_dirty_probe.py")
+            try:
+                write(probe, "# 只为一件事：让包内文件变脏\n")
+                c, out = run_release("--dry-run")
+                check("包内文件未提交 → 第一步就拒并说「先提交」",
+                      c == 1 and "先提交" in out, out[-300:])
+                os.remove(probe)
+                if clean_tree:
+                    c, out = run_release("--dry-run")
+                    check("去掉脏文件 → 预检恢复通过", c == 0 and "包内改动已提交" in out,
+                          out[-300:])
+                else:
+                    print("  SKIP  工作区本身有未提交的包内改动，跳过「干净态」断言")
+            finally:
+                if os.path.exists(probe):
+                    os.remove(probe)
+
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
