@@ -92,7 +92,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 # 码表：顺序即打印顺序，也用于 --json 的 counts
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
-         "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27", "E31",
+         "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27", "E31", "E32",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W12"]
 
 
@@ -143,6 +143,29 @@ def strip_code(text):
 def strip_fences(text):
     """只剔除围栏代码块，保留行内代码——E18 要看 verify 单元格里的命令本身。"""
     return re.sub(r"(?ms)^[ \t]*(```|~~~).*?^[ \t]*\1", "", text)
+
+
+def strip_fences_keep_lines(text):
+    """剔除围栏代码块但保留行数：报文里写「第 N 行」的判据要靠它（ISS-126）。
+
+    `strip_fences` 会把围栏整段删掉，后面所有行号都往前漂——报出来的行
+    指不到真位置，诊断等于又撒谎一次。围栏内的行一律换成空行占位。
+    """
+    out, fence = [], None
+    for line in text.splitlines():
+        s = line.strip()
+        if fence is None:
+            m = re.match(r"^(```|~~~)", s)
+            if m:
+                fence = m.group(1)
+                out.append("")
+                continue
+            out.append(line)
+        else:
+            if s.startswith(fence):
+                fence = None
+            out.append("")
+    return "\n".join(out)
 
 
 def verify_col(header):
@@ -196,6 +219,39 @@ def split_row(s):
         i += 1
     cells.append(cur.strip())
     return cells
+
+
+# 分隔行：每个单元格都是 `---` / `:--:` / `--:`。完整的表 = 表头 + 这一行 + 数据行，
+# 缺了它，那一段就不是表（ISS-126）
+TABLE_SEP_RE = re.compile(r"^:?-{2,}:?$")
+
+
+def table_break_errors(text):
+    """[(起始行号, 行数)]：表被空行 / 断行切断后，后半段成了没有表头的表块（ISS-126）。
+
+    判据：一块连续的首尾带竖线的行（≥2 行），若第 2 行不是 `|---|` 分隔行，它就
+    不在任何表里——`read_tables` 会把它当成新表的表头、或整块跳过。行还在文件里，
+    但脚本数不到：与 `P13`（计划表被切断过一次，ISS-035）同族，只是这次管全库的
+    Markdown 表。单行残段不判：补一行、贴一行太常见，判它会变成误报。
+    """
+    out, block = [], []
+
+    def flush():
+        # 只判 ≥2 行的残段：单行以竖线开头结尾很常见（补一行、贴一行），
+        # 判它会变成「误报比漏报更伤」的反例；表的后半段至少两行才算断口
+        if len(block) >= 2 and not all(
+                TABLE_SEP_RE.fullmatch(c or "-") for c in block[1][1]):
+            out.append((block[0][0], len(block)))
+        block.clear()
+
+    for no, line in enumerate(text.splitlines(), 1):
+        s = line.strip()
+        if s.startswith("|") and s.endswith("|") and len(s) > 2:
+            block.append((no, split_row(s)))
+        else:
+            flush()
+    flush()
+    return out
 
 
 def table_width_errors(text):
@@ -936,15 +992,27 @@ def main():
 
         # ---- E28 表格行格数 ≠ 表头：cell 里未转义的竖线会让整行错位（ISS-070）
         #      扩判：表格里行首有竖线、行尾没有 → 表尾截断，该行与其后行不被解析（ISS-124）
-        for no, hn, rn in table_width_errors(strip_fences(body)):
+        # 行号按整篇文件算：body 从 front-matter 之后开始，围栏换成空行保留行数（ISS-126）
+        body_off = text[:len(text) - len(body)].count("\n")
+        scan = strip_fences_keep_lines(body)
+        for no, hn, rn in table_width_errors(scan):
             if rn is None:
                 add(errors, rel, "E28",
-                    f"第 {no} 行表尾截断（行首有竖线、行尾没有）：该行与其后行可能不被解析，"
+                    f"第 {no + body_off} 行表尾截断（行首有竖线、行尾没有）：该行与其后行可能不被解析，"
                     f"补上末尾的 `|`")
             else:
                 add(errors, rel, "E28",
-                    f"第 {no} 行有 {rn} 格、表头 {hn} 格：cell 里出现了未转义的竖线，整行会错位"
+                    f"第 {no + body_off} 行有 {rn} 格、表头 {hn} 格：cell 里出现了未转义的竖线，整行会错位"
                     f"（写成「A / B / C 三列」，或用 `\\|` 转义）")
+
+        # ---- E32 表被空行 / 断行切断：后半段成了没有表头的表块（ISS-126）
+        #      ISS-035 的教训（计划表被切断，脚本只数到一半）现在有全库判据：
+        #      「行还在文件里、脚本数不到」是 errors=0 里最隐蔽的一种说谎
+        for no, rows in table_break_errors(scan):
+            add(errors, rel, "E32",
+                f"第 {no + body_off} 行起有 {rows} 行表格行，但这一段不是完整的表"
+                f"（缺表头或 `|---|` 分隔行）：表被空行 / 断行切断，这几行不会被读到"
+                f"（接回上一张表，或补表头 + 分隔行）")
 
         # ---- E29 想法候选：类别 / 原话逐字 / 落点编号（ISS-073、REQ-016）
         idea_seg, idea_scope = ideas_parts(body)

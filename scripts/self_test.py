@@ -218,6 +218,47 @@ def main():
         finally:
             shutil.rmtree(tmp28, ignore_errors=True)
 
+        # E32：表被空行 / 断行切断后，后半段成了没有表头的表块（ISS-126）。
+        # 以前这种表「行还在文件里、脚本数不到」——本轮在方向卡的回看表上真撞到过，
+        # 是 S5 误报一堆「引用了不存在的 ISS」才反查出来。
+        tmp32 = tempfile.mkdtemp(prefix="ddd-selftest32-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp32)
+            p32 = os.path.join(tmp32, "docs", "40-运行", "拆表自测.md")
+            body32 = "\n".join([
+                "---",
+                'title: "拆表自测"',
+                "layer: operation",
+                "domain: 校验",
+                "status: active",
+                "authority: 3",
+                "updated: 2026-11-13",
+                'summary: "自测用：表被空行切断。"',
+                "---",
+                "",
+                "# 拆表自测",
+                "",
+                "| ID | 值 |",
+                "|---|---|",
+                "| A | 1 |",
+                "",
+                "| B | 2 |",
+                "| C | 3 |",
+                "",
+            ])
+            write(p32, body32)
+            _, out = run("doc_check.py", cwd=tmp32)
+            expect32 = body32.splitlines().index("| B | 2 |") + 1
+            check("E32 表被空行切断报出，且行号指到真位置（ISS-126）",
+                  "E32" in codes(out) and "空行" in out and f"第 {expect32} 行" in out,
+                  out[-400:])
+            write(p32, body32.replace("\n\n| B | 2 |", "\n| B | 2 |"))
+            _, out = run("doc_check.py", cwd=tmp32)
+            check("接回同一张表后不再报 E32", "E32" not in codes(out), out[-300:])
+        finally:
+            shutil.rmtree(tmp32, ignore_errors=True)
+
         # ---------------------------------------------------------------- 4
         print("\n4. 生成区幂等")
         # 上一步故意留了非法分值，先修回来——plan index 在分值非法时拒绝写盘是正确行为
