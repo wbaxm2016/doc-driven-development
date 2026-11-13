@@ -392,7 +392,7 @@ python "<技能目录>/scripts/doc_init.py" --target . --full --ci  # 另写 pre
 
 | 文件 | 何时读 |
 |---|---|
-| `references/reference.md` | 模板与脚本完整清单、按需加载全表（本文件只列索引，细节在那） |
+| `references/reference.md` | 模板与脚本完整清单（按需加载表只在本节，不另存一份） |
 | `references/layer-model.md` | 判断某份文档该放哪层、`status`/`authority` 填什么、要不要加层、怎么改 `_schema.json` |
 | `references/process-recording.md` | 写会话档案、分类用户消息、做八维对比、收尾的决策回顾、设计收件箱字段 |
 | `references/plan-model.md` | 建/改开发计划、状态词表、加维度或视角、判断某物该是方向还是任务 |

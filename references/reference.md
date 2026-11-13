@@ -1,17 +1,6 @@
 # 参考信息索引
 
-> 本文件集中放 SKILL.md 之外的参考信息：按需加载表、模板与脚本清单。SKILL.md 只留指针，细节在这里维护。
-
-## 按需加载
-
-| 文件 | 何时读 |
-|---|---|
-| `references/layer-model.md` | 判断某份文档该放哪层、`status`/`authority` 填什么、要不要加层、怎么改 `_schema.json` |
-| `references/process-recording.md` | 写会话档案、分类用户消息、做八维对比、收尾的决策回顾、设计收件箱字段 |
-| `references/plan-model.md` | 建/改开发计划、状态词表、加维度或视角、判断某物该是方向还是任务 |
-| `references/requirements-ears.md` | 写契约层、把含糊需求改成可判真假的一句话、理解 E13/W7 的边界 |
-| `references/check-rules.md` | 校验报错看不懂、要解释"为什么这条必须机器判"、接 CI |
-| `references/ecosystem.md` | 要不要换现成工具、哪些交给 lychee / StrictDoc / sphinx-needs、为什么不整套替换 |
+> 本文件集中放 SKILL.md 之外的参考信息：模板与脚本清单。**按需加载表只在 `SKILL.md`「按需加载」一处**——两处各维护一张表会漂移（`visualization.md` 就曾只加在一边）。
 
 ## 模板与脚本
 
