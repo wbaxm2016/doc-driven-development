@@ -37,7 +37,7 @@
 | E14 | 文件名含空格或带版本号 | 用 `-v2`、`_final` 表示版本（版本走 front-matter 或 Git） |
 | E15 | 取代链断裂 | `superseded_by`/`supersedes` 指向不存在的 ADR；或取代链停在一个自己也 superseded 的 ADR 上 |
 | E16 | 出现未登记的术语旧称 | `50-术语/别名表.md` 登记了禁用别名，别处仍在用 |
-| E17 | 超出棘轮基线 | 存量问题数比基线多（只在 `--baseline` 下生效） |
+| E17 | 超出棘轮基线 | 存量问题数比基线多（只在 `--baseline` 下生效）。基线按 `CODES` 汇总——漏列一个码，该类问题在基线里就「看不见」（`E29` / `E30` 曾漏，`ISS-128`）；补列后存量基线可能多报这两类，重跑 `--update-baseline` 即可 |
 | E18 | 需求行缺 `verify:` | 编号单元格是整条 `REQ-nnn` 的表格行，缺 `verify:` 列、单元格为空或只写 `— / 待补 / TBD`；**delta 围栏里的增量行同判**（T1.2.2 / T1.1.2） |
 | E19 | 存在未合并的契约增量 | `_delta/` 根目录有 `status: proposed` 的 DELTA；或根目录 delta 不是 `proposed`；或 `_archive/` 里的 delta 不是 `snapshot`（合并后必须归档） |
 | E20 | delta 锚点与目标冲突 | `before` 在目标中出现 0 次或 >1 次；ADDED 的编号已存在、插入位置找不到；缺 before/after 代码块；增量行列数与主表不符；目标文件含合并冲突标记 |

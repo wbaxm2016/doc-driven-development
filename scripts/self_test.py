@@ -259,6 +259,49 @@ def main():
         finally:
             shutil.rmtree(tmp32, ignore_errors=True)
 
+        # ISS-128：counts 按 CODES 汇总，E29 / E30 一度漏列——错误照报，但 `--json`
+        # 的 counts 与棘轮基线都少算这两类。这条断言盯住 CODES 与真码表同步。
+        tmp128 = tempfile.mkdtemp(prefix="ddd-selftest128-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"),
+                "--target", ".", "--full", cwd=tmp128)
+            p128 = os.path.join(tmp128, "docs", "40-运行", "计数自测.md")
+            write(p128, "\n".join([
+                "---",
+                'title: "计数自测"',
+                "layer: operation",
+                "domain: 校验",
+                "status: active",
+                "authority: 3",
+                "updated: 2026-11-13",
+                'summary: "自测用：同时触发 E29 与 E30。"',
+                "---",
+                "",
+                "# 计数自测",
+                "",
+                "### 3.7 想法候选（整理产物）",
+                "",
+                "| # | 类别 | 原话（逐字） | 出处 | 建议落点 | 裁决 |",
+                "|---|---|---|---|---|---|",
+                "| 1 | 随便 | 甲 | 本档 §2 | vision | 待裁 |",
+                "",
+                "### 3.8 预审记录（LLM 辅助，只出疑点）",
+                "",
+                "| 指向 | 逐字引文 | 疑点 | 建议动作 | 状态 |",
+                "|---|---|---|---|---|",
+                "| 甲 | 甲 | 甲 | 维持 | 待裁决 |",
+                "",
+            ]))
+            _, out = run("doc_check.py", "--json", cwd=tmp128)
+            try:
+                counts = json.loads(out).get("counts", {})
+            except ValueError:
+                counts = {}
+            check("--json 的 counts 含 E29 / E30（ISS-128）",
+                  {"E29", "E30"} <= set(counts), out[-300:])
+        finally:
+            shutil.rmtree(tmp128, ignore_errors=True)
+
         # ---------------------------------------------------------------- 4
         print("\n4. 生成区幂等")
         # 上一步故意留了非法分值，先修回来——plan index 在分值非法时拒绝写盘是正确行为
