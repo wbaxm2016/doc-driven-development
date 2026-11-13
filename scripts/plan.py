@@ -15,6 +15,7 @@
         --direction D1 --work "工作名" --task "任务名" --scores 3,4,3,3,5,4 --cost S \\
         --design-interface "…" --design-swappable "…" --design-failure "…" \\
         [--design-option "A|轴|假设|失败模式|选中|—"] [--work-id W1.1] \\
+        [--design-lookback "原句|已有入口|漏重与处理"] [--design-observe "对象|问题|信号|窗口"] \\
         [--dry-run]  # 五件套批量入口（REQ-031）
 
 维度与视角全部从表头读取，脚本不认识具体维度名 —— 加维度/加视角不改代码。
@@ -1183,7 +1184,7 @@ def cmd_set_status(docs, schema, plan_path, argv, as_json):
 NEW_KEYS = ("title", "req", "accept", "verify", "direction", "work", "task",
             "scores", "cost", "design-interface", "design-swappable",
             "design-failure", "req-id", "feature-id", "work-id", "task-id",
-            "card-id")
+            "card-id", "design-lookback", "design-observe")
 EARS_CUES = ("WHEN", "IF", "WHILE", "GIVEN", "SHALL", "当", "若", "一旦",
              "必须", "应", "不得", "不许")
 
@@ -1278,10 +1279,23 @@ def id_taken(text, ident):
 
 
 def card_block(card_id, work_id, title, interface, swappable, failure,
-               options, task_id, task_name):
+               options, task_id, task_name, lookback="", observe=""):
     out = ["", f"## {card_id} · {work_id} · {title}", "",
            f"- **接口**：{interface}",
            f"- **可替换点**：{swappable}"]
+    if lookback:
+        parts = [p.strip() for p in lookback.split("|")]
+        if len(parts) != 3:
+            raise ValueError("--design-lookback 要 3 段"
+                             "（上游原句|系统里现在有什么|拆出来哪里可能漏或重及怎么处理）："
+                             f"{lookback!r}")
+        out += ["- **回看（拆分确立前）**：",
+                f"  - 上游原句（逐字）：{parts[0]}",
+                f"  - 系统里现在有什么（功能 / 契约 / 决策 / 代码入口）：{parts[1]}",
+                f"  - 拆出来哪里可能漏或重及怎么处理：{parts[2]}"]
+    else:
+        out.append("- **回看（拆分确立前）**：待补"
+                   "（`--design-lookback` 可一次填齐：上游原句|已有入口|漏重与处理）")
     if options:
         out += ["- **选项空间**：", "",
                 "  | 选项 | 轴 | 假设 | 失败模式 | 结论 | 回到条件 |",
@@ -1294,6 +1308,17 @@ def card_block(card_id, work_id, title, interface, swappable, failure,
             out.append("  | " + " | ".join(parts) + " |")
     else:
         out.append("- **选项空间**：待补（还没过设计门；`W10` 只提醒不阻断）")
+    if observe:
+        parts = [p.strip() for p in observe.split("|")]
+        if len(parts) != 4:
+            raise ValueError("--design-observe 要 4 段"
+                             "（观测对象|要回答的问题|信号|窗口）：" f"{observe!r}")
+        if any(not p for p in parts):
+            raise ValueError("--design-observe 四格不能留空（`W12` 会照报）：" f"{observe!r}")
+        out.append(f"- **观测四格**：观测对象={parts[0]}；要回答的问题={parts[1]}；"
+                   f"信号={parts[2]}；窗口={parts[3]}")
+    else:
+        out.append("- **观测四格**：观测对象=待补；要回答的问题=待补；信号=待补；窗口=待补")
     out += [f"- **失败边界**：{failure}",
             f"- **任务拆分**：{task_id} {task_name}。", ""]
     return "\n".join(out)
@@ -1512,7 +1537,8 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
         block = "" if existing_work else card_block(
             card_id, work_id, title, opts["design-interface"].strip(),
             opts["design-swappable"].strip(), opts["design-failure"].strip(),
-            opts["design-options"], task_id, task_name)
+            opts["design-options"], task_id, task_name,
+            opts["design-lookback"].strip(), opts["design-observe"].strip())
     except ValueError as exc:
         return die(str(exc), as_json, 1)
 
@@ -1596,6 +1622,9 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
             print(f"  {c['file']} · {c['table']} · +{c['row']}")
         if not existing_work and not opts["design-options"]:
             print("  提示：设计卡「选项空间」待补，W10 会提醒（不阻断）")
+        if not existing_work and not opts["design-observe"].strip():
+            print("  提示：设计卡「观测四格」为待补，W12 会提醒（不阻断）；"
+                  "补 --design-observe / --design-lookback 可一次填齐")
         print("  提示：功能停在「待评审」——过评审门后再推到「已评审」")
     return 0
 
