@@ -86,6 +86,7 @@ tags: [契约, 需求, EARS]
 | **REQ-056** | WHEN 用户以文档驱动开发模式开新会话并开始开发任务 THE SYSTEM SHALL 在首个动作前加载 doc-driven-development 技能，并按其开场动作推进 | 选择该模式的新会话第一轮先加载技能并读现状；模式文本只含触发与顺序，不含规则正文 | `python -c "import pathlib,sys;p=pathlib.Path('assets/dsh-preset/cordis.patch.yml');sys.exit(0 if p.is_file() and 'doc-driven-development' in p.read_text(encoding='utf-8') else 1)"` | 已实现 | assets/dsh-preset/、T19.2.1、2026-11-12-003 §3.4 | 复述✓ 2026-11-12｜2026-11-12-003 §4 |
 | **REQ-057** | WHEN 用户执行收尾串跑（observe.py five-run） THE SYSTEM SHALL 按收尾五连跑同一顺序执行五步、任一步失败即以非零退出，并把每步结果写入一条带 run_id 的运行记录 | 临时项目跑 five-run：span 顺序与收尾口径一致；任一步失败即 exit 1；记录落 .dd/observe/runs 且 run_id 可回查 | `python scripts/self_test.py -v`（第 72 组） | 已实现 | T13.3.1 / 第 72 组 | 采纳✓ 2026-11-12｜2026-11-12-005 §2 #2 |
 | **REQ-058** | WHEN 一次改动的档位（小 / 中 / 大）被判定后 THE SYSTEM SHALL 只要求该档在分工边界表里列明的人门，其余门合并为前后各一次回顾；方向、契约口径、发版与回滚、开放问题收口在任何档位都要过人，档位只决定门的密度与时机 | 按小 / 中 / 大各走一场：小档不建档、只跑触及校验；中档前置 / 后置各一次回顾；大档五道门齐全；不可逆门不降；`self_test` 全绿、五连跑 0 error；人读「一次回顾」未被橡皮章 | `python -c "import pathlib,sys;p=pathlib.Path('SKILL.md');sys.exit(0 if '档位：人门按代价伸缩' in p.read_text(encoding='utf-8') else 1)"` | 已实现 | 用户 2026-11-12「先做B」「第一种」「1. 认 2. 增加分工挡位，做错了只是推翻重写规则。」、ISS-108、D20、W35.1、K48 | 复述✓ 2026-11-12｜2026-11-12-007 §4 D1 |
+| **REQ-059** | WHEN 包内改动已提交且维护者要发版 THE SYSTEM SHALL 用一条命令完成预检、源目录自测与解包自测并行、验包、装 6 端逐端核对，并在任一步失败时停在原地不装宿主 | `--dry-run` 零写入并列出步骤与目标；干净树上一条命令跑完输出「缺 0 / 不等 0」；包内文件有未提交改动时第一步就拒并说「先提交」；`--skip-install` 只到验包 | `python scripts/self_test.py`（第 74 组） | 待实现 | 本会话、new-feature、F-067、T21.2.1 | — |
 
 ## 2. 不得做的事
 
