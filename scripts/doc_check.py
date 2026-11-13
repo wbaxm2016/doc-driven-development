@@ -570,7 +570,9 @@ def precheck_problems(seg, scope, docs_dir, repo_root, cache):
                         hay = cache[cand]
                         break
                 if hay is None:
-                    probs.append("预审的指向文件不存在：%s" % (pm.group(0) if pm else target[:18]))
+                    probs.append("预审的指向文件不存在：%s（指向只认 .md 路径：卡片写 `docs/00-门面/设计卡.md`；"
+                              "写卡号 / `.py` 会被拒，脚本类疑点指到对应 `.md` 载体或写「本档」）"
+                              % (pm.group(0) if pm else target[:18]))
                     continue
             if verdict in ("采纳", "驳回"):
                 # 已裁决的行是当时的快照：修复会改动原文，不要求引文今天仍逐字存在。
