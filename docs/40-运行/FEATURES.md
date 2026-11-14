@@ -247,6 +247,7 @@ tags: [功能, 台账, 追溯]
 | **T20.2.1** | 改 SKILL 分工边界 / 档位表 / 五个检查维度，同步 README 中英与 vision，REQ-058 经 DELTA-008 改写 | 与用户确认的哲学一致（人只作实质判断、可逆默认推进、可用或可观察择一） | M（同估） | 保留 | b681045 |
 | **T20.3.1** | 模板与 schema 加会话用途与可写范围、未采纳提案，SKILL 增并行会话一节 | 与用户「按你的结论」对齐（提案留本场档案、字段只声明不校验） | S（同估） | 保留 | b681045 |
 | **T1.2.4** | 三条 verify 改 python -c 并同步 FEATURES；契约改动经 DELTA-009 合并归档，DELTA-007 标 superseded_by | REQ-052 / 054 / 060 语义与验收口径未变，Windows 本地 verify.py passed=59 failed=0 skipped=3，doc_check / plan check 0 error | S（约 50 分钟，含一次 delta 返工与两次全量 verify） | 保留 | 6daad7b |
+| **T2.1.11** | SKILL「编辑与批量重构」落地清单第一项加「触及契约先开 delta」，assets/agents-snippet.md 同款；依据 ISS-130 的 E21 返工 | 规则落在既有检查点、不新增门；self_test 432/432，doc_check / plan check / devlog check 0 error | S（约 12 分钟，两处文本 + 一次 self_test） | 保留 | c055532 |
 
 ## 已评审提案
 
