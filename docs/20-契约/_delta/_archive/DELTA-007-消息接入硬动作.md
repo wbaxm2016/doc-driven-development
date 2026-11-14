@@ -9,6 +9,7 @@ summary: "REQ-054 升级：每条消息判类后必须留带入口的任务记�
 tags: [契约, 增量]
 delta_id: DELTA-007
 target: docs/20-契约/requirements.md
+superseded_by: DELTA-009
 ---
 
 # DELTA-007 · 消息接入硬动作
