@@ -2497,9 +2497,11 @@ def main():
 
             h0 = hashes()
             c, out = run("plan.py", *base, cwd=tmp60)
-            check("一次调用建出五个编号（REQ-002 / F-004 / W1.2 / T1.2.1 / K2）",
+            check("一次调用建出五个编号（REQ-002 / F-004 / W2.1 / T2.1.1 / K2；工作号接全局最大 + 1，ISS-127）",
                   c == 0 and all(x in out for x in
-                                 ("REQ-002", "F-004", "W1.2", "T1.2.1", "K2")), out[-500:])
+                                 ("REQ-002", "F-004", "W2.1", "T2.1.1", "K2")), out[-500:])
+            check("ISS-127：工作号不再按方向号派生（D1 下也是 W2.1，不是 W1.2）",
+                  c == 0 and "W1.2" not in out, out[-500:])
 
             rq, ft, pl, dc = read(req60), read(feats60), read(plan60), read(card60)
             check("REQ 行落在需求表里（§2 之前）",
@@ -2509,9 +2511,9 @@ def main():
                   "**F-004**" in ft
                   and ft.index("**F-004**") < ft.index("## 2. 任务考核"))
             check("W 行在 §4、T 行在 §5，且任务双亲 F + W 齐全",
-                  "**W1.2**" in pl and "**T1.2.1**" in pl
-                  and "| F-004 | W1.2 |" in pl)
-            check("设计卡 K2 挂 W1.2", "## K2 · W1.2 · " in dc)
+                  "**W2.1**" in pl and "**T2.1.1**" in pl
+                  and "| F-004 | W2.1 |" in pl)
+            check("设计卡 K2 挂 W2.1", "## K2 · W2.1 · " in dc)
             check("默认卡片含「观测四格」「回看」两节（四格写待补）",
                   "**观测四格**：观测对象=待补" in dc
                   and "**回看（拆分确立前）**：待补" in dc, dc[-500:])
@@ -2527,7 +2529,7 @@ def main():
             check("--dry-run --json：给出下一组五个编号且零写入",
                   c == 0 and '"dry_run": true' in out and '"written": false' in out
                   and all(x in out for x in
-                          ("REQ-003", "F-005", "W1.3", "T1.3.1", "K3"))
+                          ("REQ-003", "F-005", "W3.1", "T3.1.1", "K3"))
                   and hashes() == h1, out[-500:])
 
             look = "「建卡时两节一次填齐」|临时项目里没有既有入口|与 W10 不重（那条管选项空间）"
@@ -2536,14 +2538,14 @@ def main():
                          "--design-observe", obs, cwd=tmp60)
             dc = read(card60)
             check("--design-lookback / --design-observe：K3 两节一次填齐、四格无待补",
-                  c == 0 and "## K3 · W1.3 · " in dc
+                  c == 0 and "## K3 · W3.1 · " in dc
                   and "**观测四格**：观测对象=新建的 K 卡" in dc
                   and "上游原句（逐字）：「建卡时两节一次填齐」" in dc, out[-500:])
             c2, out2 = run("doc_check.py", cwd=tmp60)
             check("填齐的 K3 不报 W12，默认卡 K2 仍报（占位照报）",
                   c2 == 0
-                  and "W12] 00-门面/设计卡.md: K2（W1.2）" in out2
-                  and "W12] 00-门面/设计卡.md: K3（W1.3）" not in out2,
+                  and "W12] 00-门面/设计卡.md: K2（W2.1）" in out2
+                  and "W12] 00-门面/设计卡.md: K3（W3.1）" not in out2,
                   out2[-700:])
             h_after = hashes()
             c, out = run("plan.py", *base, "--design-observe", "a|b|c", cwd=tmp60)

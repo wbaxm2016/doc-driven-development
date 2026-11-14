@@ -1416,13 +1416,15 @@ def cmd_new_feature(docs, schema, plan_path, argv, as_json):
                        "不一致", as_json, 1)
         tn, tm = int(m.group(1)), int(m.group(2))
     else:
-        wm = 0
+        # ISS-127：工作号取全局最大组 + 1（与既有全局序号一致），不再按方向号派生
+        # （D22 → W22.2 会撞进别人的组，读计划树时看不出分组）。
+        gmax = 0
         for _, c in work_t[2]:
             mm = re.fullmatch(r"W(\d+)\.(\d+)", strip_md(c[0]))
-            if mm and int(mm.group(1)) == dn:
-                wm = max(wm, int(mm.group(2)))
-        work_id = f"W{dn}.{wm + 1}"
-        tn, tm = dn, wm + 1
+            if mm:
+                gmax = max(gmax, int(mm.group(1)))
+        work_id = f"W{gmax + 1}.1"
+        tn, tm = gmax + 1, 1
 
     task_id = opts["task-id"].strip()
     if task_id:
