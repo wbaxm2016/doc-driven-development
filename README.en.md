@@ -4,7 +4,7 @@
 
 > This is the English translation. The Chinese [README.md](./README.md) is the source of truth; if the two differ, the Chinese version wins. Status words stay in Chinese because the scripts and templates use them.
 
-This is a skill (Agent Skill) for AI coding assistants, intended for people who write code with AI, especially developers with limited experience. It moves development context from the chat window into project documents and makes those documents the project's single source of truth. On that foundation, it establishes an AI-heavy, timely-feedback, human-light development workflow: the AI handles implementation and checks while you mainly judge; timely feedback is the key seam between the AI's work and your understanding — after every change the AI self-checks first and you verify on the spot, so right-or-wrong is judged on the spot; it also requires the AI's replies to keep cognitive load low. The product development workflow follows agile-first: build a minimum viable product and refine it through use; prioritize a complete, working system over piling on features.
+This is a skill (Agent Skill) for AI coding assistants, intended for people who write code with AI, especially developers with limited experience. It moves development context from the chat window into project documents and makes those documents the project's single source of truth. On that foundation, it promotes AI-heavy collaboration without turning human involvement into a formality: people own goals, value trade-offs, and risk boundaries; the AI defaults to reversible implementation, self-checks, and iteration. Human input should make a real judgment, not approve every step or fill process forms. When feedback is useful, the AI provides either a usable result or observable evidence, whichever fits the situation. Replies should also keep cognitive load low. The workflow follows agile-first: build the minimum useful product and refine it through use; prioritize a complete, working system over piling on features.
 
 ## What This Is
 
@@ -23,9 +23,9 @@ This skill does three things in order:
 
 People who write code with AI, especially developers with little development experience.
 
-The division of labor is fixed: the AI does the implementation, reading documents, changing code, running checks; humans hold the few critical gates. A gate is a checkpoint where a human decides: is the requirement this sentence, is the direction worth walking, is the behavior that was built the right one? A human answers these questions; the AI does the rest directly and hands over evidence.
+The division of labor is not “the AI does the work and a human signs off every step.” People own the goal, value trade-offs, and risk boundaries; the AI reads project context, advances reversible implementation, checks it, and corrects it. Human judgment is requested only when it can materially affect the goal, acceptable risk, or outcome. For reversible details within agreed constraints, the AI proceeds with a safe, recoverable default.
 
-No need to watch the AI step by step or approve every action. This division suits less experienced developers especially: the AI covers the code-writing part, the human practices the judgment part. The action-by-action division (who decides what, what a human must verify, who signs off) is in the "Division of Labor" section of [SKILL.md](SKILL.md).
+There is no need to watch the AI step by step or approve each action. When human feedback is useful, the AI provides enough to judge: either a usable result or observable evidence, as appropriate—not necessarily both. This lets developers, especially those with less experience, focus on judging intent and outcomes rather than operating process gates. The action-by-action division is in the "Division of Labor" section of [SKILL.md](SKILL.md).
 
 ## What It Solves
 
@@ -43,11 +43,13 @@ The goal is system-level coverage: from any entry point in the system, walk thro
 The approach in two sentences:
 
 - Agile first: build the minimum viable version first, use it right away, and adjust while using it. Many trade-offs can only be judged after the product is built and used on a real machine. Feedback ranks above implementation: implementation is the means, feedback is the end.
-- AI-heavy: reversible things are done directly by the AI; humans hold only the irreversible gates. The AI makes the build-it-and-see cycle very short.
+- AI-heavy: the AI defaults to reversible implementation and self-checks; people focus on goals, meaningful trade-offs, material risks, and whether the outcome is acceptable. This shortens the build-and-learn cycle.
 
-Before adding any step, answer one question: how do you tell true from false, and when can it be removed? If you cannot answer, do not add it — so there are only five gates. Work hours, Gantt charts, and kanban sync are explicitly not done.
+Before adding any step, ask whether it supports a real judgment, verification, or rollback. If it only creates paperwork, repeated confirmation, or process completeness, it should not become a human gate. Alignment, review, design, comparison, and assessment remain useful checks, but the AI and machines can perform them continuously; involve a person only where their judgment can change the result. Work hours, Gantt charts, and kanban sync are explicitly not done.
 
-The result of this approach in one sentence: what is said can be verified, what is verified can be reverted, and what is unfinished has somewhere to stay.
+When feedback is needed, provide what fits the decision: a usable result or observable evidence. Usable and observable are alternatives, not a requirement to provide both every time.
+
+The result in one sentence: people spend attention on judgments that matter while AI moves reversible work forward; what is said can be verified, what is verified can be reverted, and what is unfinished has somewhere to stay.
 
 ## Four Promises
 
@@ -67,7 +69,7 @@ The result of this approach in one sentence: what is said can be verified, what 
 | Plan & ranking | Three levels: direction, work, task; six-dimension scores, multi-view ranking |
 | Issue inbox | Discovered issues land first without interrupting the current work |
 | Real-machine acceptance | If it is not final, keep it replaceable and open an RV entry |
-| Five gates | Alignment, review, design, comparison, assessment; machines check form, humans judge meaning |
+| Five check dimensions | Alignment, review, design, comparison, assessment; machines check form, humans make judgments that need human intent or trade-offs |
 | Observability | Component level leaves a record; system level leaves a trace |
 | Self-check & delivery | Five wrap-up checks, full self-test, six-host install |
 
@@ -95,7 +97,7 @@ Which host gets installed is declared in [install-targets.json](./install-target
 
 ## How One Development Cycle Runs
 
-Approval is not judgment: clicking approve answers only let it run, not is it right. Judgment stays at the gates.
+Approval is not judgment: clicking approve only says “let it run,” not “it is right.” The AI should proceed with reversible work by default; people focus on goals, value trade-offs, material risks, and whether the result is acceptable.
 
 | Stage | What humans do | What the Agent does |
 |---|---|---|
