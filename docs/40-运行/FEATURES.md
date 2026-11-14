@@ -246,6 +246,7 @@ tags: [功能, 台账, 追溯]
 | **T18.3.1** | 在 SKILL「消息路由」补「类 → 入口 + 一个落点」，8 类皆然，并用 grep 断言规则在 | 与 REQ-060 一致，本场 6 条消息逐条试过 | 比预估（一处措辞）多花在走完五道门与四件套登记上，约 40 分钟 | 保留 | abb06c5 |
 | **T20.2.1** | 改 SKILL 分工边界 / 档位表 / 五个检查维度，同步 README 中英与 vision，REQ-058 经 DELTA-008 改写 | 与用户确认的哲学一致（人只作实质判断、可逆默认推进、可用或可观察择一） | M（同估） | 保留 | b681045 |
 | **T20.3.1** | 模板与 schema 加会话用途与可写范围、未采纳提案，SKILL 增并行会话一节 | 与用户「按你的结论」对齐（提案留本场档案、字段只声明不校验） | S（同估） | 保留 | b681045 |
+| **T1.2.4** | 三条 verify 改 python -c 并同步 FEATURES；契约改动经 DELTA-009 合并归档，DELTA-007 标 superseded_by | REQ-052 / 054 / 060 语义与验收口径未变，Windows 本地 verify.py passed=59 failed=0 skipped=3，doc_check / plan check 0 error | S（约 50 分钟，含一次 delta 返工与两次全量 verify） | 保留 | 6daad7b |
 
 ## 已评审提案
 
