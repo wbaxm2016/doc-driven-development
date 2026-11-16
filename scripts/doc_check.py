@@ -79,7 +79,8 @@ VERIFY_PLACEHOLDERS = {"", "-", "—", "–", "待补", "待填", "待定", "无
 
 # 需求行的状态词白名单（E22）：与 verify.py 的跳过集合对齐——
 # 只有「待实现 / 阻塞 / 搁置」会被跳过，其余状态意味着 verify 必须真跑。
-REQ_STATES = {"待实现", "已实现", "阻塞", "搁置", "作废"}
+# 删除不设「作废」状态：需求要删只走 _delta 的 REMOVED + _archive 留档（REQ-066 / ISS-133）。
+REQ_STATES = {"待实现", "已实现", "阻塞", "搁置"}
 # 标了「已实现」就必须指得出出处（E23）：「依据」里要有可核对的锚
 TRACE_REF_RE = re.compile(r"(ADR-\d+|ISS-\d+|T\d+\.\d+\.\d+|W\d+\.\d+|D\d+\b|[\w\-./]+\.md)")
 REF_PLACEHOLDERS = {"", "-", "—", "–", "无", "待补", "待填", "tbd"}
@@ -391,6 +392,41 @@ def requirement_header(text, req_re):
     return None
 
 
+def delta_row_cells(block):
+    """取 delta 代码块里第一条表格行 → 单元格列表；不是表格行返回 None。"""
+    for line in (block or "").splitlines():
+        s = line.strip()
+        if s.startswith("|") and s.endswith("|") and len(s) > 2:
+            return split_row(s)
+    return None
+
+
+def reused_confirmation(ch, before, after, header):
+    """MODIFIED 改句后仍标「已实现」时，「确认」与 before 相同即沿用旧确认。
+
+    只判形式：改过的这一行还声称已实现，就必须换一条新的确认（日期 / 落点不同）。
+    「新确认是不是真由用户给出」判不了——那是对齐门的人读范围（REQ-065）。
+    """
+    if header is None:
+        return None
+    heads = [strip_md(h) for h in header]
+    if "确认" not in heads or "状态" not in heads:
+        return None
+    i_cf, i_st = heads.index("确认"), heads.index("状态")
+    cb, ca = delta_row_cells(before), delta_row_cells(after)
+    if not cb or not ca:
+        return None
+    if len(cb) != len(heads) or len(ca) != len(heads):
+        return None
+    if strip_md(ca[i_st]) != "已实现":
+        return None
+    old, new = strip_md(cb[i_cf]), strip_md(ca[i_cf])
+    if old != new:
+        return None
+    return (f"变更 {ch['no']}（MODIFIED {ch['req']}）改句后沿用了旧确认：{new!r}"
+            f"——改句必须重确认（换一条新的确认，写明日期与落点）")
+
+
 def check_delta(changes, problems, target_text, archived, req_re, superseded=False):
     """返回 [(code, message)]：proposed 按 _delta/README.md §5 判冲突，归档判合并结果。
 
@@ -410,6 +446,7 @@ def check_delta(changes, problems, target_text, archived, req_re, superseded=Fal
     for _h, rows in read_tables(strip_fences(target_text)):
         for row in rows:
             target_ids.update(row_req_ids("|" + "|".join(row) + "|", req_re))
+    header = requirement_header(target_text, req_re)
     for ch in changes:
         tag = f"变更 {ch['no']}（{ch['op']} {ch['req']}）"
         before, after = ch["before"], ch["after"]
@@ -457,6 +494,10 @@ def check_delta(changes, problems, target_text, archived, req_re, superseded=Fal
                                       f"（MODIFIED 不得改编号）"))
             if ch["op"] == "MODIFIED" and not after:
                 out.append((code, f"{tag} 缺 after 代码块（合并后原文）"))
+            if ch["op"] == "MODIFIED" and after and before:
+                msg = reused_confirmation(ch, before, after, header)
+                if msg:
+                    out.append((code, msg))
     return out
 
 

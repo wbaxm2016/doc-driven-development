@@ -1295,6 +1295,88 @@ def main():
             c, out = run("doc_check.py", cwd=tmp23)
             check("「撤回」是合法状态，入口可为空但要写考核",
                   c == 0 and "E24" not in codes(out) and "E27" not in codes(out), out[-300:])
+
+            # ---- 需求生命周期：改句后旧确认不得沿用（E20）/ 删除只走归档删除（E22）
+            write(req23, base_req23.replace("| 待实现 | — | — |",
+                                            "| 作废 | ADR-001 | — |", 1))
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("需求行写「作废」→ E22（删除只走归档删除）",
+                  c == 1 and "E22" in codes(out), out[-300:])
+
+            base_row23 = next(l for l in base_req23.splitlines()
+                              if l.startswith("| **REQ-001**"))
+            impl_row = base_row23.replace(
+                "| 待实现 | — | — |",
+                "| 已实现 | ADR-001 | 复述✓ 2026-11-01｜档案 012 §2 |", 1)
+            write(req23, base_req23.replace(base_row23, impl_row, 1))
+            delta23 = os.path.join(tmp23, "docs", "20-契约", "_delta")
+            arch23 = os.path.join(delta23, "_archive")
+            os.makedirs(arch23, exist_ok=True)
+            today23 = datetime.date.today().isoformat()
+
+            def put23(no, status, changes, archived=False, sup=None):
+                body = ("---\n"
+                        f'title: "DELTA-{no} · 自测设变"\n'
+                        "layer: contract\ndomain: 全局\n"
+                        f"status: {status}\nauthority: 1\n"
+                        f"updated: {today23}\n"
+                        f'summary: "自测增量 {no}：需求生命周期判据。"\n'
+                        "tags: [契约, 增量]\n"
+                        f"delta_id: DELTA-{no}\ntarget: docs/20-契约/requirements.md\n"
+                        + (f"superseded_by: {sup}\n" if sup else "") + "---\n\n"
+                        f"# DELTA-{no} · 自测设变\n\n"
+                        "本增量**必须**逐字应用锚点；**不得**手工凑合目标行。\n\n"
+                        "## 2. 逐字变更\n\n" + changes)
+                p = os.path.join(arch23 if archived else delta23,
+                                 f"DELTA-{no}-自测设变.md")
+                write(p, body)
+                return p
+
+            after_reuse = impl_row.replace("（触发条件）", "（触发条件，改句）")
+            mod_reuse = ("**变更 1 · MODIFIED · REQ-001**\n\n"
+                         "锚点（before，逐字，含首尾）：\n\n"
+                         "```markdown\n" + impl_row + "\n```\n\n"
+                         "合并后（after，逐字）：\n\n"
+                         "```markdown\n" + after_reuse + "\n```\n")
+            put23("901", "proposed", mod_reuse)
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("改句后沿用旧确认 → E20（旧确认不得沿用）",
+                  c == 1 and "E20" in codes(out) and "沿用" in out, out[-300:])
+
+            mod_new = mod_reuse.replace(
+                after_reuse,
+                after_reuse.replace("复述✓ 2026-11-01｜档案 012 §2",
+                                    "复述✓ 2026-11-02｜档案 013 §4"), 1)
+            put23("901", "proposed", mod_new)
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("改句后换新确认 → 不报 E20", "E20" not in codes(out), out[-300:])
+            os.remove(os.path.join(delta23, "DELTA-901-自测设变.md"))
+
+            row2 = impl_row.replace("REQ-001", "REQ-002").replace(
+                "（触发条件）", "（第二条触发条件）")
+            added2 = ("**变更 1 · ADDED · REQ-002**\n\n位置：需求表末尾\n\n"
+                      "```markdown\n" + row2 + "\n```\n")
+            put23("902", "proposed", added2)
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("ADDED 需求行合法 → 不报 E20（删除前基线）",
+                  "E20" not in codes(out), out[-300:])
+            write(req23, read(req23).replace(impl_row + "\n", impl_row + "\n" + row2 + "\n", 1))
+            os.remove(os.path.join(delta23, "DELTA-902-自测设变.md"))
+
+            removed2 = ("**变更 1 · REMOVED · REQ-002**\n\n"
+                        "锚点（before，逐字，含首尾）：\n\n"
+                        "```markdown\n" + row2 + "\n```\n")
+            put23("903", "proposed", removed2)
+            put23("902", "snapshot", added2, archived=True, sup="DELTA-903")
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("REMOVED 结构合法 → 不报 E20", "E20" not in codes(out), out[-300:])
+
+            write(req23, read(req23).replace(row2 + "\n", "", 1))
+            os.remove(os.path.join(delta23, "DELTA-903-自测设变.md"))
+            put23("903", "snapshot", removed2, archived=True)
+            c, out = run("doc_check.py", cwd=tmp23)
+            check("删除走归档（REMOVED 合并 + 归档）→ 0 error",
+                  c == 0 and "errors=0" in out, out[-300:])
         finally:
             shutil.rmtree(tmp23, ignore_errors=True)
 
