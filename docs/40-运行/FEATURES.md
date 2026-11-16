@@ -253,6 +253,7 @@ tags: [功能, 台账, 追溯]
 | **T20.3.1** | 模板与 schema 加会话用途与可写范围、未采纳提案，SKILL 增并行会话一节 | 与用户「按你的结论」对齐（提案留本场档案、字段只声明不校验） | S（同估） | 保留 | b681045 |
 | **T1.2.4** | 三条 verify 改 python -c 并同步 FEATURES；契约改动经 DELTA-009 合并归档，DELTA-007 标 superseded_by | REQ-052 / 054 / 060 语义与验收口径未变，Windows 本地 verify.py passed=59 failed=0 skipped=3，doc_check / plan check 0 error | S（约 50 分钟，含一次 delta 返工与两次全量 verify） | 保留 | 6daad7b |
 | **T2.1.11** | SKILL「编辑与批量重构」落地清单第一项加「触及契约先开 delta」，assets/agents-snippet.md 同款；依据 ISS-130 的 E21 返工 | 规则落在既有检查点、不新增门；self_test 432/432，doc_check / plan check / devlog check 0 error | S（约 12 分钟，两处文本 + 一次 self_test） | 保留 | c055532 |
+| **T2.1.12** | SKILL「日常三动作·收尾」新增「先定稿，再跑一次」段，run_id 回写只补 devlog check；CHANGELOG/VERSION 2.35.2 | 只加顺序不改码表与判据，self_test 434/434、解包 426/426 | 一次发版约 2 分钟，常驻上下文 +2 行 | 保留，下一场收尾验收 repeat_edit ≤2 | 4f9c909 |
 
 ## 已评审提案
 
