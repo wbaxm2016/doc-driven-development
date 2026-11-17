@@ -1,5 +1,16 @@
 # 变更记录
 
+## 2.35.3
+
+一次定期减法：去掉一处重复、补一处码表、修三处索引。**不破安装**。
+
+### 改进
+
+- **去重**（`SKILL.md`「日常三动作 · 开场」）：方向接入回看段与「消息路由 · 方向落点」重复，开场段改留指针——回看三问三选一仍只在「方向落点」一处（硬规则 1）。
+- **码表补齐**（`references/check-rules.md`）：补 `W12` 行（实现有、说明缺：待开工 / 进行中的设计卡缺观测四格）。
+- **索引纠偏**（`references/reference.md`）：`devlog` 子命令补 `flow / decisions / cost / reply-tier / rv`；`P1–P19` → `P1–P20`；`self_test` 规格指向 `references/acceptance.md` 1–50。
+- **模板片段**（`assets/agents-snippet.md`）：「收尾四连跑」→「收尾五条命令」，与正文一致。
+
 ## 2.35.2
 
 收尾顺序成规则：档案先定稿、再跑一次五连跑，`run_id` 回写后只补 `devlog check`，不为它重跑。**不破安装**。
