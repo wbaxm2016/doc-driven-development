@@ -25,10 +25,10 @@
 | `assets/agents-snippet.md` | 粘进 `AGENTS.md` 的 8 行约定，让习惯默认生效 |
 | `scripts/doc_init.py` | 铺骨架（幂等） |
 | `scripts/doc_check.py` | 全库校验：`--docs` `--quiet` `--json` `--baseline` `--update-baseline` |
-| `scripts/devlog.py` | `new` / `brief` / `ask` / `pending` / `inbox` / `features` / `check` / `index [--check]` |
-| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）/ `set-status <T-id> --to <状态> [--commit] [--review] [--dry-run] [--json]`（状态转写：只写既有列、失败零写入、幂等）/ `new-feature …`（五件套批量入口：一次写 REQ / F / W / T / K，自动编号只认表首列、先验后写、失败零写入；`--work-id` 挂已有工作、`--dry-run` 只列清单）；`P1`–`P19`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯）；`--help` 只读、不写生成区 |
+| `scripts/devlog.py` | `new` / `brief` / `flow` / `ask` / `pending` / `inbox` / `features` / `check` / `decisions` / `cost` / `reply-tier` / `rv` / `index [--check]` |
+| `scripts/plan.py` | `index [--check]` / `check [--json]` / `next [--json]`（唯一出口：第一视角第一名 + 方向 → 工作 → 任务 路径）/ `tree [--html] [--json] [--out 路径]`（只读全貌：方向 → 工作 → 任务，带功能、状态、完成于）/ `set-status <T-id> --to <状态> [--commit] [--review] [--dry-run] [--json]`（状态转写：只写既有列、失败零写入、幂等）/ `new-feature …`（五件套批量入口：一次写 REQ / F / W / T / K，自动编号只认表首列、先验后写、失败零写入；`--work-id` 挂已有工作、`--dry-run` 只列清单）；`P1`–`P20`（含方向卡、设计卡、任务双亲与考核、功能汇总可回溯、链路表）；`--help` 只读、不写生成区 |
 | `scripts/verify.py` | 按契约 `verify:` 真跑：`--timeout` `--dry-run` `--quiet`；失败/超时 exit 1 |
-| `scripts/self_test.py` | 自检：把本文「验收」1–40 跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
+| `scripts/self_test.py` | 自检：把 `references/acceptance.md` 的 1–50 条规格跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 | `scripts/observe.py` | 自身参考实现：`run` 包一条命令、`five-run` 串五连跑、`show` / `status` / `trend` 只读回看；`trend` 按码 + 目标文件跨 run 聚合；记录落 `.dd/observe/runs/`；写失败只降级、不改主命令退出码 |
 | `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |
 
