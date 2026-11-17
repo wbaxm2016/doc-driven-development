@@ -800,7 +800,7 @@ def cmd_new(ctx, args):
     os.makedirs(ctx.sess, exist_ok=True)
     write(target, text)
     print(f"created: {target}")
-    print("下一步：填 §1 → 过程中追加 §2/§4 → 收尾定稿 §3/§5/§6/§7")
+    print("下一步：填 §1 → 过程中只追加 §2 → 收尾一次写 §3–§7")
     return 0
 
 
