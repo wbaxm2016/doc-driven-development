@@ -161,15 +161,6 @@ def h1_of(text):
     return ""
 
 
-def split_row(s):
-    """按未转义的 `|` 切单元格，并把 `\\|` 还原成 `|`。
-
-    收件箱里真的有「标题含竖线」这类条目（ISS-011）：写的时候 `cell()` 转义了，
-    读的时候再按裸 `|` 切，整行会多出一列并被静默跳过——S5 就会误报「ISS 不存在」。
-    """
-    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", s)]
-
-
 def read_tables(text):
     tables, block = [], []
     for line in text.splitlines() + [""]:
