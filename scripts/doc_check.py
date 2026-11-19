@@ -95,7 +95,7 @@ LEGACY_REQ = {"—（历史）", "-（历史）", "—(历史)", "-(历史)"}
 CODES = ["E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "E9", "E10",
          "E11", "E12", "E13", "E14", "E15", "E16", "E17", "E18", "E28",
          "E19", "E20", "E21", "E22", "E23", "E24", "E26", "E27", "E29", "E30",
-         "E31", "E32",
+         "E31", "E32", "E33",
          "W1", "W2", "W3", "W4", "W5", "W6", "W7", "W8", "W9", "W10", "W12"]
 
 
@@ -569,6 +569,9 @@ def load_aliases(docs, schema):
 # ---------------------------------------------------------------- 想法候选
 IDEAS_HEADING = re.compile(r"^### 3\.7\b[^\n]*", re.M)
 ID_PATTERN = re.compile(r"REQ-\d+|F-\d+|(?<![A-Za-z])D\d+")
+# 经验台账的「来源 / 状态」要指向真东西：比 ID_PATTERN 宽（ISS / T / W / K / ADR / RV）
+REF_PATTERN = re.compile(r"ISS-\d+|REQ-\d+|ADR-\d+|RV-\d+|EXP-\d+|F-\d+"
+                         r"|T\d+\.\d+\.\d+|W\d+\.\d+|K\d+")
 IDEA_KINDS = ("目标", "愿景", "功能", "需求")
 # 活文档出处：`路径.md（YYYY-MM-DD）`——带版本日期才跳过逐字（REQ-025）
 DOC_SRC_RE = re.compile(r"^(?P<path>[^\s（(]+\.md)\s*[（(](?P<date>\d{4}-\d{2}-\d{2})[)）]$")
@@ -763,6 +766,54 @@ def ideas_problems(seg, scope, docs_dir, repo_root, cache, all_ids):
             quotes.append(quote)
     return probs, quotes
 
+def experience_problems(body, known_refs):
+    """E33：经验台账的形状（REQ-069）。语义（算不算经验 / 场景写得对不对）不判。"""
+    want = ["ID", "日期", "类别", "经验", "适用场景", "怎么用", "来源", "状态", "更新"]
+    tables = []
+    for header, rows in read_tables(strip_fences(body)):
+        heads = [strip_md(h).strip() for h in header]
+        if heads and heads[0] == "ID" and "经验" in heads and "适用场景" in heads:
+            tables.append((heads, rows))
+    if not tables:
+        return ["缺经验表：表头应为「" + " | ".join(want) + "」"]
+    heads, rows = tables[0]
+    if heads != want:
+        miss = [h for h in want if h not in heads]
+        if miss:
+            return ["表头缺列：" + "、".join(miss) + "（九列：" + " | ".join(want) + "）"]
+        return ["表头列序不符，应为：" + " | ".join(want)]
+    probs = []
+    seen = set()
+    date_re = re.compile(r"20\d{2}-\d{2}-\d{2}")
+    blank = ("", "—", "-", "待补", "待填", "TBD", "无")
+    for row in rows:
+        if len(row) != len(heads):
+            continue  # 格数不对由 E28 报，这里不重复
+        c = {h: strip_md(v).strip() for h, v in zip(heads, row)}
+        eid = c["ID"]
+        if not re.fullmatch(r"EXP-\d{3}", eid):
+            probs.append("%s：编号应为 EXP-<三位>（如 EXP-001）" % (eid or "（空）"))
+        elif eid in seen:
+            probs.append("%s：编号重复（编号只增不复用）" % eid)
+        seen.add(eid)
+        for k in ("经验", "适用场景", "怎么用", "来源"):
+            if c[k] in blank:
+                probs.append("%s：%s 不能空着或写占位（%r）" % (eid, k, c[k]))
+        if c["类别"] not in ("坑", "做法", "工具", "领域"):
+            probs.append("%s：类别 %r 不在白名单（坑 / 做法 / 工具 / 领域）"
+                         % (eid, c["类别"]))
+        st = c["状态"]
+        if st != "有效" and not re.match(r"^已(升级|失效)：\S", st):
+            probs.append("%s：状态只能是「有效」「已升级：<编号>」「已失效：<原因>」：%r"
+                         % (eid, st))
+        for k in ("日期", "更新"):
+            if not date_re.fullmatch(c[k]):
+                probs.append("%s：%s 不是 YYYY-MM-DD：%r" % (eid, k, c[k]))
+        for ref in REF_PATTERN.findall(c["来源"]) + REF_PATTERN.findall(st):
+            if ref not in known_refs:
+                probs.append("%s：指向的 %s 不存在" % (eid, ref))
+    return probs
+
 
 def design_card_problems(card_text, plan_status):
     """W10：待开工 / 进行中工作的设计卡，选项空间是否具备最小形状。
@@ -881,6 +932,7 @@ def main():
     layers = schema["layers"]
     layer_names = set(layers.values())
     names = schema["names"]
+    process_dir = layer_dir(schema, "process")
     today = datetime.date.today().isoformat()
 
     files = []
@@ -901,6 +953,14 @@ def main():
         # 想法候选表里的编号是「建议」，不能自己证明自己存在：取编号时先把这一节去掉
         all_ids.update(ID_PATTERN.findall(_body if _fm else _txt)
                        if not _fm else ID_PATTERN.findall(ideas_parts(_body)[1]))
+    known_refs = set()
+    exp_rel = (f"{process_dir}/{names['experience']}"
+               if names.get("experience") and process_dir else None)
+    for path in files:
+        # 台账自身不算「编号存在」：写错一个 ISS 不能自己证明自己（REQ-069）
+        if exp_rel and os.path.relpath(path, docs).replace(os.sep, "/") == exp_rel:
+            continue
+        known_refs.update(REF_PATTERN.findall(read(path)))
     per_layer = {v: [] for v in layers.values()}
     summaries = {}
     adr_files, adr_ids, adr_states, adr_links = [], {}, {}, {}
@@ -1056,6 +1116,11 @@ def main():
                 f"第 {no + body_off} 行起有 {rows} 行表格行，但这一段不是完整的表"
                 f"（缺表头或 `|---|` 分隔行）：表被空行 / 断行切断，这几行不会被读到"
                 f"（接回上一张表，或补表头 + 分隔行）")
+
+        # ---- E33 经验台账：形状 / 编号 / 类别与状态白名单 / 来源可指回（REQ-069）
+        if exp_rel and rel == exp_rel:
+            for msg in experience_problems(body, known_refs):
+                add(errors, rel, "E33", msg)
 
         # ---- E29 想法候选：类别 / 原话逐字 / 落点编号（ISS-073、REQ-016）
         idea_seg, idea_scope = ideas_parts(body)

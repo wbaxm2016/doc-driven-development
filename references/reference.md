@@ -10,6 +10,7 @@
 | `assets/templates/session-record.md` | 七段会话档案（占位 `{{TITLE}} {{DATE}} {{NO}} {{SCOPE}} {{SLUG}}`；§4 决策块带「拍板 / 依据 / 撤销条件」） |
 | `assets/templates/inbox.md` | 问题收件箱（主表 + 已闭环 + 已拒绝；四维状态示例） |
 | `assets/templates/verification.md` | 真机验收台账（主表九列 + 观察记录子表 + 判据三型 / 三态 / 三档出口的规则块）；`doc_init` 铺到 `70-过程/真机验收台账.md`；`V1–V6` 只判形式（ADR-007） |
+| `assets/templates/experience-ledger.md` | 经验台账（一条一行：类别 / 经验 / 适用场景 / 怎么用 / 来源 / 状态 / 更新）；`doc_init` 铺到 `70-过程/经验台账.md`；`E33` 只判形式，「算不算经验」由人判（REQ-069） |
 | `assets/templates/timeline.md` | 时间线（含 `devlog-index` 生成区） |
 | `assets/templates/dev-plan.md` | 开发计划（三层 + 六维 + 三视角 + 任务双亲的 `功能` 列 + `plan-rank` 生成区） |
 | `assets/templates/adr.md` | ADR 六段 + `supersedes`/`superseded_by` 双向链 |

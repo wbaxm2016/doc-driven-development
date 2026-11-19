@@ -3587,6 +3587,81 @@ def main():
     finally:
         shutil.rmtree(cm_tmp, ignore_errors=True)
 
+    # ---------------------------------------------------------------- 第 76 组
+    print("\n76. 经验台账（E33，REQ-069 / D25）")
+    exp_tmp = tempfile.mkdtemp(prefix="exp-ledger-")
+    try:
+        run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", cwd=exp_tmp)
+        exp_path = os.path.join(exp_tmp, "docs", "70-过程", "经验台账.md")
+        check("doc_init 铺出经验台账（模板 experience-ledger）",
+              os.path.exists(exp_path))
+        c, out = run("doc_check.py", "--quiet", cwd=exp_tmp)
+        check("新项目的经验台账首跑 0 error", c == 0 and "E33" not in codes(out),
+              out.strip()[-300:])
+
+        exp_head = ["| ID | 日期 | 类别 | 经验 | 适用场景 | 怎么用 | 来源 | 状态 | 更新 |",
+                    "|---|---|---|---|---|---|---|---|---|"]
+        exp_fm = ('---\ntitle: "经验台账"\nlayer: process\ndomain: 协作\n'
+                  'status: active\nauthority: 3\nupdated: 2026-11-19\n'
+                  'summary: "项目开发经验的唯一落点：一条一行（类别 / 场景 / 怎么用 / 来源 / 状态）。"\n'
+                  'tags: [经验, 台账]\n---\n\n# 经验台账\n\n')
+
+        def exp_write(rows, head=None):
+            head = head or exp_head
+            write(exp_path, exp_fm + "\n".join(head + rows) + "\n")
+
+        def exp_run():
+            c, out = run("doc_check.py", cwd=exp_tmp)
+            return c, codes(out), out
+
+        row_ok1 = ("| **EXP-001** | 2026-11-19 | 做法 | 先立断言再改脚本 | 加机器判据时 "
+                   "| 先写正反例再改校验 | 本场 | 有效 | 2026-11-19 |")
+        row_ok2 = ("| **EXP-002** | 2026-11-19 | 坑 | 并行打包会改源文件 | 发版脚本 "
+                   "| 自测与打包串行 | RV-001 | 已升级：REQ-001 | 2026-11-19 |")
+        row_ok3 = ("| **EXP-003** | 2026-11-19 | 领域 | 状态词只认白名单 | 加状态词 "
+                   "| 先改 _schema.json | F-001 | 已失效：需求生命周期定死四态 | 2026-11-19 |")
+        exp_write([row_ok1, row_ok2, row_ok3])
+        c, cs, out = exp_run()
+        check("经验台账：合规三态混排 → 无 E33（有效 / 已升级 / 已失效）",
+              c == 0 and "E33" not in cs, out.strip()[-300:])
+
+        exp_write([row_ok1], head=["| ID | 日期 | 类别 | 经验 | 适用场景 | 用法 | 来源 | 状态 | 更新 |",
+                                   exp_head[1]])
+        c, cs, out = exp_run()
+        check("经验台账：表头缺列（怎么用 → 用法）→ E33",
+              "E33" in cs and "缺列" in out, out.strip()[-300:])
+
+        exp_write([row_ok1, row_ok1])
+        c, cs, out = exp_run()
+        check("经验台账：EXP 编号重复 → E33", "E33" in cs and "重复" in out,
+              out.strip()[-300:])
+
+        exp_write([row_ok1.replace("| 做法 |", "| 感悟 |")])
+        c, cs, out = exp_run()
+        check("经验台账：类别不在白名单 → E33", "E33" in cs and "白名单" in out,
+              out.strip()[-300:])
+
+        exp_write([row_ok1.replace("| 有效 |", "| 已升级 |")])
+        c, cs, out = exp_run()
+        check("经验台账：状态写「已升级」却缺去处 → E33", "E33" in cs,
+              out.strip()[-300:])
+
+        exp_write([row_ok1.replace("| 本场 |", "| ISS-999 |")])
+        c, cs, out = exp_run()
+        check("经验台账：来源引用不存在的 ISS → E33", "E33" in cs and "ISS-999" in out,
+              out.strip()[-300:])
+
+        exp_write([row_ok1.replace("| 2026-11-19 |", "| 2026/11/19 |", 1)])
+        c, cs, out = exp_run()
+        check("经验台账：日期不是 YYYY-MM-DD → E33", "E33" in cs, out.strip()[-300:])
+
+        exp_write([row_ok1, row_ok2, row_ok3])
+        c, cs, out = exp_run()
+        check("经验台账：修回后恢复 0 error", c == 0 and "E33" not in cs,
+              out.strip()[-300:])
+    finally:
+        shutil.rmtree(exp_tmp, ignore_errors=True)
+
     total = len(PASS) + len(FAIL)
     print(f"\n{'=' * 52}")
     print(f"通过 {len(PASS)}/{total}")

@@ -43,6 +43,7 @@
       "plan": "开发计划.md",
       "inbox": "问题收件箱.md",
       "verification": "真机验收台账.md",
+      "experience": "经验台账.md",
       "timeline": "时间线.md",
       "features": "FEATURES.md",
       "direction_card": "方向卡.md",
@@ -53,7 +54,8 @@
       "adr_index": "decisions.md",
       "alias_table": "别名表.md"
     },
-    "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "verification": "RV", "digits": 3},
+    "ids": {"issue": "ISS", "adr": "ADR", "req": "REQ", "verification": "RV",
+            "experience": "EXP", "digits": 3},
     "verification": {
       "types": ["时长", "场景", "信号"],
       "states": ["观察中", "信号已足待拍板", "已定论"],
