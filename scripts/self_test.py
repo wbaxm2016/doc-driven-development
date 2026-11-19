@@ -3487,6 +3487,86 @@ def main():
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
+    # ---------------------------------------------------------------- 第 75 组
+    print("\n第 75 组：代码地图（codemap.py，REQ-068 / D24）")
+    cm_tmp = tempfile.mkdtemp(prefix="codemap-")
+    try:
+        cm_docs = os.path.join(cm_tmp, "docs", "10-架构")
+        cm_code = os.path.join(cm_tmp, "code")
+        os.makedirs(cm_docs)
+        os.makedirs(cm_code)
+        cm_notes = os.path.join(cm_docs, "代码地图-旁注.md")
+        cm_map = os.path.join(cm_docs, "代码地图.md")
+
+        def cm_run(*args):
+            return run(os.path.join(SKILL, "scripts", "codemap.py"), *args, cwd=cm_tmp)
+
+        def cm_notes_text(rows, ghost_entry=False):
+            head = ["## 入口表", "", "| 脚本 | 命令 | 处理函数 |", "|---|---|---|",
+                    "| m.py | （无子命令，入口 main） | main |"]
+            if ghost_entry:
+                head.append("| m.py | ghost | no_such_fn |")
+            body = ["", "## 函数旁注", "", "### m.py", "",
+                    "| 函数 | 干什么 | 从哪进来 | 失败时怎样 | 改它谁被牵连 |",
+                    "|---|---|---|---|---|"]
+            return "\n".join(head + body + rows) + "\n"
+
+        cm_src = "def main():\n    return helper()\n\n\ndef helper():\n    return 1\n"
+        write(os.path.join(cm_code, "m.py"), cm_src)
+        rows_ok = ["| main | 入口 | 命令行 | 无 | helper |",
+                   "| helper | 返回常数 | main | 无 | 无 |"]
+
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：缺旁注源 → 报错并说清缺什么",
+              c == 1 and "找不到旁注源" in out, out.strip()[-200:])
+
+        write(cm_notes, cm_notes_text(rows_ok))
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：还没 build → 报「先跑一次 build」",
+              c == 1 and "先跑一次 build" in out, out.strip()[-200:])
+
+        c, out = cm_run("build", "--code", "code")
+        check("代码地图：build 写出生成物", c == 0 and os.path.exists(cm_map),
+              out.strip()[-200:])
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：齐全且已 build → check 退出 0", c == 0, out.strip()[-300:])
+
+        write(cm_notes, cm_notes_text(rows_ok[:1]))
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：旁注漏一个函数 → 报「没有说明」",
+              c == 1 and "没有说明" in out and "helper" in out, out.strip()[-200:])
+
+        write(cm_notes, cm_notes_text(rows_ok + ["| ghost | 幽灵 | — | — | — |"]))
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：旁注指向不存在的函数 → 报「不存在」",
+              c == 1 and "不存在" in out and "ghost" in out, out.strip()[-200:])
+
+        write(cm_notes, cm_notes_text(rows_ok))
+        write(os.path.join(cm_code, "m.py"), "\n" + cm_src)
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：改了代码没重跑 → 报「不一致」",
+              c == 1 and "不一致" in out, out.strip()[-200:])
+
+        write(os.path.join(cm_code, "m.py"), cm_src + "\n\ndef helper():\n    return 2\n")
+        cm_run("build", "--code", "code")
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：同名重复定义 → 报「定义了 2 次」（ISS-142）",
+              c == 1 and "定义了 2 次" in out, out.strip()[-200:])
+
+        write(os.path.join(cm_code, "m.py"), cm_src)
+        write(cm_notes, cm_notes_text(rows_ok, ghost_entry=True))
+        cm_run("build", "--code", "code")
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：入口表点名的函数不存在 → 报",
+              c == 1 and "入口表" in out, out.strip()[-200:])
+
+        write(cm_notes, cm_notes_text(rows_ok))
+        cm_run("build", "--code", "code")
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：修回后 check 恢复退出 0", c == 0, out.strip()[-200:])
+    finally:
+        shutil.rmtree(cm_tmp, ignore_errors=True)
+
     total = len(PASS) + len(FAIL)
     print(f"\n{'=' * 52}")
     print(f"通过 {len(PASS)}/{total}")
