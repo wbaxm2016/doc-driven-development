@@ -3564,6 +3564,26 @@ def main():
         cm_run("build", "--code", "code")
         c, out = cm_run("check", "--code", "code")
         check("代码地图：修回后 check 恢复退出 0", c == 0, out.strip()[-200:])
+
+        write(os.path.join(cm_code, "other.py"), "def lone():\n    return 1\n")
+        cm_run("build", "--code", "code")
+        c, out = cm_run("check", "--code", "code")
+        check("代码地图：没进入口表的脚本只提醒不阻断（exit 0 且说出名字）",
+              c == 0 and "没进入口表" in out and "other.py" in out, out.strip()[-300:])
+
+        di_tmp = tempfile.mkdtemp(prefix="codemap-init-")
+        try:
+            run(os.path.join(SKILL, "scripts", "doc_init.py"), "--target", ".", "--full",
+                cwd=di_tmp)
+            di_notes = os.path.join(di_tmp, "docs", "10-架构", "代码地图-旁注.md")
+            check("doc_init --full 铺出代码地图旁注骨架", os.path.exists(di_notes))
+            check("doc_init 把 codemap.py 一并拷进项目",
+                  os.path.exists(os.path.join(di_tmp, "scripts", "codemap.py")))
+            c, out = run(os.path.join(SKILL, "scripts", "codemap.py"), "check", cwd=di_tmp)
+            check("新项目只有骨架时 check 不红（没声明入口 ⇒ 不要求地图）",
+                  c == 0 and "errors=0" in out, out.strip()[-300:])
+        finally:
+            shutil.rmtree(di_tmp, ignore_errors=True)
     finally:
         shutil.rmtree(cm_tmp, ignore_errors=True)
 

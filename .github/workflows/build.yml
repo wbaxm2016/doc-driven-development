@@ -38,6 +38,11 @@ jobs:
       - name: Check docs
         run: python scripts/doc_check.py --quiet
 
+      # 代码地图不许撒谎：代码或旁注改了而地图没重跑 → 本步非 0（REQ-068 / D24）。
+      # 它不进收尾五连跑（五步口径不动），靠每次 push 兜底。
+      - name: Check code map
+        run: python scripts/codemap.py check
+
       # 契约 verify: 指向的测试必须真跑；任一失败 → 本步非 0 → workflow 失败
       - name: Verify contracts
         run: python scripts/verify.py --quiet

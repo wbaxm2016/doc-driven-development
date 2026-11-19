@@ -31,5 +31,6 @@
 | `scripts/self_test.py` | 自检：把 `references/acceptance.md` 的 1–50 条规格跑成断言，在临时目录里铺骨架、造错、跨天、校验，不碰真实项目 |
 | `scripts/observe.py` | 自身参考实现：`run` 包一条命令、`five-run` 串五连跑、`show` / `status` / `trend` 只读回看；`trend` 按码 + 目标文件跨 run 聚合；记录落 `.dd/observe/runs/`；写失败只降级、不改主命令退出码 |
 | `scripts/yaml_rules.py` | front-matter 与 `.skill-metadata.yaml` 的严格 YAML 子集校验；`build.py` / `install.py` / `self_test.py` 共用这一份规则 |
+| `scripts/codemap.py` | 代码地图：`build` 从代码 + 旁注写出 `<docs>/10-架构/代码地图.md`，`check` 判覆盖 / 悬空 / 陈旧 / 同名重复定义 / 入口表对不上（exit 0/1/2）；覆盖范围由旁注里的「入口表」声明（REQ-068） |
 
 脚本按**表头**识别维度列（单大写字母列即维度），因此加维度、加视角都不用改代码。

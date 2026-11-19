@@ -226,8 +226,15 @@ def read_notes(path):
     text = open(path, encoding="utf-8").read()
     entries, notes = [], {}
     section, current = None, None
+    fence = False
     for raw in text.splitlines():
         line = raw.rstrip()
+        # 围栏里的内容是「怎么写」的示例，不是声明本身：跳过，免得示例被当成真入口
+        if line.startswith("```"):
+            fence = not fence
+            continue
+        if fence:
+            continue
         if line.startswith("## "):
             section = line[3:].strip()
             current = None
@@ -375,19 +382,33 @@ def render(mods, notes, entries, updated="", ):
 # ---------------------------------------------------------------- 校验
 
 def check_all(mods, notes, entries):
-    """五类问题：缺旁注源 / 覆盖 / 悬空 / 重复定义 / 入口表对不上。返回 (errors, warnings)。"""
+    """五类问题：缺旁注源 / 覆盖 / 悬空 / 重复定义 / 入口表对不上。返回 (errors, warnings)。
+
+    **覆盖范围由入口表声明**：只有入口表里出现过的脚本才要求「每个函数都有一行说明」。
+    这样新项目里被 `doc_init` 拷进来的工具脚本（还没人写旁注）只提醒、不阻断——
+    否则 `check` 会在一个新项目里永远红，门禁从第一天就被绕过。
+    """
     errors, warnings = [], []
     if notes is None:
         return (["找不到旁注源 `%s`：先建它，再跑 build（不猜、不生成空说明）" % NOTES_NAME],
                 warnings)
 
+    scope = {s for (s, _c, _h) in entries}
     known = set()
     for mo in mods:
         for q in mo["fq"]:
             known.add((mo["file"], q))
 
-    # 1) 覆盖：代码里每个函数都要有一行
+    # 0) 范围声明：没进入口表的脚本只提醒
     for mo in mods:
+        if mo["file"] not in scope:
+            warnings.append("%s 没进入口表：不纳入地图（要纳入就在入口表里声明它的入口）"
+                            % mo["file"])
+
+    # 1) 覆盖：范围内的每个函数都要有一行
+    for mo in mods:
+        if mo["file"] not in scope:
+            continue
         miss = [q for q in mo["fq"] if (mo["file"], q) not in notes["notes"]]
         if miss:
             errors.append("%s：%d 个函数在旁注里没有说明（%s%s）"
@@ -461,14 +482,17 @@ def main(argv=None):
         return die("代码解析失败：%s（%s）" % (exc.msg, exc.filename))
 
     notes = read_notes(notes_path)
-    errors, warnings = check_all(mods, notes, (notes or {}).get("entries", []))
+    entries = (notes or {}).get("entries", [])
+    scoped = [mo for mo in mods if mo["file"] in {s for (s, _c, _h) in entries}]
+    errors, warnings = check_all(mods, notes, entries)
 
     if args.action == "check":
         stale = False
-        if notes is None:
+        if notes is None or not scoped:
+            # 旁注还没声明任何入口（新项目刚铺骨架）：没有要渲染的东西，不要求地图存在
             pass
         else:
-            text = render(mods, notes, notes["entries"], updated)
+            text = render(scoped, notes, notes["entries"], updated)
             if not os.path.exists(map_path):
                 errors.append("还没有 `%s`：先跑一次 build" % os.path.relpath(map_path, docs))
             else:
@@ -490,7 +514,7 @@ def main(argv=None):
     if notes is None:
         return die("找不到旁注源 `%s`：先建它（入口表 + 每个函数一行），再跑 build。"
                    % os.path.relpath(notes_path, docs))
-    text = render(mods, notes, notes["entries"], updated)
+    text = render(scoped, notes, notes["entries"], updated)
     os.makedirs(os.path.dirname(map_path), exist_ok=True)
     with open(map_path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)

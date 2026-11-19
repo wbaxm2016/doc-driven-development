@@ -9,7 +9,8 @@
     1. 建层目录（默认 5 层：门面/契约/决策/运行/过程；--full 再加 架构/术语/规范）
     2. 落 README、开发计划、需求清单、问题收件箱、时间线、会话模板、过程层 README、ADR 示例、别名表
     3. 写 <docs>/_schema.json —— 层 / 枚举 / 段结构 / 编号规则 / 路径的唯一来源
-    4. 复制 scripts/{doc_check,devlog,plan,verify}.py 到 <target>/scripts
+    4. 复制 scripts/{codemap,doc_check,devlog,plan,verify}.py 到 <target>/scripts
+       （--full 时另铺「代码地图-旁注」骨架：入口表 + 函数旁注，覆盖范围由入口表声明）
     5. --ci 时另写 .pre-commit-config.yaml 与 .github/workflows/docs.yml
 
 不覆盖已存在的文件（幂等，可反复跑）。
@@ -176,13 +177,16 @@ def main():
     if args.full:
         write_if_absent(os.path.join(docs, "10-架构", "technical-design.md"),
                         fm("技术设计", "architecture", "系统怎么搭、机制为何这样。", date))
+        # 代码地图的「人写的一侧」：入口表 + 每个函数一行的四格说明（REQ-068 / D24）。
+        # 只铺骨架、不猜内容——覆盖范围由入口表声明，没声明就只提醒不阻断。
+        copy_tpl("codemap-notes.md", os.path.join(docs, "10-架构", "代码地图-旁注.md"), date)
         copy_tpl("alias-table.md", os.path.join(docs, "50-术语", "别名表.md"), date)
         write_if_absent(os.path.join(docs, "60-规范", "文档组织管理规范.md"),
                         fm("文档组织管理规范", "norm", "人怎么协作、文档怎么组织与校验。", date))
 
     scripts_dir = os.path.join(root, "scripts")
     os.makedirs(scripts_dir, exist_ok=True)
-    for name in ("doc_check.py", "devlog.py", "plan.py", "verify.py"):
+    for name in ("codemap.py", "doc_check.py", "devlog.py", "plan.py", "verify.py"):
         src = os.path.join(SKILL, "scripts", name)
         with open(src, encoding="utf-8") as fh:
             write_if_absent(os.path.join(scripts_dir, name), fh.read())

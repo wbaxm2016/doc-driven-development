@@ -9,7 +9,7 @@ name: docs
 on:
   push:
     paths: ["docs/**", "tests/**", "scripts/doc_*.py", "scripts/devlog.py",
-            "scripts/plan.py", "scripts/verify.py"]
+            "scripts/plan.py", "scripts/verify.py", "scripts/codemap.py"]
   pull_request:
     paths: ["docs/**", "tests/**", "scripts/**"]
   schedule:
@@ -38,6 +38,10 @@ jobs:
       # 契约的 verify: 指向的测试必须真跑：任一失败/超时 → 本步非 0 → workflow 失败
       - name: "契约 verify: 真跑"
         run: python scripts/verify.py --quiet
+      # 代码地图：代码或旁注改了而地图没重跑 → 非 0（REQ-068）。
+      # 没在旁注里声明入口表的项目，这一步只提醒、不阻断。
+      - name: 代码地图与代码是否一致
+        run: python scripts/codemap.py check
 
   external-links:
     if: github.event_name == 'schedule'
