@@ -9,6 +9,7 @@ summary: "加 REQ-069：项目级经验台账（EXP）一条一行，E33 只判�
 tags: [契约, 增量]
 delta_id: DELTA-016
 target: docs/20-契约/requirements.md
+superseded_by: DELTA-017
 ---
 
 # DELTA-016 · 经验台账立项
